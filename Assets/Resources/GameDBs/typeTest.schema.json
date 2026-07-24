@@ -1,0 +1,149 @@
+{
+    "localizationDB": false,
+    "scope": "TypeTest",
+    "tables": {
+        "TypeTest1": {
+            "fields": {
+                "bool": {
+                    "isArray": false,
+                    "type": "bool",
+                    "typeArg": null
+                },
+                "color": {
+                    "isArray": false,
+                    "type": "color",
+                    "typeArg": null
+                },
+                "enum": {
+                    "isArray": false,
+                    "type": "enum",
+                    "typeArg": "Days",
+                    "validValues": [
+                        "Sun",
+                        "Mon",
+                        "Tue",
+                        "Wed",
+                        "Thu",
+                        "Fri",
+                        "Sat"
+                    ]
+                },
+                "float": {
+                    "isArray": false,
+                    "type": "float",
+                    "typeArg": null
+                },
+                "int": {
+                    "isArray": false,
+                    "type": "int",
+                    "typeArg": null
+                },
+                "obj": {
+                    "isArray": false,
+                    "type": "unityObject",
+                    "typeArg": null
+                },
+                "string": {
+                    "isArray": false,
+                    "type": "string",
+                    "typeArg": null
+                },
+                "tableRef": {
+                    "isArray": false,
+                    "type": "tableRef",
+                    "typeArg": "TypeTest1"
+                },
+                "vec2": {
+                    "isArray": false,
+                    "type": "vector2",
+                    "typeArg": null
+                },
+                "vec3": {
+                    "isArray": false,
+                    "type": "vector3",
+                    "typeArg": null
+                },
+                "vec4": {
+                    "isArray": false,
+                    "type": "vector4",
+                    "typeArg": null
+                }
+            },
+            "key": {
+                "type": "string",
+                "typeArg": null
+            }
+        },
+        "TypeTest2": {
+            "fields": {
+                "bool": {
+                    "isArray": true,
+                    "type": "bool",
+                    "typeArg": null
+                },
+                "color": {
+                    "isArray": true,
+                    "type": "color",
+                    "typeArg": null
+                },
+                "enum": {
+                    "isArray": true,
+                    "type": "enum",
+                    "typeArg": "Rarity",
+                    "validValues": [
+                        "tier1",
+                        "tier2",
+                        "tier3",
+                        "tier4",
+                        "tier5",
+                        "tier6"
+                    ]
+                },
+                "float": {
+                    "isArray": true,
+                    "type": "float",
+                    "typeArg": null
+                },
+                "int": {
+                    "isArray": true,
+                    "type": "int",
+                    "typeArg": null
+                },
+                "obj": {
+                    "isArray": true,
+                    "type": "unityObject",
+                    "typeArg": null
+                },
+                "string": {
+                    "isArray": true,
+                    "type": "string",
+                    "typeArg": null
+                },
+                "tableRef": {
+                    "isArray": true,
+                    "type": "tableRef",
+                    "typeArg": "TypeTest1"
+                },
+                "vec2": {
+                    "isArray": true,
+                    "type": "vector2",
+                    "typeArg": null
+                },
+                "vec3": {
+                    "isArray": true,
+                    "type": "vector3",
+                    "typeArg": null
+                },
+                "vec4": {
+                    "isArray": true,
+                    "type": "vector4",
+                    "typeArg": null
+                }
+            },
+            "key": {
+                "type": "enum",
+                "typeArg": "Colors"
+            }
+        }
+    }
+}

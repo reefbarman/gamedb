@@ -1,0 +1,136 @@
+{
+    "tables": {
+        "DictOtherKeys": {
+            "A": {
+                "DictEnumStr": {
+                    "Blue": "BlueColor",
+                    "Green": "GreenColor"
+                }
+            }
+        },
+        "EnumKeyArrays": {
+            "Sun": {
+                "BoolArray": [
+                    true,
+                    false
+                ],
+                "ColorArray": [
+                    "#000000",
+                    "#FF0000"
+                ],
+                "EnumArray": [
+                    "Green",
+                    "Red"
+                ],
+                "FloatArray": [
+                    2.5,
+                    3.5
+                ],
+                "IntArray": [
+                    1,
+                    2
+                ],
+                "StringArray": [
+                    "Hello",
+                    "Hello2"
+                ],
+                "TableRefArray": [
+                    "A",
+                    null
+                ],
+                "UnityObjectArray": [
+                    "Assets/Resources/Prefabs/MyPrefab1.prefab",
+                    "Assets/Resources/Prefabs/MyPrefab2.prefab"
+                ],
+                "Vector2Array": [
+                    "0,1",
+                    "1,0"
+                ],
+                "Vector3Array": [
+                    "1,0,0",
+                    "0,0,1"
+                ],
+                "Vector4Array": [
+                    "1,0,0,0",
+                    "0,0,0,1"
+                ]
+            }
+        },
+        "StringKeySingle": {
+            "A": {
+                "Bool": true,
+                "Color": "#000000",
+                "Enum": "Sun",
+                "Float": 2.5,
+                "Int": 1,
+                "String": "Hello",
+                "TableRef": null,
+                "UnityObject": "Assets/Resources/Prefabs/MyPrefab1.prefab",
+                "Vector2": "0,0",
+                "Vector3": "0,3,0",
+                "Vector4": "0,0,0,2"
+            },
+            "B": {
+                "Bool": false,
+                "Color": "#000000",
+                "Enum": "Sun",
+                "Float": 0,
+                "Int": 0,
+                "String": "",
+                "TableRef": null,
+                "UnityObject": "",
+                "Vector2": "0,0",
+                "Vector3": "0,0,0",
+                "Vector4": "0,0,0,0"
+            }
+        },
+        "TableRefEnumKeysDicts": {
+            "Sun": {
+                "DictStrBool": {
+                    "No": false,
+                    "Yes": true
+                },
+                "DictStrColor": {
+                    "Black": "#000000",
+                    "Red": "#FF0000"
+                },
+                "DictStrEnum": {
+                    "Rare": "tier5",
+                    "Uber": "tier6"
+                },
+                "DictStrFlt": {
+                    "A": 0.5,
+                    "B": 1.3
+                },
+                "DictStrInt": {
+                    "Hi": 1,
+                    "Ho": 2
+                },
+                "DictStrStr": {
+                    "Here": "There",
+                    "Hi": "Yo"
+                },
+                "DictStrTableRef": {
+                    "NotSet": null,
+                    "Set": "Sun"
+                },
+                "DictStrUObj": {
+                    "1": "Assets/Resources/Prefabs/MyPrefab1.prefab",
+                    "2": "Assets/Resources/Prefabs/MyPrefab2.prefab"
+                },
+                "DictStrVec2": {
+                    "01": "0,1",
+                    "10": "1,0"
+                },
+                "DictStrVec3": {
+                    "001": "0,0,1",
+                    "100": "1,0,0"
+                },
+                "DictStrVec4": {
+                    "0001": "0,0,0,1",
+                    "1000": "1,0,0,0"
+                }
+            }
+        }
+    }
+}

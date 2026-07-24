@@ -1,0 +1,54 @@
+# Unity generated directories
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Mm]emoryCaptures/
+[Rr]ecordings/
+
+# User-local Unity state
+UserSettings/
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+
+# IDE-generated files
+.vs/
+.vscode/
+.idea/
+/gamedb*.csproj
+/gamedb.sln
+*.csproj.user
+*.suo
+*.tmp
+*.user
+*.userosscache
+*.sln.docstates
+
+# Package and test artifacts
+.npmrc
+*.tgz
+TestResults/
+CoverageResults/
+.upmconfig.toml
+
+# Agent/tool local state
+.agentlink/
+
+# Local GameDB settings and secrets
+UserSettings/GameDB/
+*.gamedb-secrets.json
+.env
+.env.*
+!.env.example
+
+# OS files
+.DS_Store
+Thumbs.db

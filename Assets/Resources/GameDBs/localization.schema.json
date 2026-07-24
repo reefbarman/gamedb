@@ -1,0 +1,24 @@
+{
+    "localizationDB": true,
+    "scope": "Localization",
+    "tables": {
+        "Localization": {
+            "fields": {
+                "EN": {
+                    "isArray": false,
+                    "type": "string",
+                    "typeArg": null
+                },
+                "IT": {
+                    "isArray": false,
+                    "type": "string",
+                    "typeArg": null
+                }
+            },
+            "key": {
+                "type": "string",
+                "typeArg": null
+            }
+        }
+    }
+}

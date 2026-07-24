@@ -1,0 +1,75 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{39E741C6-2472-47C4-96F3-64C78BE4C546}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>GameDBLibraryUnity</RootNamespace>
+    <AssemblyName>GameDBLibraryUnity</AssemblyName>
+    <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <TargetFrameworkProfile>Unity Subset v3.5</TargetFrameworkProfile>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <DocumentationFile>bin\Debug\GameDBLibraryUnity.xml</DocumentationFile>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Xml" />
+    <Reference Include="UnityEngine">
+      <HintPath>..\..\Library\UnityAssemblies\UnityEngine.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Source\Data\ColorAccessor.cs" />
+    <Compile Include="Source\Data\UnityObjectAccessor.cs" />
+    <Compile Include="Source\Data\Vector2Accessor.cs" />
+    <Compile Include="Source\Data\Vector3Accessor.cs" />
+    <Compile Include="Source\Data\Vector4Accessor.cs" />
+    <Compile Include="Source\FormFactory.cs" />
+    <Compile Include="Source\Helpers\TypeHelpers.cs" />
+    <Compile Include="Source\UnityDownloadHandler.cs" />
+    <Compile Include="Source\UnityForm.cs" />
+    <Compile Include="Source\WebRequest.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\GameDBLibrary\GameDBLibrary.csproj">
+      <Project>{d6b9fb59-99f3-4091-8232-cd00b1552d0d}</Project>
+      <Name>GameDBLibrary</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <PropertyGroup>
+    <PostBuildEvent>echo ON
+
+#echo "%25MONO_PATH%25\bin\pdb2mdb.bat"
+
+#call "%25MONO_PATH%25\bin\pdb2mdb.bat" $(TargetPath)
+
+
+mkdir "$(SolutionDir)Assets\Plugins\GameDBLibrary"
+copy /Y "$(TargetDir)$(ProjectName)*" "$(SolutionDir)Assets\Plugins\GameDBLibrary"</PostBuildEvent>
+  </PropertyGroup>
+</Project>

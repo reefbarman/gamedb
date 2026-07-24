@@ -1,0 +1,286 @@
+{
+    "localizationDB": false,
+    "scope": "Main",
+    "tables": {
+        "DictOtherKeys": {
+            "fields": {
+                "DictEnumStr": {
+                    "isArray": false,
+                    "type": "dictionary",
+                    "typeArg": {
+                        "key": "enum",
+                        "keyTypeArg": "Colors",
+                        "value": "string",
+                        "valueTypeArg": null
+                    }
+                }
+            },
+            "key": {
+                "type": "string",
+                "typeArg": null
+            }
+        },
+        "EnumKeyArrays": {
+            "fields": {
+                "BoolArray": {
+                    "isArray": true,
+                    "type": "bool",
+                    "typeArg": null
+                },
+                "ColorArray": {
+                    "isArray": true,
+                    "type": "color",
+                    "typeArg": null
+                },
+                "EnumArray": {
+                    "isArray": true,
+                    "type": "enum",
+                    "typeArg": "Colors",
+                    "validValues": [
+                        "Green",
+                        "Blue",
+                        "Red",
+                        "Pink",
+                        "Yellow",
+                        "Orange",
+                        "White"
+                    ]
+                },
+                "FloatArray": {
+                    "isArray": true,
+                    "type": "float",
+                    "typeArg": null
+                },
+                "IntArray": {
+                    "isArray": true,
+                    "type": "int",
+                    "typeArg": null
+                },
+                "StringArray": {
+                    "isArray": true,
+                    "type": "string",
+                    "typeArg": null
+                },
+                "TableRefArray": {
+                    "isArray": true,
+                    "type": "tableRef",
+                    "typeArg": "StringKeySingle"
+                },
+                "UnityObjectArray": {
+                    "isArray": true,
+                    "type": "unityObject",
+                    "typeArg": null
+                },
+                "Vector2Array": {
+                    "isArray": true,
+                    "type": "vector2",
+                    "typeArg": null
+                },
+                "Vector3Array": {
+                    "isArray": true,
+                    "type": "vector3",
+                    "typeArg": null
+                },
+                "Vector4Array": {
+                    "isArray": true,
+                    "type": "vector4",
+                    "typeArg": null
+                }
+            },
+            "key": {
+                "type": "enum",
+                "typeArg": "Days"
+            }
+        },
+        "StringKeySingle": {
+            "fields": {
+                "Bool": {
+                    "isArray": false,
+                    "type": "bool",
+                    "typeArg": null
+                },
+                "Color": {
+                    "isArray": false,
+                    "type": "color",
+                    "typeArg": null
+                },
+                "Enum": {
+                    "isArray": false,
+                    "type": "enum",
+                    "typeArg": "Days",
+                    "validValues": [
+                        "Sun",
+                        "Mon",
+                        "Tue",
+                        "Wed",
+                        "Thu",
+                        "Fri",
+                        "Sat"
+                    ]
+                },
+                "Float": {
+                    "isArray": false,
+                    "type": "float",
+                    "typeArg": null
+                },
+                "Int": {
+                    "isArray": false,
+                    "type": "int",
+                    "typeArg": null
+                },
+                "String": {
+                    "isArray": false,
+                    "type": "string",
+                    "typeArg": null
+                },
+                "TableRef": {
+                    "isArray": false,
+                    "type": "tableRef",
+                    "typeArg": "EnumKeyArrays"
+                },
+                "UnityObject": {
+                    "isArray": false,
+                    "type": "unityObject",
+                    "typeArg": null
+                },
+                "Vector2": {
+                    "isArray": false,
+                    "type": "vector2",
+                    "typeArg": null
+                },
+                "Vector3": {
+                    "isArray": false,
+                    "type": "vector3",
+                    "typeArg": null
+                },
+                "Vector4": {
+                    "isArray": false,
+                    "type": "vector4",
+                    "typeArg": null
+                }
+            },
+            "key": {
+                "type": "string",
+                "typeArg": null
+            }
+        },
+        "TableRefEnumKeysDicts": {
+            "fields": {
+                "DictStrBool": {
+                    "isArray": false,
+                    "type": "dictionary",
+                    "typeArg": {
+                        "key": "string",
+                        "keyTypeArg": null,
+                        "value": "bool",
+                        "valueTypeArg": null
+                    }
+                },
+                "DictStrColor": {
+                    "isArray": false,
+                    "type": "dictionary",
+                    "typeArg": {
+                        "key": "string",
+                        "keyTypeArg": null,
+                        "value": "color",
+                        "valueTypeArg": null
+                    }
+                },
+                "DictStrEnum": {
+                    "isArray": false,
+                    "type": "dictionary",
+                    "typeArg": {
+                        "key": "string",
+                        "keyTypeArg": null,
+                        "value": "enum",
+                        "valueTypeArg": "Rarity"
+                    }
+                },
+                "DictStrFlt": {
+                    "isArray": false,
+                    "type": "dictionary",
+                    "typeArg": {
+                        "key": "string",
+                        "keyTypeArg": null,
+                        "value": "float",
+                        "valueTypeArg": null
+                    }
+                },
+                "DictStrInt": {
+                    "isArray": false,
+                    "type": "dictionary",
+                    "typeArg": {
+                        "key": "string",
+                        "keyTypeArg": null,
+                        "value": "int",
+                        "valueTypeArg": null
+                    }
+                },
+                "DictStrStr": {
+                    "isArray": false,
+                    "type": "dictionary",
+                    "typeArg": {
+                        "key": "string",
+                        "keyTypeArg": null,
+                        "value": "string",
+                        "valueTypeArg": null
+                    }
+                },
+                "DictStrTableRef": {
+                    "isArray": false,
+                    "type": "dictionary",
+                    "typeArg": {
+                        "key": "string",
+                        "keyTypeArg": null,
+                        "value": "tableRef",
+                        "valueTypeArg": "EnumKeyArrays"
+                    }
+                },
+                "DictStrUObj": {
+                    "isArray": false,
+                    "type": "dictionary",
+                    "typeArg": {
+                        "key": "string",
+                        "keyTypeArg": null,
+                        "value": "unityObject",
+                        "valueTypeArg": null
+                    }
+                },
+                "DictStrVec2": {
+                    "isArray": false,
+                    "type": "dictionary",
+                    "typeArg": {
+                        "key": "string",
+                        "keyTypeArg": null,
+                        "value": "vector2",
+                        "valueTypeArg": null
+                    }
+                },
+                "DictStrVec3": {
+                    "isArray": false,
+                    "type": "dictionary",
+                    "typeArg": {
+                        "key": "string",
+                        "keyTypeArg": null,
+                        "value": "vector3",
+                        "valueTypeArg": null
+                    }
+                },
+                "DictStrVec4": {
+                    "isArray": false,
+                    "type": "dictionary",
+                    "typeArg": {
+                        "key": "string",
+                        "keyTypeArg": null,
+                        "value": "vector4",
+                        "valueTypeArg": null
+                    }
+                }
+            },
+            "key": {
+                "type": "string",
+                "typeArg": null
+            }
+        }
+    }
+}

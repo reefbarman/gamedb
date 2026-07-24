@@ -1,0 +1,39 @@
+
+        public Exception Load(string path, string language, bool notify = true, bool binary = false, string key = null, string salt = null) 
+        {
+            LocalizationLanguage = language;
+
+            var gameDBResource = UnityEngine.Resources.Load(path) as UnityEngine.TextAsset;
+
+            if (gameDBResource == null)
+            {
+                return new ArgumentException(string.Format("Failed to load gameDB {0} at path: {1}", Name, path));
+            }
+
+            Exception error = null;
+
+            if (binary)
+            {
+                try
+                {
+                    error = Import(BinaryGameDB.Deserialize(gameDBResource.bytes, key, salt), new[]{ language }, notify);
+                }
+                catch (Exception e)
+                {
+                    error = e;
+                }
+            }
+            else
+            {
+                error = Import(gameDBResource.text, new[]{ language }, notify);
+            }
+
+            return error;
+        }
+
+        public Exception Import(string json, string language, bool notify = true)
+        {
+            LocalizationLanguage = language;
+
+            return Import(json, new[]{ language }, notify);
+        }

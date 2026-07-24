@@ -1,0 +1,30 @@
+
+        public Exception Load(string path, bool notify = true, bool binary = false, string key = null, string salt = null) 
+        {
+            var gameDBResource = UnityEngine.Resources.Load(path) as UnityEngine.TextAsset;
+
+            if (gameDBResource == null)
+            {
+                return new ArgumentException(string.Format("Failed to load gameDB {0} at path: {1}", Name, path));
+            }
+
+            Exception error = null;
+
+            if (binary)
+            {
+                try
+                {
+                    error = Import(BinaryGameDB.Deserialize(gameDBResource.bytes, key, salt), notify);
+                }
+                catch (Exception e)
+                {
+                    error = e;
+                }
+            }
+            else
+            {
+                error = Import(gameDBResource.text, notify);
+            }
+
+            return error;
+        }

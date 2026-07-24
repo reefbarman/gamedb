@@ -1,0 +1,191 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="14.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{F037D91D-D173-42B5-9985-1AB111235E7B}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>GameDBEditorLibrary</RootNamespace>
+    <AssemblyName>GameDBEditorLibrary</AssemblyName>
+    <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <TargetFrameworkProfile>Unity Subset v3.5</TargetFrameworkProfile>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <DocumentationFile>bin\Debug\GameDBEditorLibrary.xml</DocumentationFile>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup>
+    <SignAssembly>true</SignAssembly>
+  </PropertyGroup>
+  <PropertyGroup>
+    <AssemblyOriginatorKeyFile>keypair.snk</AssemblyOriginatorKeyFile>
+  </PropertyGroup>
+  <PropertyGroup>
+    <RunPostBuildEvent>Always</RunPostBuildEvent>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'DebugFree|AnyCPU'">
+    <DebugSymbols>true</DebugSymbols>
+    <OutputPath>bin\DebugFree\</OutputPath>
+    <DefineConstants>TRACE;DEBUG;FREE_VERSION</DefineConstants>
+    <DebugType>full</DebugType>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <ErrorReport>prompt</ErrorReport>
+    <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Xml" />
+    <Reference Include="UnityEditor">
+      <HintPath>..\..\Library\UnityAssemblies\UnityEditor.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine">
+      <HintPath>..\..\Library\UnityAssemblies\UnityEngine.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Properties\Resources.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>Resources.resx</DependentUpon>
+    </Compile>
+    <Compile Include="Source\Components\Base\Component.cs" />
+    <Compile Include="Source\Components\TableComponents\ColumnComponent.cs" />
+    <Compile Include="Source\Components\ConfigEnumsComponent.cs" />
+    <Compile Include="Source\Components\BuildComponent.cs" />
+    <Compile Include="Source\Components\DeploymentPickerComponent.cs" />
+    <Compile Include="Source\Components\TableComponents\HeaderComponent.cs" />
+    <Compile Include="Source\Components\TableComponents\KeyFieldComponent.cs" />
+    <Compile Include="Source\Components\ServerManagementComponent.cs" />
+    <Compile Include="Source\Components\GameDBSelectorComponent.cs" />
+    <Compile Include="Source\Components\DeploymentComponent.cs" />
+    <Compile Include="Source\Components\ConfigurationComponent.cs" />
+    <Compile Include="Source\Components\EditorTabComponent.cs" />
+    <Compile Include="Source\Components\GSheetsPopupComponent.cs" />
+    <Compile Include="Source\Components\GenerateClassesPopupComponent.cs" />
+    <Compile Include="Source\Components\TableComponents\RowComponent.cs" />
+    <Compile Include="Source\Components\TableComponents\TableComponent.cs" />
+    <Compile Include="Source\Components\TableComponents\TableHeaderComponent.cs" />
+    <Compile Include="Source\Components\TableEditorComponent.cs" />
+    <Compile Include="Source\Components\TableComponents\FieldComponent.cs" />
+    <Compile Include="Source\Components\TablesComponent.cs" />
+    <Compile Include="Source\Components\ValueComponents\DictionaryValueComponent.cs" />
+    <Compile Include="Source\Components\ValueComponents\ValueComponent.cs" />
+    <Compile Include="Source\Components\ValueComponents\UnityObjectValueComponent.cs" />
+    <Compile Include="Source\Components\ValueComponents\Vector4ValueComponent.cs" />
+    <Compile Include="Source\Components\ValueComponents\Vector3ValueComponent.cs" />
+    <Compile Include="Source\Components\ValueComponents\Vector2ValueComponent.cs" />
+    <Compile Include="Source\Components\ValueComponents\ColorValueComponent.cs" />
+    <Compile Include="Source\Components\ValueComponents\EnumValueComponent.cs" />
+    <Compile Include="Source\Components\ValueComponents\TableRefValueComponent.cs" />
+    <Compile Include="Source\Components\ValueComponents\StringValueComponent.cs" />
+    <Compile Include="Source\Components\ValueComponents\IntValueComponent.cs" />
+    <Compile Include="Source\Components\ValueComponents\FloatValueComponent.cs" />
+    <Compile Include="Source\Components\ValueComponents\ValueContainerComponent.cs" />
+    <Compile Include="Source\Components\ValueFactory.cs" />
+    <Compile Include="Source\Components\ValueComponents\BoolValueComponent.cs" />
+    <Compile Include="Source\Core\AssemblyExplorer.cs" />
+    <Compile Include="Source\Core\Config.cs" />
+    <Compile Include="Source\Core\ControlHandler.cs" />
+    <Compile Include="Source\Core\Settings.cs" />
+    <Compile Include="Source\Core\Updater.cs" />
+    <Compile Include="Source\Core\Utils.cs" />
+    <Compile Include="Source\DataSource\GameDBDataSource.cs" />
+    <Compile Include="Source\DataSource\ServerDeploymentsDataSource.cs" />
+    <Compile Include="Source\Events.cs" />
+    <Compile Include="Source\Components\EditorComponent.cs" />
+    <Compile Include="Source\Components\GameDBEditorComponent.cs" />
+    <Compile Include="Source\Components\LoaderComponent.cs" />
+    <Compile Include="Source\Core\EventSystem.cs" />
+    <Compile Include="Source\Exporters\CSharpExporter.cs" />
+    <Compile Include="Source\GameDB\DictionaryTypeUtils.cs" />
+    <Compile Include="Source\GameDB\Field.cs" />
+    <Compile Include="Source\GameDB\GameDB.cs" />
+    <Compile Include="Source\GameDB\RowModel.cs" />
+    <Compile Include="Source\GameDB\TableModel.cs" />
+    <Compile Include="Source\GameDBEditor.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Source\Helpers\AlphanumComparatorFast.cs" />
+    <Compile Include="Source\Helpers\DownloadHandler.cs" />
+    <Compile Include="Source\Helpers\RequestHelper.cs" />
+    <Compile Include="Source\Helpers\TypeHelpers.cs" />
+    <Compile Include="Source\Helpers\UIHelpers.cs" />
+    <Compile Include="Source\ThirdParty\RSG-CSharpPromise\EnumerableExt.cs" />
+    <Compile Include="Source\ThirdParty\RSG-CSharpPromise\Promise.cs" />
+    <Compile Include="Source\ThirdParty\RSG-CSharpPromise\PromiseHelpers.cs" />
+    <Compile Include="Source\ThirdParty\RSG-CSharpPromise\PromiseTimer.cs" />
+    <Compile Include="Source\ThirdParty\RSG-CSharpPromise\Promise_NonGeneric.cs" />
+    <Compile Include="Source\ThirdParty\RSG-CSharpPromise\Tuple.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\GameDBLibrary\GameDBLibrary.csproj">
+      <Project>{d6b9fb59-99f3-4091-8232-cd00b1552d0d}</Project>
+      <Name>GameDBLibrary</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="keypair.snk" />
+    <None Include="Resources\Templates\baseFieldAccessor.tmpl" />
+    <None Include="Resources\Templates\data.tmpl" />
+    <None Include="Resources\Templates\localizationDataField.tmpl" />
+    <None Include="Resources\Templates\gameDBLocalization.tmpl" />
+    <None Include="Resources\Templates\gameDBUnity.tmpl" />
+    <None Include="Resources\Templates\unityBinaryLocalizationLoad.tmpl" />
+    <None Include="Resources\Templates\unityLoad.tmpl" />
+    <None Include="Resources\Templates\unityBinaryLoad.tmpl" />
+    <None Include="Resources\Templates\dataField.tmpl" />
+    <None Include="Resources\Templates\baseTypeConvert.tmpl" />
+    <None Include="Resources\Templates\arrayFieldAccessor.tmpl" />
+    <None Include="Resources\Templates\enumTypeConvert.tmpl" />
+    <None Include="Resources\Templates\gameDB.tmpl" />
+    <None Include="Resources\Templates\schema.tmpl" />
+    <None Include="Resources\Templates\table.tmpl" />
+    <None Include="Resources\Templates\tableAccessor.tmpl" />
+    <None Include="Resources\Templates\tableDef.tmpl" />
+    <None Include="Resources\Templates\tableField.tmpl" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Properties\Resources.resx">
+      <Generator>ResXFileCodeGenerator</Generator>
+      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+  </ItemGroup>
+  <ItemGroup />
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <PropertyGroup>
+    <PostBuildEvent>echo ON
+#echo "%25MONO_PATH%25\bin\pdb2mdb.bat"
+#call "%25MONO_PATH%25\bin\pdb2mdb.bat" $(TargetPath)
+
+mkdir "$(SolutionDir)Assets\Plugins\GameDBLibrary\Editor"
+
+copy /Y "$(TargetDir)$(ProjectName)*" "$(SolutionDir)Assets\Plugins\GameDBLibrary\Editor"</PostBuildEvent>
+  </PropertyGroup>
+  <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
+       Other similar extension points exist, see Microsoft.Common.targets.
+  <Target Name="BeforeBuild">
+  </Target>
+  <Target Name="AfterBuild">
+  </Target>
+  -->
+</Project>

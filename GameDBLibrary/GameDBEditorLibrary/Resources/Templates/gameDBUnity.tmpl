@@ -1,0 +1,26 @@
+        
+#if UNITY_EDITOR
+            GameDBEditorInvoker.AddRuntimeDB(this);
+#endif
+            this.Logger = new UnityLogger();
+            {0}
+        }}
+
+        {1}
+
+        public class UnityLogger : GameDBLibrary.Logger
+        {{
+            public override void Log(string message)
+            {{
+                UnityEngine.Debug.Log(message);
+            }}
+
+            public override void LogError(string message)
+            {{
+                UnityEngine.Debug.LogError(message);
+            }}
+
+            public override void LogException(Exception e)
+            {{
+                UnityEngine.Debug.LogException(e);
+            }}

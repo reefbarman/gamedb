@@ -1,0 +1,14 @@
+{
+    "tables": {
+        "MyTable": {
+            "MyTestKey1": {
+                "Column1": [
+                    "hello",
+                    "1",
+                    "2",
+                    "3"
+                ]
+            }
+        }
+    }
+}

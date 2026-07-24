@@ -1,0 +1,10 @@
+{
+    "tables": {
+        "Localization": {
+            "TEST_STRING": {
+                "EN": "This is my test string",
+                "IT": "Italiano"
+            }
+        }
+    }
+}

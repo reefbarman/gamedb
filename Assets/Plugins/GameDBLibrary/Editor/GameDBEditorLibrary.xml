@@ -1,0 +1,1282 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>GameDBEditorLibrary</name>
+    </assembly>
+    <members>
+        <member name="T:GameDBEditorLibrary.Properties.Resources">
+            <summary>
+              A strongly-typed resource class, for looking up localized strings, etc.
+            </summary>
+        </member>
+        <member name="P:GameDBEditorLibrary.Properties.Resources.ResourceManager">
+            <summary>
+              Returns the cached ResourceManager instance used by this class.
+            </summary>
+        </member>
+        <member name="P:GameDBEditorLibrary.Properties.Resources.Culture">
+            <summary>
+              Overrides the current thread's CurrentUICulture property for all
+              resource lookups using this strongly typed resource class.
+            </summary>
+        </member>
+        <member name="P:GameDBEditorLibrary.Properties.Resources.arrayFieldAccessor">
+            <summary>
+              Looks up a localized resource of type System.Byte[].
+            </summary>
+        </member>
+        <member name="P:GameDBEditorLibrary.Properties.Resources.baseFieldAccessor">
+            <summary>
+              Looks up a localized resource of type System.Byte[].
+            </summary>
+        </member>
+        <member name="P:GameDBEditorLibrary.Properties.Resources.baseTypeConvert">
+            <summary>
+              Looks up a localized resource of type System.Byte[].
+            </summary>
+        </member>
+        <member name="P:GameDBEditorLibrary.Properties.Resources.data">
+            <summary>
+              Looks up a localized resource of type System.Byte[].
+            </summary>
+        </member>
+        <member name="P:GameDBEditorLibrary.Properties.Resources.dataField">
+            <summary>
+              Looks up a localized resource of type System.Byte[].
+            </summary>
+        </member>
+        <member name="P:GameDBEditorLibrary.Properties.Resources.enumTypeConvert">
+            <summary>
+              Looks up a localized resource of type System.Byte[].
+            </summary>
+        </member>
+        <member name="P:GameDBEditorLibrary.Properties.Resources.gameDB">
+            <summary>
+              Looks up a localized resource of type System.Byte[].
+            </summary>
+        </member>
+        <member name="P:GameDBEditorLibrary.Properties.Resources.gameDBLocalization">
+            <summary>
+              Looks up a localized resource of type System.Byte[].
+            </summary>
+        </member>
+        <member name="P:GameDBEditorLibrary.Properties.Resources.gameDBUnity">
+            <summary>
+              Looks up a localized resource of type System.Byte[].
+            </summary>
+        </member>
+        <member name="P:GameDBEditorLibrary.Properties.Resources.localizationDataField">
+            <summary>
+              Looks up a localized resource of type System.Byte[].
+            </summary>
+        </member>
+        <member name="P:GameDBEditorLibrary.Properties.Resources.schema">
+            <summary>
+              Looks up a localized resource of type System.Byte[].
+            </summary>
+        </member>
+        <member name="P:GameDBEditorLibrary.Properties.Resources.table">
+            <summary>
+              Looks up a localized resource of type System.Byte[].
+            </summary>
+        </member>
+        <member name="P:GameDBEditorLibrary.Properties.Resources.tableAccessor">
+            <summary>
+              Looks up a localized resource of type System.Byte[].
+            </summary>
+        </member>
+        <member name="P:GameDBEditorLibrary.Properties.Resources.tableDef">
+            <summary>
+              Looks up a localized resource of type System.Byte[].
+            </summary>
+        </member>
+        <member name="P:GameDBEditorLibrary.Properties.Resources.tableField">
+            <summary>
+              Looks up a localized resource of type System.Byte[].
+            </summary>
+        </member>
+        <member name="P:GameDBEditorLibrary.Properties.Resources.unityBinaryLoad">
+            <summary>
+              Looks up a localized resource of type System.Byte[].
+            </summary>
+        </member>
+        <member name="P:GameDBEditorLibrary.Properties.Resources.unityBinaryLocalizationLoad">
+            <summary>
+              Looks up a localized resource of type System.Byte[].
+            </summary>
+        </member>
+        <member name="P:GameDBEditorLibrary.Properties.Resources.unityLoad">
+            <summary>
+              Looks up a localized resource of type System.Byte[].
+            </summary>
+        </member>
+        <member name="T:GameDBEditorLibrary.GameDBEditor">
+            <summary>
+            GameDBEditor provides static methods for working with the GameDB Editor within the Unity Editor.
+            Allowing things such as subscribing to events (load/save/promote) and programatically working with the editor.
+            </summary>
+        </member>
+        <member name="M:GameDBEditorLibrary.GameDBEditor.LoadGameDB(System.String)">
+            <summary>
+            Programatically load a GameDB in the editor. Useful if intergrating the GameDB Editor with other tools/editors.
+            </summary>
+            <param name="gameDBPath">The path to the GameDB to load.</param>
+            <returns><c>true</c>/<c>false</c> indicating success of the load operation.</returns>
+        </member>
+        <member name="M:GameDBEditorLibrary.GameDBEditor.SaveGameDB">
+            <summary>
+            Programatically save the currently loaded GameDB in the editor.
+            </summary>
+            <returns><c>true</c>/<c>false</c> indicating success of the save operation.</returns>
+        </member>
+        <member name="M:GameDBEditorLibrary.GameDBEditor.AddRowToTable(System.String,System.String,System.Collections.Generic.Dictionary{System.String,System.Object})">
+            <summary>
+            Allows the adding of a row to a GameDB table via an editor script. 
+            The GameDB needs to already be loaded via <see cref="M:GameDBEditorLibrary.GameDBEditor.LoadGameDB(System.String)"/> method. 
+            After adding rows the GameDB needs to be saved via <see cref="M:GameDBEditorLibrary.GameDBEditor.SaveGameDB"/>
+            </summary>
+            <param name="table">The table to add the row to.</param>
+            <param name="key">The key of the row to add.</param>
+            <param name="data">The dictionary representing the fields and data to add.</param>
+            <exception cref="T:System.InvalidCastException">Thrown when data of an invalid type is added for a field.</exception>
+            <exception cref="T:System.ArgumentOutOfRangeException">Thrown when a field in the data doesn't exist in the table.</exception>
+            <example>
+            This example shows the code necessary to add a row to a table.
+            <code>
+            if (GameDBEditor.LoadGameDB("Test/testGameDB.json"))
+            {
+                GameDBEditor.AddRowToTable(TestSchema.TableName, "testKey1", new Dictionary&lt;string, object> {
+                    { TestSchema.FieldTest1, "test" },
+                    { TestSchema.FieldTest2, true }
+                });
+            
+                GameDBEditor.AddRowToTable(TestSchema.TableName, "testKey2", new Dictionary&lt;string, object> {
+                    { TestSchema.FieldTest1, "test2" },
+                    { TestSchema.FieldTest2, false }
+                });
+                GameDBEditor.SaveGameDB();
+            }
+            </code>
+            </example>
+        </member>
+        <member name="M:GameDBEditorLibrary.GameDBEditor.RegisterSavedGameDBCallback(System.Action{System.String})">
+            <summary>
+            Allows a callback to be registered when a GameDB has been saved in the editor.
+            Useful for updating other editors or systems when data has changed.
+            The Scope Name of the saved GameDB is returned via the callback.
+            </summary>
+            <param name="onSaved">The on saved.</param>
+        </member>
+        <member name="M:GameDBEditorLibrary.GameDBEditor.RegisterRevisionPromotionCallback(System.Action{System.String,System.String,System.Int32})">
+            <summary>
+            Allows a callback to be registered for when a revision of the GameDB is promoted on the GameDB Server.
+            This is useful to trigger events such as causing live clients to update when a GameDB has been promoted. 
+            The Scope Name, tag and revision number are returned via the callback of the promoted GameDB.
+            </summary>
+            <param name="onPromotion">The callback triggered on a promotion.</param>
+        </member>
+        <member name="M:GameDBEditorLibrary.TypeHelpers.ToUnityColor(GameDBLibrary.Color)">
+            <summary>
+            Converts a GameDB Color to a Unity Color
+            </summary>
+            <param name="color">The color to convert</param>
+            <returns>The equivelant Unity Color</returns>
+        </member>
+        <member name="M:GameDBEditorLibrary.TypeHelpers.ToGameDBColor(UnityEngine.Color)">
+            <summary>
+            Converts a Unity Color to a GameDB Color
+            </summary>
+            <param name="color">The color to convert</param>
+            <returns>The equivelant GameDB Color</returns>
+        </member>
+        <member name="T:RSG.Promises.EnumerableExt">
+            <summary>
+            General extensions to LINQ.
+            </summary>
+        </member>
+        <member name="T:RSG.IPromise`1">
+            <summary>
+            Implements a C# promise.
+            https://developer.mozilla.org/en/docs/Web/JavaScript/Reference/Global_Objects/Promise
+            </summary>
+        </member>
+        <member name="P:RSG.IPromise`1.Id">
+            <summary>
+            Gets the id of the promise, useful for referencing the promise during runtime.
+            </summary>
+        </member>
+        <member name="M:RSG.IPromise`1.WithName(System.String)">
+            <summary>
+            Set the name of the promise, useful for debugging.
+            </summary>
+        </member>
+        <member name="M:RSG.IPromise`1.Done(System.Action{`0},System.Action{System.Exception})">
+            <summary>
+            Completes the promise. 
+            onResolved is called on successful completion.
+            onRejected is called on error.
+            </summary>
+        </member>
+        <member name="M:RSG.IPromise`1.Done(System.Action{`0})">
+            <summary>
+            Completes the promise. 
+            onResolved is called on successful completion.
+            Adds a default error handler.
+            </summary>
+        </member>
+        <member name="M:RSG.IPromise`1.Done">
+            <summary>
+            Complete the promise. Adds a default error handler.
+            </summary>
+        </member>
+        <member name="M:RSG.IPromise`1.Catch(System.Action{System.Exception})">
+            <summary>
+            Handle errors for the promise. 
+            </summary>
+        </member>
+        <member name="M:RSG.IPromise`1.Then``1(System.Func{`0,RSG.IPromise{``0}})">
+            <summary>
+            Add a resolved callback that chains a value promise (optionally converting to a different value type).
+            </summary>
+        </member>
+        <member name="M:RSG.IPromise`1.Then(System.Func{`0,RSG.IPromise})">
+            <summary>
+            Add a resolved callback that chains a non-value promise.
+            </summary>
+        </member>
+        <member name="M:RSG.IPromise`1.Then(System.Action{`0})">
+            <summary>
+            Add a resolved callback.
+            </summary>
+        </member>
+        <member name="M:RSG.IPromise`1.Then``1(System.Func{`0,RSG.IPromise{``0}},System.Action{System.Exception})">
+            <summary>
+            Add a resolved callback and a rejected callback.
+            The resolved callback chains a value promise (optionally converting to a different value type).
+            </summary>
+        </member>
+        <member name="M:RSG.IPromise`1.Then(System.Func{`0,RSG.IPromise},System.Action{System.Exception})">
+            <summary>
+            Add a resolved callback and a rejected callback.
+            The resolved callback chains a non-value promise.
+            </summary>
+        </member>
+        <member name="M:RSG.IPromise`1.Then(System.Action{`0},System.Action{System.Exception})">
+            <summary>
+            Add a resolved callback and a rejected callback.
+            </summary>
+        </member>
+        <member name="M:RSG.IPromise`1.Then``1(System.Func{`0,``0})">
+            <summary>
+            Return a new promise with a different value.
+            May also change the type of the value.
+            </summary>
+        </member>
+        <member name="M:RSG.IPromise`1.Transform``1(System.Func{`0,``0})">
+            <summary>
+            Return a new promise with a different value.
+            May also change the type of the value.
+            </summary>
+        </member>
+        <member name="M:RSG.IPromise`1.ThenAll``1(System.Func{`0,System.Collections.Generic.IEnumerable{RSG.IPromise{``0}}})">
+            <summary>
+            Chain an enumerable of promises, all of which must resolve.
+            Returns a promise for a collection of the resolved results.
+            The resulting promise is resolved when all of the promises have resolved.
+            It is rejected as soon as any of the promises have been rejected.
+            </summary>
+        </member>
+        <member name="M:RSG.IPromise`1.ThenAll(System.Func{`0,System.Collections.Generic.IEnumerable{RSG.IPromise}})">
+            <summary>
+            Chain an enumerable of promises, all of which must resolve.
+            Converts to a non-value promise.
+            The resulting promise is resolved when all of the promises have resolved.
+            It is rejected as soon as any of the promises have been rejected.
+            </summary>
+        </member>
+        <member name="M:RSG.IPromise`1.ThenRace``1(System.Func{`0,System.Collections.Generic.IEnumerable{RSG.IPromise{``0}}})">
+            <summary>
+            Takes a function that yields an enumerable of promises.
+            Returns a promise that resolves when the first of the promises has resolved.
+            Yields the value from the first promise that has resolved.
+            </summary>
+        </member>
+        <member name="M:RSG.IPromise`1.ThenRace(System.Func{`0,System.Collections.Generic.IEnumerable{RSG.IPromise}})">
+            <summary>
+            Takes a function that yields an enumerable of promises.
+            Converts to a non-value promise.
+            Returns a promise that resolves when the first of the promises has resolved.
+            Yields the value from the first promise that has resolved.
+            </summary>
+        </member>
+        <member name="M:RSG.IPromise`1.Finally(System.Action)">
+            <summary> 
+            Add a finally callback. 
+            Finally callbacks will always be called, even if any preceding promise is rejected, or encounters an error. 
+            </summary> 
+        </member>
+        <member name="M:RSG.IPromise`1.Finally(System.Func{RSG.IPromise})">
+            <summary>
+            Add a finally callback. 
+            Finally callbacks will always be called, even if any preceding promise is rejected, or encounters an error. 
+            </summary>
+        </member>
+        <member name="M:RSG.IPromise`1.Finally``1(System.Func{RSG.IPromise{``0}})">
+            <summary> 
+            Add a finally callback. 
+            Finally callbacks will always be called, even if any preceding promise is rejected, or encounters an error. 
+            </summary> 
+        </member>
+        <member name="T:RSG.IRejectable">
+            <summary>
+            Interface for a promise that can be rejected.
+            </summary>
+        </member>
+        <member name="M:RSG.IRejectable.Reject(System.Exception)">
+            <summary>
+            Reject the promise with an exception.
+            </summary>
+        </member>
+        <member name="T:RSG.IPendingPromise`1">
+            <summary>
+            Interface for a promise that can be rejected or resolved.
+            </summary>
+        </member>
+        <member name="P:RSG.IPendingPromise`1.Id">
+            <summary>
+            ID of the promise, useful for debugging.
+            </summary>
+        </member>
+        <member name="M:RSG.IPendingPromise`1.Resolve(`0)">
+            <summary>
+            Resolve the promise with a particular value.
+            </summary>
+        </member>
+        <member name="T:RSG.PromiseState">
+            <summary>
+            Specifies the state of a promise.
+            </summary>
+        </member>
+        <member name="T:RSG.Promise`1">
+            <summary>
+            Implements a C# promise.
+            https://developer.mozilla.org/en/docs/Web/JavaScript/Reference/Global_Objects/Promise
+            </summary>
+        </member>
+        <member name="F:RSG.Promise`1.rejectionException">
+            <summary>
+            The exception when the promise is rejected.
+            </summary>
+        </member>
+        <member name="F:RSG.Promise`1.resolveValue">
+            <summary>
+            The value when the promises is resolved.
+            </summary>
+        </member>
+        <member name="F:RSG.Promise`1.rejectHandlers">
+            <summary>
+            Error handler.
+            </summary>
+        </member>
+        <member name="F:RSG.Promise`1.resolveCallbacks">
+            <summary>
+            Completed handlers that accept a value.
+            </summary>
+        </member>
+        <member name="P:RSG.Promise`1.Id">
+            <summary>
+            ID of the promise, useful for debugging.
+            </summary>
+        </member>
+        <member name="P:RSG.Promise`1.Name">
+            <summary>
+            Name of the promise, when set, useful for debugging.
+            </summary>
+        </member>
+        <member name="P:RSG.Promise`1.CurState">
+            <summary>
+            Tracks the current state of the promise.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise`1.AddRejectHandler(System.Action{System.Exception},RSG.IRejectable)">
+            <summary>
+            Add a rejection handler for this promise.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise`1.AddResolveHandler(System.Action{`0},RSG.IRejectable)">
+            <summary>
+            Add a resolve handler for this promise.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise`1.InvokeHandler``1(System.Action{``0},RSG.IRejectable,``0)">
+            <summary>
+            Invoke a single handler.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise`1.ClearHandlers">
+            <summary>
+            Helper function clear out all handlers after resolution or rejection.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise`1.InvokeRejectHandlers(System.Exception)">
+            <summary>
+            Invoke all reject handlers.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise`1.InvokeResolveHandlers(`0)">
+            <summary>
+            Invoke all resolve handlers.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise`1.Reject(System.Exception)">
+            <summary>
+            Reject the promise with an exception.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise`1.Resolve(`0)">
+            <summary>
+            Resolve the promise with a particular value.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise`1.Done(System.Action{`0},System.Action{System.Exception})">
+            <summary>
+            Completes the promise. 
+            onResolved is called on successful completion.
+            onRejected is called on error.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise`1.Done(System.Action{`0})">
+            <summary>
+            Completes the promise. 
+            onResolved is called on successful completion.
+            Adds a default error handler.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise`1.Done">
+            <summary>
+            Complete the promise. Adds a default error handler.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise`1.WithName(System.String)">
+            <summary>
+            Set the name of the promise, useful for debugging.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise`1.Catch(System.Action{System.Exception})">
+            <summary>
+            Handle errors for the promise. 
+            </summary>
+        </member>
+        <member name="M:RSG.Promise`1.Then``1(System.Func{`0,RSG.IPromise{``0}})">
+            <summary>
+            Add a resolved callback that chains a value promise (optionally converting to a different value type).
+            </summary>
+        </member>
+        <member name="M:RSG.Promise`1.Then(System.Func{`0,RSG.IPromise})">
+            <summary>
+            Add a resolved callback that chains a non-value promise.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise`1.Then(System.Action{`0})">
+            <summary>
+            Add a resolved callback.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise`1.Then``1(System.Func{`0,RSG.IPromise{``0}},System.Action{System.Exception})">
+            <summary>
+            Add a resolved callback and a rejected callback.
+            The resolved callback chains a value promise (optionally converting to a different value type).
+            </summary>
+        </member>
+        <member name="M:RSG.Promise`1.Then(System.Func{`0,RSG.IPromise},System.Action{System.Exception})">
+            <summary>
+            Add a resolved callback and a rejected callback.
+            The resolved callback chains a non-value promise.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise`1.Then(System.Action{`0},System.Action{System.Exception})">
+            <summary>
+            Add a resolved callback and a rejected callback.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise`1.Then``1(System.Func{`0,``0})">
+            <summary>
+            Return a new promise with a different value.
+            May also change the type of the value.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise`1.Transform``1(System.Func{`0,``0})">
+            <summary>
+            Return a new promise with a different value.
+            May also change the type of the value.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise`1.ActionHandlers(RSG.IRejectable,System.Action{`0},System.Action{System.Exception})">
+            <summary>
+            Helper function to invoke or register resolve/reject handlers.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise`1.ThenAll``1(System.Func{`0,System.Collections.Generic.IEnumerable{RSG.IPromise{``0}}})">
+            <summary>
+            Chain an enumerable of promises, all of which must resolve.
+            Returns a promise for a collection of the resolved results.
+            The resulting promise is resolved when all of the promises have resolved.
+            It is rejected as soon as any of the promises have been rejected.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise`1.ThenAll(System.Func{`0,System.Collections.Generic.IEnumerable{RSG.IPromise}})">
+            <summary>
+            Chain an enumerable of promises, all of which must resolve.
+            Converts to a non-value promise.
+            The resulting promise is resolved when all of the promises have resolved.
+            It is rejected as soon as any of the promises have been rejected.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise`1.All(RSG.IPromise{`0}[])">
+            <summary>
+            Returns a promise that resolves when all of the promises in the enumerable argument have resolved.
+            Returns a promise of a collection of the resolved results.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise`1.All(System.Collections.Generic.IEnumerable{RSG.IPromise{`0}})">
+            <summary>
+            Returns a promise that resolves when all of the promises in the enumerable argument have resolved.
+            Returns a promise of a collection of the resolved results.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise`1.ThenRace``1(System.Func{`0,System.Collections.Generic.IEnumerable{RSG.IPromise{``0}}})">
+            <summary>
+            Takes a function that yields an enumerable of promises.
+            Returns a promise that resolves when the first of the promises has resolved.
+            Yields the value from the first promise that has resolved.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise`1.ThenRace(System.Func{`0,System.Collections.Generic.IEnumerable{RSG.IPromise}})">
+            <summary>
+            Takes a function that yields an enumerable of promises.
+            Converts to a non-value promise.
+            Returns a promise that resolves when the first of the promises has resolved.
+            Yields the value from the first promise that has resolved.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise`1.Race(RSG.IPromise{`0}[])">
+            <summary>
+            Returns a promise that resolves when the first of the promises in the enumerable argument have resolved.
+            Returns the value from the first promise that has resolved.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise`1.Race(System.Collections.Generic.IEnumerable{RSG.IPromise{`0}})">
+            <summary>
+            Returns a promise that resolves when the first of the promises in the enumerable argument have resolved.
+            Returns the value from the first promise that has resolved.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise`1.Resolved(`0)">
+            <summary>
+            Convert a simple value directly into a resolved promise.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise`1.Rejected(System.Exception)">
+            <summary>
+            Convert an exception directly into a rejected promise.
+            </summary>
+        </member>
+        <member name="M:RSG.PromiseHelpers.All``2(RSG.IPromise{``0},RSG.IPromise{``1})">
+            <summary>
+            Returns a promise that resolves with all of the specified promises have resolved.
+            Returns a promise of a tuple of the resolved results.
+            </summary>
+        </member>
+        <member name="M:RSG.PromiseHelpers.All``3(RSG.IPromise{``0},RSG.IPromise{``1},RSG.IPromise{``2})">
+            <summary>
+            Returns a promise that resolves with all of the specified promises have resolved.
+            Returns a promise of a tuple of the resolved results.
+            </summary>
+        </member>
+        <member name="M:RSG.PromiseHelpers.All``4(RSG.IPromise{``0},RSG.IPromise{``1},RSG.IPromise{``2},RSG.IPromise{``3})">
+            <summary>
+            Returns a promise that resolves with all of the specified promises have resolved.
+            Returns a promise of a tuple of the resolved results.
+            </summary>
+        </member>
+        <member name="M:RSG.PromiseCancelledException.#ctor">
+            <summary>
+            Just create the exception
+            </summary>
+        </member>
+        <member name="M:RSG.PromiseCancelledException.#ctor(System.String)">
+            <summary>
+            Create the exception with description
+            </summary>
+            <param name="message">Exception description</param>
+        </member>
+        <member name="T:RSG.PredicateWait">
+            <summary>
+            A class that wraps a pending promise with it's predicate and time data
+            </summary>
+        </member>
+        <member name="F:RSG.PredicateWait.predicate">
+            <summary>
+            Predicate for resolving the promise
+            </summary>
+        </member>
+        <member name="F:RSG.PredicateWait.timeStarted">
+            <summary>
+            The time the promise was started
+            </summary>
+        </member>
+        <member name="F:RSG.PredicateWait.pendingPromise">
+            <summary>
+            The pending promise which is an interface for a promise that can be rejected or resolved.
+            </summary>
+        </member>
+        <member name="F:RSG.PredicateWait.timeData">
+            <summary>
+            The time data specific to this pending promise. Includes elapsed time and delta time.
+            </summary>
+        </member>
+        <member name="T:RSG.TimeData">
+            <summary>
+            Time data specific to a particular pending promise.
+            </summary>
+        </member>
+        <member name="F:RSG.TimeData.elapsedTime">
+            <summary>
+            The amount of time that has elapsed since the pending promise started running
+            </summary>
+        </member>
+        <member name="F:RSG.TimeData.deltaTime">
+            <summary>
+            The amount of time since the last time the pending promise was updated.
+            </summary>
+        </member>
+        <member name="M:RSG.IPromiseTimer.WaitFor(System.Single)">
+            <summary>
+            Resolve the returned promise once the time has elapsed
+            </summary>
+        </member>
+        <member name="M:RSG.IPromiseTimer.WaitUntil(System.Func{RSG.TimeData,System.Boolean})">
+            <summary>
+            Resolve the returned promise once the predicate evaluates to true
+            </summary>
+        </member>
+        <member name="M:RSG.IPromiseTimer.WaitWhile(System.Func{RSG.TimeData,System.Boolean})">
+            <summary>
+            Resolve the returned promise once the predicate evaluates to false
+            </summary>
+        </member>
+        <member name="M:RSG.IPromiseTimer.Update(System.Single)">
+            <summary>
+            Update all pending promises. Must be called for the promises to progress and resolve at all.
+            </summary>
+        </member>
+        <member name="M:RSG.IPromiseTimer.Cancel(RSG.IPromise)">
+            <summary>
+            Cancel a waiting promise and reject it immediately.
+            </summary>
+        </member>
+        <member name="F:RSG.PromiseTimer.curTime">
+            <summary>
+            The current running total for time that this PromiseTimer has run for
+            </summary>
+        </member>
+        <member name="F:RSG.PromiseTimer.waiting">
+            <summary>
+            Currently pending promises
+            </summary>
+        </member>
+        <member name="M:RSG.PromiseTimer.WaitFor(System.Single)">
+            <summary>
+            Resolve the returned promise once the time has elapsed
+            </summary>
+        </member>
+        <member name="M:RSG.PromiseTimer.WaitWhile(System.Func{RSG.TimeData,System.Boolean})">
+            <summary>
+            Resolve the returned promise once the predicate evaluates to false
+            </summary>
+        </member>
+        <member name="M:RSG.PromiseTimer.WaitUntil(System.Func{RSG.TimeData,System.Boolean})">
+            <summary>
+            Resolve the returned promise once the predicate evalutes to true
+            </summary>
+        </member>
+        <member name="M:RSG.PromiseTimer.Update(System.Single)">
+            <summary>
+            Update all pending promises. Must be called for the promises to progress and resolve at all.
+            </summary>
+        </member>
+        <member name="M:RSG.PromiseTimer.RemoveNode(System.Collections.Generic.LinkedListNode{RSG.PredicateWait})">
+            <summary>
+            Removes the provided node and returns the next node in the list.
+            </summary>
+        </member>
+        <member name="T:RSG.IPromise">
+            <summary>
+            Implements a non-generic C# promise, this is a promise that simply resolves without delivering a value.
+            https://developer.mozilla.org/en/docs/Web/JavaScript/Reference/Global_Objects/Promise
+            </summary>
+        </member>
+        <member name="P:RSG.IPromise.Id">
+            <summary>
+            ID of the promise, useful for debugging.
+            </summary>
+        </member>
+        <member name="M:RSG.IPromise.WithName(System.String)">
+            <summary>
+            Set the name of the promise, useful for debugging.
+            </summary>
+        </member>
+        <member name="M:RSG.IPromise.Done(System.Action,System.Action{System.Exception})">
+            <summary>
+            Completes the promise. 
+            onResolved is called on successful completion.
+            onRejected is called on error.
+            </summary>
+        </member>
+        <member name="M:RSG.IPromise.Done(System.Action)">
+            <summary>
+            Completes the promise. 
+            onResolved is called on successful completion.
+            Adds a default error handler.
+            </summary>
+        </member>
+        <member name="M:RSG.IPromise.Done">
+            <summary>
+            Complete the promise. Adds a default error handler.
+            </summary>
+        </member>
+        <member name="M:RSG.IPromise.Catch(System.Action{System.Exception})">
+            <summary>
+            Handle errors for the promise. 
+            </summary>
+        </member>
+        <member name="M:RSG.IPromise.Then``1(System.Func{RSG.IPromise{``0}})">
+            <summary>
+            Add a resolved callback that chains a value promise (optionally converting to a different value type).
+            </summary>
+        </member>
+        <member name="M:RSG.IPromise.Then(System.Func{RSG.IPromise})">
+            <summary>
+            Add a resolved callback that chains a non-value promise.
+            </summary>
+        </member>
+        <member name="M:RSG.IPromise.Then(System.Action)">
+            <summary>
+            Add a resolved callback.
+            </summary>
+        </member>
+        <member name="M:RSG.IPromise.Then``1(System.Func{RSG.IPromise{``0}},System.Action{System.Exception})">
+            <summary>
+            Add a resolved callback and a rejected callback.
+            The resolved callback chains a value promise (optionally converting to a different value type).
+            </summary>
+        </member>
+        <member name="M:RSG.IPromise.Then(System.Func{RSG.IPromise},System.Action{System.Exception})">
+            <summary>
+            Add a resolved callback and a rejected callback.
+            The resolved callback chains a non-value promise.
+            </summary>
+        </member>
+        <member name="M:RSG.IPromise.Then(System.Action,System.Action{System.Exception})">
+            <summary>
+            Add a resolved callback and a rejected callback.
+            </summary>
+        </member>
+        <member name="M:RSG.IPromise.ThenAll(System.Func{System.Collections.Generic.IEnumerable{RSG.IPromise}})">
+            <summary>
+            Chain an enumerable of promises, all of which must resolve.
+            The resulting promise is resolved when all of the promises have resolved.
+            It is rejected as soon as any of the promises have been rejected.
+            </summary>
+        </member>
+        <member name="M:RSG.IPromise.ThenAll``1(System.Func{System.Collections.Generic.IEnumerable{RSG.IPromise{``0}}})">
+            <summary>
+            Chain an enumerable of promises, all of which must resolve.
+            Converts to a non-value promise.
+            The resulting promise is resolved when all of the promises have resolved.
+            It is rejected as soon as any of the promises have been rejected.
+            </summary>
+        </member>
+        <member name="M:RSG.IPromise.ThenSequence(System.Func{System.Collections.Generic.IEnumerable{System.Func{RSG.IPromise}}})">
+            <summary>
+            Chain a sequence of operations using promises.
+            Reutrn a collection of functions each of which starts an async operation and yields a promise.
+            Each function will be called and each promise resolved in turn.
+            The resulting promise is resolved after each promise is resolved in sequence.
+            </summary>
+        </member>
+        <member name="M:RSG.IPromise.ThenRace(System.Func{System.Collections.Generic.IEnumerable{RSG.IPromise}})">
+            <summary>
+            Takes a function that yields an enumerable of promises.
+            Returns a promise that resolves when the first of the promises has resolved.
+            </summary>
+        </member>
+        <member name="M:RSG.IPromise.ThenRace``1(System.Func{System.Collections.Generic.IEnumerable{RSG.IPromise{``0}}})">
+            <summary>
+            Takes a function that yields an enumerable of promises.
+            Converts to a value promise.
+            Returns a promise that resolves when the first of the promises has resolved.
+            </summary>
+        </member>
+        <member name="M:RSG.IPromise.Finally(System.Action)">
+            <summary> 
+            Add a finally callback. 
+            Finally callbacks will always be called, even if any preceding promise is rejected, or encounters an error. 
+            </summary> 
+        </member>
+        <member name="M:RSG.IPromise.Finally(System.Func{RSG.IPromise})">
+            <summary>
+            Add a finally callback that chains a non-value promise.
+            </summary>
+        </member>
+        <member name="M:RSG.IPromise.Finally``1(System.Func{RSG.IPromise{``0}})">
+            <summary> 
+            Add a finally callback. 
+            Finally callbacks will always be called, even if any preceding promise is rejected, or encounters an error. 
+            </summary> 
+        </member>
+        <member name="T:RSG.IPendingPromise">
+            <summary>
+            Interface for a promise that can be rejected or resolved.
+            </summary>
+        </member>
+        <member name="P:RSG.IPendingPromise.Id">
+            <summary>
+            ID of the promise, useful for debugging.
+            </summary>
+        </member>
+        <member name="M:RSG.IPendingPromise.Resolve">
+            <summary>
+            Resolve the promise with a particular value.
+            </summary>
+        </member>
+        <member name="T:RSG.IPromiseInfo">
+            <summary>
+            Used to list information of pending promises.
+            </summary>
+        </member>
+        <member name="P:RSG.IPromiseInfo.Id">
+            <summary>
+            Id of the promise.
+            </summary>
+        </member>
+        <member name="P:RSG.IPromiseInfo.Name">
+            <summary>
+            Human-readable name for the promise.
+            </summary>
+        </member>
+        <member name="T:RSG.ExceptionEventArgs">
+            <summary>
+            Arguments to the UnhandledError event.
+            </summary>
+        </member>
+        <member name="T:RSG.RejectHandler">
+            <summary>
+            Represents a handler invoked when the promise is rejected.
+            </summary>
+        </member>
+        <member name="F:RSG.RejectHandler.callback">
+            <summary>
+            Callback fn.
+            </summary>
+        </member>
+        <member name="F:RSG.RejectHandler.rejectable">
+            <summary>
+            The promise that is rejected when there is an error while invoking the handler.
+            </summary>
+        </member>
+        <member name="T:RSG.Promise">
+            <summary>
+            Implements a non-generic C# promise, this is a promise that simply resolves without delivering a value.
+            https://developer.mozilla.org/en/docs/Web/JavaScript/Reference/Global_Objects/Promise
+            </summary>
+        </member>
+        <member name="F:RSG.Promise.EnablePromiseTracking">
+            <summary>
+            Set to true to enable tracking of promises.
+            </summary>
+        </member>
+        <member name="E:RSG.Promise.UnhandledException">
+            <summary>
+            Event raised for unhandled errors.
+            For this to work you have to complete your promises with a call to Done().
+            </summary>
+        </member>
+        <member name="F:RSG.Promise.nextPromiseId">
+            <summary>
+            Id for the next promise that is created.
+            </summary>
+        </member>
+        <member name="F:RSG.Promise.pendingPromises">
+            <summary>
+            Information about pending promises.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise.GetPendingPromises">
+            <summary>
+            Information about pending promises, useful for debugging.
+            This is only populated when 'EnablePromiseTracking' is set to true.
+            </summary>
+        </member>
+        <member name="F:RSG.Promise.rejectionException">
+            <summary>
+            The exception when the promise is rejected.
+            </summary>
+        </member>
+        <member name="F:RSG.Promise.rejectHandlers">
+            <summary>
+            Error handlers.
+            </summary>
+        </member>
+        <member name="T:RSG.Promise.ResolveHandler">
+            <summary>
+            Represents a handler invoked when the promise is resolved.
+            </summary>
+        </member>
+        <member name="F:RSG.Promise.ResolveHandler.callback">
+            <summary>
+            Callback fn.
+            </summary>
+        </member>
+        <member name="F:RSG.Promise.ResolveHandler.rejectable">
+            <summary>
+            The promise that is rejected when there is an error while invoking the handler.
+            </summary>
+        </member>
+        <member name="F:RSG.Promise.resolveHandlers">
+            <summary>
+            Completed handlers that accept no value.
+            </summary>
+        </member>
+        <member name="P:RSG.Promise.Id">
+            <summary>
+            ID of the promise, useful for debugging.
+            </summary>
+        </member>
+        <member name="P:RSG.Promise.Name">
+            <summary>
+            Name of the promise, when set, useful for debugging.
+            </summary>
+        </member>
+        <member name="P:RSG.Promise.CurState">
+            <summary>
+            Tracks the current state of the promise.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise.NextId">
+            <summary>
+            Increments the ID counter and gives us the ID for the next promise.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise.AddRejectHandler(System.Action{System.Exception},RSG.IRejectable)">
+            <summary>
+            Add a rejection handler for this promise.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise.AddResolveHandler(System.Action,RSG.IRejectable)">
+            <summary>
+            Add a resolve handler for this promise.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise.InvokeRejectHandler(System.Action{System.Exception},RSG.IRejectable,System.Exception)">
+            <summary>
+            Invoke a single error handler.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise.InvokeResolveHandler(System.Action,RSG.IRejectable)">
+            <summary>
+            Invoke a single resolve handler.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise.ClearHandlers">
+            <summary>
+            Helper function clear out all handlers after resolution or rejection.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise.InvokeRejectHandlers(System.Exception)">
+            <summary>
+            Invoke all reject handlers.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise.InvokeResolveHandlers">
+            <summary>
+            Invoke all resolve handlers.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise.Reject(System.Exception)">
+            <summary>
+            Reject the promise with an exception.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise.Resolve">
+            <summary>
+            Resolve the promise with a particular value.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise.Done(System.Action,System.Action{System.Exception})">
+            <summary>
+            Completes the promise. 
+            onResolved is called on successful completion.
+            onRejected is called on error.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise.Done(System.Action)">
+            <summary>
+            Completes the promise. 
+            onResolved is called on successful completion.
+            Adds a default error handler.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise.Done">
+            <summary>
+            Complete the promise. Adds a defualt error handler.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise.WithName(System.String)">
+            <summary>
+            Set the name of the promise, useful for debugging.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise.Catch(System.Action{System.Exception})">
+            <summary>
+            Handle errors for the promise. 
+            </summary>
+        </member>
+        <member name="M:RSG.Promise.Then``1(System.Func{RSG.IPromise{``0}})">
+            <summary>
+            Add a resolved callback that chains a value promise (optionally converting to a different value type).
+            </summary>
+        </member>
+        <member name="M:RSG.Promise.Then(System.Func{RSG.IPromise})">
+            <summary>
+            Add a resolved callback that chains a non-value promise.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise.Then(System.Action)">
+            <summary>
+            Add a resolved callback.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise.Then``1(System.Func{RSG.IPromise{``0}},System.Action{System.Exception})">
+            <summary>
+            Add a resolved callback and a rejected callback.
+            The resolved callback chains a value promise (optionally converting to a different value type).
+            </summary>
+        </member>
+        <member name="M:RSG.Promise.Then(System.Func{RSG.IPromise},System.Action{System.Exception})">
+            <summary>
+            Add a resolved callback and a rejected callback.
+            The resolved callback chains a non-value promise.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise.Then(System.Action,System.Action{System.Exception})">
+            <summary>
+            Add a resolved callback and a rejected callback.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise.ActionHandlers(RSG.IRejectable,System.Action,System.Action{System.Exception})">
+            <summary>
+            Helper function to invoke or register resolve/reject handlers.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise.ThenAll(System.Func{System.Collections.Generic.IEnumerable{RSG.IPromise}})">
+            <summary>
+            Chain an enumerable of promises, all of which must resolve.
+            The resulting promise is resolved when all of the promises have resolved.
+            It is rejected as soon as any of the promises have been rejected.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise.ThenAll``1(System.Func{System.Collections.Generic.IEnumerable{RSG.IPromise{``0}}})">
+            <summary>
+            Chain an enumerable of promises, all of which must resolve.
+            Converts to a non-value promise.
+            The resulting promise is resolved when all of the promises have resolved.
+            It is rejected as soon as any of the promises have been rejected.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise.All(RSG.IPromise[])">
+            <summary>
+            Returns a promise that resolves when all of the promises in the enumerable argument have resolved.
+            Returns a promise of a collection of the resolved results.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise.All(System.Collections.Generic.IEnumerable{RSG.IPromise})">
+            <summary>
+            Returns a promise that resolves when all of the promises in the enumerable argument have resolved.
+            Returns a promise of a collection of the resolved results.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise.ThenSequence(System.Func{System.Collections.Generic.IEnumerable{System.Func{RSG.IPromise}}})">
+            <summary>
+            Chain a sequence of operations using promises.
+            Reutrn a collection of functions each of which starts an async operation and yields a promise.
+            Each function will be called and each promise resolved in turn.
+            The resulting promise is resolved after each promise is resolved in sequence.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise.Sequence(System.Func{RSG.IPromise}[])">
+            <summary>
+            Chain a number of operations using promises.
+            Takes a number of functions each of which starts an async operation and yields a promise.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise.Sequence(System.Collections.Generic.IEnumerable{System.Func{RSG.IPromise}})">
+            <summary>
+            Chain a sequence of operations using promises.
+            Takes a collection of functions each of which starts an async operation and yields a promise.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise.ThenRace(System.Func{System.Collections.Generic.IEnumerable{RSG.IPromise}})">
+            <summary>
+            Takes a function that yields an enumerable of promises.
+            Returns a promise that resolves when the first of the promises has resolved.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise.ThenRace``1(System.Func{System.Collections.Generic.IEnumerable{RSG.IPromise{``0}}})">
+            <summary>
+            Takes a function that yields an enumerable of promises.
+            Converts to a value promise.
+            Returns a promise that resolves when the first of the promises has resolved.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise.Race(RSG.IPromise[])">
+            <summary>
+            Returns a promise that resolves when the first of the promises in the enumerable argument have resolved.
+            Returns the value from the first promise that has resolved.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise.Race(System.Collections.Generic.IEnumerable{RSG.IPromise})">
+            <summary>
+            Returns a promise that resolves when the first of the promises in the enumerable argument have resolved.
+            Returns the value from the first promise that has resolved.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise.Resolved">
+            <summary>
+            Convert a simple value directly into a resolved promise.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise.Rejected(System.Exception)">
+            <summary>
+            Convert an exception directly into a rejected promise.
+            </summary>
+        </member>
+        <member name="M:RSG.Promise.PropagateUnhandledException(System.Object,System.Exception)">
+            <summary>
+            Raises the UnhandledException event.
+            </summary>
+        </member>
+        <member name="T:RSG.Tuple">
+            <summary>
+            Provides static methods for creating tuple objects.
+            
+            Tuple implementation for .NET 3.5
+            </summary>
+        </member>
+        <member name="M:RSG.Tuple.Create``2(``0,``1)">
+            <summary>
+            Create a new 2-tuple, or pair.
+            </summary>
+            <typeparam name="T1">The type of the first component of the tuple.</typeparam>
+            <typeparam name="T2">The type of the second component of the tuple.</typeparam>
+            <param name="item1">The value of the first component of the tuple.</param>
+            <param name="item2">The value of the second component of the tuple.</param>
+            <returns>A 2-tuple whose value is (item1, item2)</returns>
+        </member>
+        <member name="M:RSG.Tuple.Create``3(``0,``1,``2)">
+            <summary>
+            Create a new 3-tuple, or triple.
+            </summary>
+            <typeparam name="T1">The type of the first component of the tuple.</typeparam>
+            <typeparam name="T2">The type of the second component of the tuple.</typeparam>
+            <typeparam name="T3">The type of the third component of the tuple.</typeparam>
+            <param name="item1">The value of the first component of the tuple.</param>
+            <param name="item2">The value of the second component of the tuple.</param>
+            <param name="item3">The value of the third component of the tuple.</param>
+            <returns>A 3-tuple whose value is (item1, item2, item3)</returns>
+        </member>
+        <member name="M:RSG.Tuple.Create``4(``0,``1,``2,``3)">
+            <summary>
+            Create a new 4-tuple, or quadruple.
+            </summary>
+            <typeparam name="T1">The type of the first component of the tuple.</typeparam>
+            <typeparam name="T2">The type of the second component of the tuple.</typeparam>
+            <typeparam name="T3">The type of the third component of the tuple.</typeparam>
+            <typeparam name="T4">The type of the fourth component of the tuple.</typeparam>
+            <param name="item1">The value of the first component of the tuple.</param>
+            <param name="item2">The value of the second component of the tuple.</param>
+            <param name="item3">The value of the third component of the tuple.</param>
+            <param name="item4">The value of the fourth component of the tuple.</param>
+            <returns>A 3-tuple whose value is (item1, item2, item3, item4)</returns>
+        </member>
+        <member name="T:RSG.Tuple`2">
+            <summary>
+            Represents a 2-tuple, or pair.
+            </summary>
+            <typeparam name="T1">The type of the tuple's first component.</typeparam>
+            <typeparam name="T2">The type of the tuple's second component.</typeparam>
+        </member>
+        <member name="P:RSG.Tuple`2.Item1">
+            <summary>
+            Gets the value of the current tuple's first component.
+            </summary>
+        </member>
+        <member name="P:RSG.Tuple`2.Item2">
+            <summary>
+            Gets the value of the current tuple's second component.
+            </summary>
+        </member>
+        <member name="T:RSG.Tuple`3">
+            <summary>
+            Represents a 3-tuple, or triple.
+            </summary>
+            <typeparam name="T1">The type of the tuple's first component.</typeparam>
+            <typeparam name="T2">The type of the tuple's second component.</typeparam>
+            <typeparam name="T3">The type of the tuple's third component.</typeparam>
+        </member>
+        <member name="P:RSG.Tuple`3.Item1">
+            <summary>
+            Gets the value of the current tuple's first component.
+            </summary>
+        </member>
+        <member name="P:RSG.Tuple`3.Item2">
+            <summary>
+            Gets the value of the current tuple's second component.
+            </summary>
+        </member>
+        <member name="P:RSG.Tuple`3.Item3">
+            <summary>
+            Gets the value of the current tuple's third component.
+            </summary>
+        </member>
+        <member name="T:RSG.Tuple`4">
+            <summary>
+            Represents a 4-tuple, or quadruple.
+            </summary>
+            <typeparam name="T1">The type of the tuple's first component.</typeparam>
+            <typeparam name="T2">The type of the tuple's second component.</typeparam>
+            <typeparam name="T3">The type of the tuple's third component.</typeparam>
+            <typeparam name="T4">The type of the tuple's fourth component.</typeparam>
+        </member>
+        <member name="P:RSG.Tuple`4.Item1">
+            <summary>
+            Gets the value of the current tuple's first component.
+            </summary>
+        </member>
+        <member name="P:RSG.Tuple`4.Item2">
+            <summary>
+            Gets the value of the current tuple's second component.
+            </summary>
+        </member>
+        <member name="P:RSG.Tuple`4.Item3">
+            <summary>
+            Gets the value of the current tuple's third component.
+            </summary>
+        </member>
+        <member name="P:RSG.Tuple`4.Item4">
+            <summary>
+            Gets the value of the current tuple's fourth component.
+            </summary>
+        </member>
+    </members>
+</doc>

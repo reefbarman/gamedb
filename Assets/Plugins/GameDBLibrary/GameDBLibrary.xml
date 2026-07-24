@@ -1,0 +1,315 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>GameDBLibrary</name>
+    </assembly>
+    <members>
+        <member name="T:GameDBLibrary.Properties.Resources">
+            <summary>
+              A strongly-typed resource class, for looking up localized strings, etc.
+            </summary>
+        </member>
+        <member name="P:GameDBLibrary.Properties.Resources.ResourceManager">
+            <summary>
+              Returns the cached ResourceManager instance used by this class.
+            </summary>
+        </member>
+        <member name="P:GameDBLibrary.Properties.Resources.Culture">
+            <summary>
+              Overrides the current thread's CurrentUICulture property for all
+              resource lookups using this strongly typed resource class.
+            </summary>
+        </member>
+        <member name="T:GameDBLibrary.MiniJSON.Json">
+             <summary>
+             This class encodes and decodes JSON strings.
+             Spec. details, see http://www.json.org/
+            
+             JSON uses Arrays and Objects. These correspond here to the datatypes IList and IDictionary.
+             All numbers are parsed to doubles.
+             </summary>
+        </member>
+        <member name="M:GameDBLibrary.MiniJSON.Json.Deserialize(System.String)">
+            <summary>
+            Parses the string json into a value
+            </summary>
+            <param name="json">A JSON string.</param>
+            <returns>An List&lt;object&gt;, a Dictionary&lt;string, object&gt;, a double, an integer,a string, null, true, or false</returns>
+        </member>
+        <member name="M:GameDBLibrary.MiniJSON.Json.Serialize(System.Object)">
+            <summary>
+            Converts a IDictionary / IList object or a simple type (string, int, etc.) into a JSON string
+            </summary>
+            <param name="obj">A Dictionary&lt;string, object&gt; / List&lt;object&gt;</param>
+            <returns>A JSON encoded string, or null if object 'json' is not serializable</returns>
+        </member>
+        <member name="T:GameDBLibrary.LZF.CLZF2">
+            <summary>
+            Improved C# LZF Compressor, a very small data compression library. The compression algorithm is extremely fast.
+            </summary>
+        </member>
+        <member name="F:GameDBLibrary.LZF.CLZF2.HashTable">
+            <summary>
+            Hashtable, that can be allocated only once
+            </summary>
+        </member>
+        <member name="M:GameDBLibrary.LZF.CLZF2.lzf_compress(System.Byte[],System.Byte[]@)">
+            <summary>
+            Compresses the data using LibLZF algorithm
+            </summary>
+            <param name="input">Reference to the data to compress</param>
+            <param name="output">Reference to a buffer which will contain the compressed data</param>
+            <returns>The size of the compressed archive in the output buffer</returns>
+        </member>
+        <member name="M:GameDBLibrary.LZF.CLZF2.lzf_decompress(System.Byte[],System.Byte[]@)">
+            <summary>
+            Decompresses the data using LibLZF algorithm
+            </summary>
+            <param name="input">Reference to the data to decompress</param>
+            <param name="output">Reference to a buffer which will contain the decompressed data</param>
+            <returns>Returns decompressed size</returns>
+        </member>
+        <member name="T:GameDBLibrary.GameDBBase">
+            <summary>
+            The base class all GameDBs inherit from. 
+            The GameDB provides methods for importing data.
+            </summary>
+        </member>
+        <member name="F:GameDBLibrary.GameDBBase.OnDBLoaded">
+            <summary>
+            OnDBLoaded allows callbacks to be added that are triggered if <c>notify = true</c>
+            when importing or loading data. This allows code to deal with data potentially
+            beind asynchronously loaded (when imported from a server) or hot reloaded via
+            an Import or Reload from the GameDB Editor during run-time in editor.
+            </summary>
+        </member>
+        <member name="P:GameDBLibrary.GameDBBase.ScopeName">
+            <summary>
+            Gets the ScopeName of the GameDB set when creating it in the GameDB Editor.
+            </summary>
+            <value>
+            The ScopeName
+            </value>
+        </member>
+        <member name="P:GameDBLibrary.GameDBBase.Name">
+            <summary>
+            Gets the name of the GameDB set when instantiating.
+            </summary>
+            <value>
+            The name of the GameDB.
+            </value>
+        </member>
+        <member name="P:GameDBLibrary.GameDBBase.Logger">
+            <summary>
+            Gets or sets the logger used for internal logs.
+            </summary>
+            <value>
+            The logger.
+            </value>
+        </member>
+        <member name="M:GameDBLibrary.GameDBBase.Import(System.String,System.Boolean)">
+            <summary>
+            Imports JSON representing the GameDB.
+            </summary>
+            <param name="jsonData">A string representing the JSON format of the GameDB to import.</param>
+            <param name="notify">if set to <c>true</c> the <see cref="F:GameDBLibrary.GameDBBase.OnDBLoaded"/> callback will be triggered for the GameDB (defaults to <c>true</c>).</param>
+            <returns>An exception is returned if the GameDB fails to imprt</returns>
+        </member>
+        <member name="M:GameDBLibrary.GameDBBase.Import(System.String,System.String[],System.Boolean)">
+            <summary>
+            Imports JSON representing the GameDB.
+            Allows specifying only certain fields to be imported. Useful for limiting the memory used of the loaded GameDB.
+            </summary>
+            <param name="jsonData">A string representing the JSON format of the GameDB to import.</param>
+            <param name="columImportList">An array of field names to import.</param>
+            <param name="notify">if set to <c>true</c> the <see cref="F:GameDBLibrary.GameDBBase.OnDBLoaded"/> callback will be triggered for the GameDB (defaults to <c>true</c>).</param>
+            <returns>An exception is returned if the GameDB fails to imprt</returns>
+        </member>
+        <member name="M:GameDBLibrary.GameDBBase.ImportFromServer(System.String,System.String,System.String,System.String,System.String,System.String,System.Boolean,System.String,System.String,System.String[],System.Action{System.Exception})">
+            <summary>
+            <strong>(Pro Version only)</strong><br/> 
+            Imports the GameDB from a server. Can be used in conjuction with the Golang server provided in the (Pro version)
+            This allows over the air updating of GameDBs so new data can be pushed to clients without the need of releasing
+            new versions of the clients.
+            Downloaded GameDBs will be cached locally to avoid downloading again if they haven't changed.
+            If they have change, only the diff between the original built-in GameDB and the uploaded GameDB will be downloaded.
+            </summary>
+            <param name="serverHost">The server host base address of the GameDB server to communicate with. For example: https://mygamedbserver.com</param>
+            <param name="downloadHost">The download host base address of the GameDB to download. For example https://s3.aws.com/mygamedb</param>
+            <param name="userID">A unique identified used to represent the client downloading the GameDB. Can be used for A/B testing GameDB versions</param>
+            <param name="tag">The tag used to download the correct version of the GameDB</param>
+            <param name="originalJSON">The original json the update is based off. This will be imported if there are no cached version or anything to download from the server</param>
+            <param name="cachePath">The path to cache downloaded GameDBs too</param>
+            <param name="binary">if set to <c>true</c> the GameDB will be loaded as a binary source (defaults to <c>false</c>) (<c>key</c> and <c>salt</c> required if loading binary)</param>
+            <param name="key">the key used to encrypt the database via the <see cref="T:GameDBLibrary.BinaryGameDB"/> utilities. Required if using <c>binary = true</c></param>
+            <param name="salt">the salt used to encrypt the database via the <see cref="T:GameDBLibrary.BinaryGameDB"/> utilities. Required if using <c>binary = true</c></param>
+            <param name="columImportList">An array of field names to import.</param>
+            <param name="onImport">A callback called when the data has be imported.</param>
+            <returns>A <see cref="T:GameDBLibrary.RequestUpdater"/> used to montior the request to the server.</returns>
+        </member>
+        <member name="T:GameDBLibrary.Logger">
+            <summary>
+            The logger class allows internal logging in the GameDB classes to be redirected to any
+            destination required ie. Unity console, file on disk or terminal output.
+            </summary>
+        </member>
+        <member name="M:GameDBLibrary.Logger.Log(System.String)">
+            <summary>
+            Used to log general information from internal classes.
+            </summary>
+            <param name="message">The message to log.</param>
+        </member>
+        <member name="M:GameDBLibrary.Logger.LogError(System.String)">
+            <summary>
+            Used to log errors from internal classes.
+            </summary>
+            <param name="message">The message to log.</param>
+        </member>
+        <member name="M:GameDBLibrary.Logger.LogException(System.Exception)">
+            <summary>
+            Used to log exceptions from internal classes.
+            </summary>
+            <param name="e">The exception to log.</param>
+        </member>
+        <member name="T:GameDBLibrary.Remote">
+            <summary>
+            The Remote class provides methods to communicate with GameDB servers.
+            </summary>
+        </member>
+        <member name="M:GameDBLibrary.Remote.GetLatestDeployment(System.String,System.String,System.String,System.String,System.String,System.String,System.String,System.String,System.Action{System.Exception,System.String,System.Int32})">
+            <summary>
+            Gets the latest deployed GameDB for a particular tag.
+            </summary>
+            <param name="serverHost">The server host base address of the GameDB server to communicate with. For example: https://mygamedbserver.com</param>
+            <param name="downloadHost">The download host base address of the GameDB to download. For example https://s3.aws.com/mygamedb</param>
+            <param name="scope">The scope name of the GameDB to check.</param>
+            <param name="tag">The tag used to download the correct version of the GameDB</param>
+            <param name="checksum">The checksum of the currently on disk GameDB.</param>
+            <param name="userID">A unique identified used to represent the client downloading the GameDB. Can be used for A/B testing GameDB versions</param>
+            <param name="key">the key used to encrypt the database via the <see cref="T:GameDBLibrary.BinaryGameDB"/> utilities. Required if using <c>binary = true</c></param>
+            <param name="salt">the salt used to encrypt the database via the <see cref="T:GameDBLibrary.BinaryGameDB"/> utilities. Required if using <c>binary = true</c></param>
+            <param name="callback">A callback called when the communication is complete. Returning information about the latest GameDB.</param>
+            <returns>A <see cref="T:GameDBLibrary.RequestUpdater"/> used to montior the request to the server.</returns>
+        </member>
+        <member name="T:GameDBLibrary.RowBase">
+            <summary>
+            This is the base class for all Rows in a GameDB's tables.
+            It provides accessors to the values store within.
+            </summary>
+        </member>
+        <member name="M:GameDBLibrary.RowBase.GetValue(System.String)">
+            <summary>
+            Gets the value for a particular field.
+            </summary>
+            <param name="field">The name of the field to retrieve.</param>
+            <returns>The internally store value.</returns>
+        </member>
+        <member name="T:GameDBLibrary.Singleton`1">
+            <summary>
+            A helper base class for creating singletons.
+            Used internally but provided for utility reasons.
+            </summary>
+            <typeparam name="T">The type of the singleton class</typeparam>
+        </member>
+        <member name="P:GameDBLibrary.Singleton`1.Instance">
+            <summary>
+            Returns the singleton instance (and instantiates it if not already instantiated)
+            </summary>
+            <value>
+            The singleton instance of the inherited class.
+            </value>
+        </member>
+        <member name="T:GameDBLibrary.Utils">
+            <summary>
+            Provide utility methods for working with GameDBs
+            </summary>
+        </member>
+        <member name="M:GameDBLibrary.Utils.GetChecksum(System.Byte[])">
+            <summary>
+            Gets the MD5 checksum of a byte array.
+            </summary>
+            <param name="input">The byte array to generate a checksum for.</param>
+            <returns>A MD5 checksum string</returns>
+        </member>
+        <member name="M:GameDBLibrary.Utils.UrlCombine(System.String,System.String)">
+            <summary>
+            Combines two URL sub paths.
+            </summary>
+            <param name="url1">The first path of the url to combine.</param>
+            <param name="url2">The second path of the url to combine.</param>
+            <returns></returns>
+        </member>
+        <member name="T:GameDBLibrary.BinaryGameDB">
+            <summary>
+            BinaryGameDB provides utility methods for Serializing and Deserializing 
+            GameDBs to and from binary representations that are encrypted and compressed.
+            </summary>
+        </member>
+        <member name="M:GameDBLibrary.BinaryGameDB.Serialize(System.String,System.String,System.String)">
+            <summary>
+            Serializes the specified json into a binary blob.
+            </summary>
+            <param name="json">The json.</param>
+            <param name="encryptionKey">The encryption key.</param>
+            <param name="encryptionSalt">The encryption salt.</param>
+            <returns>A binary blob encrypted and compressed of the passed in JSON</returns>
+            <exception cref="T:System.Exception">Throws an exception if it fails to encrypt or compress the json</exception>
+        </member>
+        <member name="M:GameDBLibrary.BinaryGameDB.Deserialize(System.Byte[],System.String,System.String)">
+            <summary>
+            Deserializes the specified data in a JSON string.
+            </summary>
+            <param name="data">The data.</param>
+            <param name="encryptionKey">The encryption key.</param>
+            <param name="encryptionSalt">The encryption salt.</param>
+            <returns>A JSON string decompressed and decrypted from the data passed in.</returns>
+            <exception cref="T:System.Exception">Throws an exception if it fails to decrypt or decompress the json</exception>
+        </member>
+        <member name="T:GameDBLibrary.RequestUpdater">
+            <summary>
+            RequestUpdater is a class that allows an update method to be hooked into an update loop,
+            to allow constant updating of a requests asynchronous handling mechanisms
+            </summary>
+        </member>
+        <member name="F:GameDBLibrary.RequestUpdater.OnUpdate">
+            <summary>
+            A callback to call each Update
+            </summary>
+        </member>
+        <member name="M:GameDBLibrary.RequestUpdater.Update">
+            <summary>
+            Updates the RequestUpdater. Call often to keep the associated callback receiving regular updates.
+            </summary>
+        </member>
+        <member name="T:GameDBLibrary.ServerResponse">
+            <summary>
+            ServerResponse handles parsing basic responses from the GameDB server
+            </summary>
+        </member>
+        <member name="M:GameDBLibrary.ServerResponse.HandleBasicResponse(GameDBLibrary.IDownloadHandler)">
+            <summary>
+            Handles a basic response from the GameDBServer.
+            </summary>
+            <param name="response">The response object to parse.</param>
+            <returns><c>null</c> is returned if no error is found, otherwise an error message is returned</returns>
+        </member>
+        <member name="T:GameDBLibrary.JsonPatch">
+            <summary>
+            Implements the json patch spec at http://jsonpatch.com/ and passes all tests https://github.com/json-patch/json-patch-tests/blob/master/spec_tests.json
+            Allows applying a json patch to a json string.
+            </summary>
+        </member>
+        <member name="M:GameDBLibrary.JsonPatch.Patch(System.String,System.String)">
+            <summary>
+            Patches the specified original json.
+            </summary>
+            <param name="originalJson">The original json.</param>
+            <param name="patchJson">The patch json.</param>
+            <returns>The patched json string</returns>
+            <exception cref="T:System.FormatException">
+            </exception>
+            <exception cref="T:System.ArgumentException">
+            </exception>
+        </member>
+    </members>
+</doc>

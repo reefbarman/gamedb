@@ -45,8 +45,6 @@ namespace GameDBEditorLibrary
 
         public string ExportPath { get; set; } = string.Empty;
         public string BuildPath { get; set; } = string.Empty;
-        public string GameDBServer { get; set; } = string.Empty;
-        public string DownloadServer { get; set; } = string.Empty;
 
         public void Load()
         {
@@ -74,8 +72,6 @@ namespace GameDBEditorLibrary
 
                 ExportPath = ReadString(settings, "exportPath");
                 BuildPath = ReadString(settings, "buildPath");
-                GameDBServer = ReadString(settings, "gameDBServer");
-                DownloadServer = ReadString(settings, "downloadServer");
                 ReadGoogleSheets(settings);
             }
             catch (Exception exception)
@@ -105,8 +101,6 @@ namespace GameDBEditorLibrary
                 { "exportPath", ExportPath },
                 { "importedEnums", m_importedEnums },
                 { "buildPath", BuildPath },
-                { "gameDBServer", GameDBServer },
-                { "downloadServer", DownloadServer },
                 { "googleSheets", googleSheets }
             };
 
@@ -122,8 +116,6 @@ namespace GameDBEditorLibrary
             m_googleSheets.Clear();
             ExportPath = string.Empty;
             BuildPath = string.Empty;
-            GameDBServer = string.Empty;
-            DownloadServer = string.Empty;
         }
 
         private void ReadGoogleSheets(IDictionary<string, object> settings)

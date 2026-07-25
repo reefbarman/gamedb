@@ -1,4 +1,6 @@
-﻿using GameDBLibrary;
+﻿#pragma warning disable CS0618 // Google Sheets uses the retained legacy request transport until CSV replaces it.
+
+using GameDBLibrary;
 using System;
 using System.Collections.Generic;
 using UnityEditor;
@@ -319,3 +321,5 @@ namespace GameDBEditorLibrary
         }
     }
 }
+
+#pragma warning restore CS0618

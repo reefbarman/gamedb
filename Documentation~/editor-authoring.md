@@ -86,16 +86,16 @@ Generated files are derived output: do not hand-edit them. Regenerate after chan
 
 ## Build data-only JSON
 
-The **Deployment** tab contains a supported **Build GameDB** foldout despite the rest of the legacy deployment-server workflow being unsupported.
+The **GameDB** tab contains the supported **Build GameDB** foldout outside Play Mode.
 
-1. Select and load a database in the **Deployment** tab.
-2. Expand **Build GameDB**.
+1. Select and load a database in the **GameDB** tab.
+2. Expand **Build GameDB** below the loader controls.
 3. Choose a **Build Location** under `Assets`.
 4. Click **Build**.
 
 Build saves the source database first, then writes only its data JSON to the selected project folder and refreshes the Asset Database. It does not produce a schema, binary, compressed, or encrypted artifact.
 
-The server-management controls in the same tab target the old unshipped deployment backend. They are retained only as legacy compatibility UI and are not a supported publishing workflow in this preview.
+The old upload, retrieve, and revision-promotion editor controls were removed because this package does not ship or support their deployment server.
 
 ## Project settings and recovery
 
@@ -105,7 +105,7 @@ GameDB stores editor state in:
 ProjectSettings/GameDBSettings.json
 ```
 
-It includes registered database paths, imported enums, code-generation and build paths, Google Sheets configuration, and legacy server fields. Review it before committing because Google Sheets URLs can be sensitive.
+It includes registered database paths, imported enums, code-generation and build paths, and Google Sheets configuration. Review it before committing because Google Sheets URLs can be sensitive.
 
 If the file is missing, GameDB creates it. If it cannot be parsed, GameDB logs a warning, restores defaults, and rewrites a valid settings file. You can close Unity and delete or repair this file to reset the GameDB editor workspace; database and schema files under `Assets` are unaffected.
 

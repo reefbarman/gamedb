@@ -327,14 +327,14 @@ IDownloadHandler;
 ServerResponse.HandleBasicResponse(...);
 GameDBLibraryUnity.UnityForm;
 Utils.GetChecksum(...);
-Utils.UrlCombine(...);
-JsonPatch.Patch(...);       // used by legacy revision patching
 GameDBEditor.RegisterRevisionPromotionCallback(...);
 ```
 
 The package does not provide, host, authenticate, or validate the historical Go/AWS GameDB deployment server. These APIs assume its response and JSON-patch protocol. `ImportFromServer` falls back to importing the built-in JSON after a remote error and reports through its callback/logging; callers must repeatedly call the returned `RequestUpdater.Update()` from an update loop to advance Unity web requests. Cache and patch operations perform local file I/O and can return or log network, parsing, reflection, or file errors.
 
-There are no `[Obsolete]` attributes on this surface in the current source, so the unsupported status is documentation-level and does not produce compiler warnings. A separately secured and tested protocol-compatible service is the caller's responsibility.
+Each type or member listed above is marked with warning-only `[Obsolete]` and is planned for removal in GameDB `1.0.0`. The internal `GameDBLibraryUnity.UnityWebRequestTransport` implementation is obsolete on the same schedule. `GameDBEditor.RegisterRevisionPromotionCallback` remains only as a no-op source-compatibility shim because the revision-promotion UI was removed. A separately secured and tested protocol-compatible service is the caller's responsibility.
+
+`Utils.UrlCombine(...)` and `JsonPatch.Patch(...)` remain non-obsolete generic helpers. They are not part of the deprecated remote client contract.
 
 ## Public declarations that are not supported consumer contracts
 
@@ -342,7 +342,7 @@ The runtime/editor assemblies expose additional declarations because generated c
 
 - generated-code infrastructure such as `FieldBase`, `DictionaryType`, `IDataAccessor`, `DataAccessor<T>`, scalar accessor classes, and `DictionaryAccessor<,>`; generated files depend on this ABI, but applications should use generated typed properties instead of constructing these types directly;
 - exposed infrastructure such as `IGameDB`, `Singleton<T>`, and `GameDBEditorInvoker`; these are not recommended consumer extension points (`GameDBEditorInvoker` is a reflection bridge used by Unity-enabled generated constructors);
-- generic helpers such as `JsonHelper`, `Utils` outside the retained remote use noted above, and constructors/protected storage on row/table bases;
+- generic helpers such as `JsonHelper`, most of `Utils`, and constructors/protected storage on row/table bases; `Utils.UrlCombine` and `JsonPatch.Patch` are retained non-obsolete helpers, while `Utils.GetChecksum` is part of the deprecated remote surface;
 - editor model, data-source, component, settings, exporter, request, and UI helper types;
 - `GameDBEditorWindow.ShowWindow`, which is primarily the implementation of **Window > GameDB > Open Editor**.
 
@@ -351,7 +351,7 @@ Some of these declarations may remain binary/source compatible incidentally, but
 ## Known ambiguities and caveats
 
 - Support intent is inferred from generated templates, package documentation, XML comments, tests, and usage; it is not enforced by a dedicated public-API analyzer or assembly facade.
-- No current public API is compiler-deprecated with `[Obsolete]`, including the unsupported remote client.
+- The unsupported legacy remote client types and members are compiler-deprecated with warning-only `[Obsolete]` and are planned for removal in GameDB `1.0.0`.
 - `Row` and `GameDBEditorWindow` are public in the global namespace, while most APIs use explicit GameDB namespaces.
 - Generated-code infrastructure is a required compile-time ABI for generated files even where it is not a recommended direct consumer API.
 - Generated schema members are mutable static fields even though callers should treat them as constants.

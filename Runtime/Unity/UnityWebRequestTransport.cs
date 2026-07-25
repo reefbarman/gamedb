@@ -1,10 +1,13 @@
-﻿using GameDBLibrary;
+﻿#pragma warning disable CS0618 // Retained implementation for the obsolete remote API and optional Google Sheets bridge.
+
+using GameDBLibrary;
 using System;
 using System.Collections.Generic;
 using UnityEngine.Networking;
 
 namespace GameDBLibraryUnity
 {
+    [Obsolete("The legacy GameDB remote/deployment transport is unsupported and will be removed in GameDB 1.0.0. Use generated Load/Import with local JSON, or provide your own network transport. See Documentation~/runtime.md#intentionally-unsupported-surfaces.")]
     internal sealed class UnityWebRequestTransport
     {
         public RequestUpdater StartRequest(string url, RequestMethod method, Dictionary<string, string> requestParams, Action<Exception, IDownloadHandler> callback)
@@ -83,3 +86,5 @@ namespace GameDBLibraryUnity
         }
     }
 }
+
+#pragma warning restore CS0618

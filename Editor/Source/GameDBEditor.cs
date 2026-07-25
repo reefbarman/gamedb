@@ -10,17 +10,14 @@ namespace GameDBEditorLibrary
     //TODO: add reload editor button
     //TODO: trim/cleanup all names before code export
     //TODO: refactoring tool for changing enums
-    //TODO: add methods for server download parts
-
     /// <summary>
     /// GameDBEditor provides static methods for working with the GameDB Editor within the Unity Editor.
-    /// Allowing things such as subscribing to events (load/save/promote) and programatically working with the editor.
+    /// Allowing things such as subscribing to save events and programatically working with the editor.
     /// </summary>
     public class GameDBEditor
     {
         private static EditorComponent m_editorComponent = null;
 
-        internal static Action<string, string, int> OnRevisionPromotion = null;
         internal static Action<string> OnGameDBSaved = null;
 
         /// <summary>
@@ -98,15 +95,12 @@ namespace GameDBEditorLibrary
         }
 
         /// <summary>
-        /// Allows a callback to be registered for when a revision of the GameDB is promoted on the GameDB Server.
-        /// This is useful to trigger events such as causing live clients to update when a GameDB has been promoted.
-        /// The Scope Name, tag and revision number are returned via the callback of the promoted GameDB.
+        /// Retained for source compatibility with the removed deployment-server workflow.
         /// </summary>
-        /// <param name="onPromotion">The callback triggered on a promotion.</param>
-        public
-                static void RegisterRevisionPromotionCallback(Action<string, string, int> onPromotion)
+        /// <param name="onPromotion">Ignored. Revision promotion callbacks are no longer raised.</param>
+        [Obsolete("The legacy deployment-server workflow is unsupported, and revision-promotion callbacks will be removed in GameDB 1.0.0. This callback is no longer raised. See Documentation~/api-reference.md#retained-legacy-remote-client-apis.")]
+        public static void RegisterRevisionPromotionCallback(Action<string, string, int> onPromotion)
         {
-            OnRevisionPromotion += onPromotion;
         }
 
         public static void AddRuntimeDB(GameDBBase runtimeDB)

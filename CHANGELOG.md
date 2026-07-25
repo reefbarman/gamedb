@@ -1,10 +1,25 @@
 # Changelog
 
+<!-- markdownlint-disable MD024 -->
+
 All notable changes to GameDB are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+### Changed
+
+- Moved the supported data-only **Build GameDB** control into the main GameDB editor tab.
+- Retained the networking path required by optional Google Sheets interoperability.
+
+### Deprecated
+
+- Marked the unsupported legacy remote/deployment runtime APIs obsolete, with removal planned for GameDB `1.0.0`.
+
+### Removed
+
+- Removed the legacy server-management, upload, retrieval, and revision-promotion editor UI.
 
 ## [1.0.0-preview.1] - 2026-07-24
 

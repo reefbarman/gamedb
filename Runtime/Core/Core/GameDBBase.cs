@@ -1,4 +1,6 @@
-﻿using System;
+﻿#pragma warning disable CS0618 // Retained implementation of the obsolete remote API.
+
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -101,6 +103,7 @@ namespace GameDBLibrary
         /// <param name="columImportList">An array of field names to import.</param>
         /// <param name="onImport">A callback called when the data has be imported.</param>
         /// <returns>A <see cref="RequestUpdater"/> used to montior the request to the server.</returns>
+        [Obsolete(LegacyRemoteApi.Message)]
         public RequestUpdater ImportFromServer(string serverHost, string downloadHost, string userID, string tag, string originalJSON, string cachePath, string[] columImportList = null, Action<Exception> onImport = null)
         {
             var baseGameDBJson = originalJSON;
@@ -172,3 +175,5 @@ namespace GameDBLibrary
         }
     }
 }
+
+#pragma warning restore CS0618

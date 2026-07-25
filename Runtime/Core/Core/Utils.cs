@@ -22,6 +22,7 @@ namespace GameDBLibrary
         /// </summary>
         /// <param name="input">The byte array to generate a checksum for.</param>
         /// <returns>A MD5 checksum string</returns>
+        [Obsolete(LegacyRemoteApi.Message)]
         public static string GetChecksum(byte[] input)
         {
             var sb = new StringBuilder();

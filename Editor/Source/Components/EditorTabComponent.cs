@@ -7,7 +7,6 @@ namespace GameDBEditorLibrary
     {
         private Vector2 m_gameDBScrollPos = new Vector2();
         private Vector2 m_configurationScrollPos = new Vector2();
-        private Vector2 m_deploymentScrollPos = new Vector2();
 
         private EditorWindow m_editorWindow = null;
 
@@ -19,18 +18,13 @@ namespace GameDBEditorLibrary
 
             AddChild(new LoaderComponent("Loader"));
             AddChild(new GameDBEditorComponent("GameDBEditor"));
+            AddChild(new BuildComponent("Build"));
             AddChild(new ConfigurationComponent("Configuration"));
-            AddChild(new DeploymentComponent("Deployment"));
         }
 
         public override void Render(params object[] args)
         {
             var tabs = new[] { "GameDB", "Configuration" };
-
-            if (!Application.isPlaying)
-            {
-                tabs = new[] { "GameDB", "Configuration", "Deployment" };
-            }
 
             m_currentTab = GUILayout.Toolbar(m_currentTab, tabs, GUILayout.Width(460));
 
@@ -41,9 +35,6 @@ namespace GameDBEditorLibrary
                     break;
                 case 1:
                     RenderConfigurationTab();
-                    break;
-                case 2:
-                    RenderDeploymentTab();
                     break;
             }
         }
@@ -59,6 +50,12 @@ namespace GameDBEditorLibrary
                 UIHelpers.RenderDivider();
 
                 RenderChild("GameDBEditor");
+
+                if (!Application.isPlaying)
+                {
+                    UIHelpers.RenderDivider();
+                    RenderChild("Build");
+                }
 
                 m_editorWindow.EndWindows();
             }
@@ -80,19 +77,5 @@ namespace GameDBEditorLibrary
             EditorGUILayout.EndScrollView();
         }
 
-        private void RenderDeploymentTab()
-        {
-            m_deploymentScrollPos = EditorGUILayout.BeginScrollView(m_deploymentScrollPos);
-            {
-                m_editorWindow.BeginWindows();
-
-                GUILayout.Label("GameDB Deployment", EditorStyles.boldLabel);
-
-                RenderChild("Deployment");
-
-                m_editorWindow.EndWindows();
-            }
-            EditorGUILayout.EndScrollView();
-        }
     }
 }

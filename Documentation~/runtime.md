@@ -226,5 +226,5 @@ Generate localization classes with **Generate for Unity** enabled. With Unity ge
 The supported generated Unity runtime path is JSON text loaded from `Resources` or supplied to `Import`.
 
 - Binary, compressed, and encrypted GameDB build/load output was removed. Current generation emits no `BinaryGameDB` API.
-- This package does not provide, host, or validate the old remote deployment server. Residual generic remote-update client and deployment UI code exists for legacy source compatibility, but it is not a supported hosted publishing/runtime workflow for new projects.
+- This package does not provide, host, or validate the old remote deployment server. The editor deployment UI was removed. Residual runtime remote-update client APIs remain only as warning-only obsolete source-compatibility shims and will be removed in GameDB 1.0.0; they are not a supported publishing/runtime workflow for new projects.
 - GameDB does not provide automatic Addressables loading. Unity-object fields use `Resources.Load` only.

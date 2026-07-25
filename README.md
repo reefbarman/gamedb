@@ -160,7 +160,7 @@ A legacy-compatible Google Apps Script is retained as an **optional** interopera
 
 ## Legacy-compatible remote client APIs
 
-The runtime still contains the original generic remote-update client APIs for source compatibility, but this preview does not provide, host, or validate the old Go/AWS deployment server. Treat this surface as unsupported legacy compatibility code: it is outside the agent mutation API and should not be used for a new production deployment without a separately secured and tested service implementation.
+The old editor upload, retrieval, and revision-promotion controls were removed. The runtime still contains warning-only obsolete remote-update client APIs for source compatibility, but this preview does not provide, host, or validate the old Go/AWS deployment server. Do not use this surface for new production work; it is planned for removal in GameDB `1.0.0`.
 
 ## Development
 

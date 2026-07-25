@@ -1,4 +1,6 @@
-﻿using System;
+﻿#pragma warning disable CS0618 // Retained implementation of the obsolete remote API.
+
+using System;
 using System.Collections.Generic;
 
 namespace GameDBLibrary
@@ -6,6 +8,7 @@ namespace GameDBLibrary
     /// <summary>
     /// The Remote class provides methods to communicate with GameDB servers.
     /// </summary>
+    [Obsolete(LegacyRemoteApi.Message)]
     public
         class Remote
     {
@@ -111,3 +114,5 @@ namespace GameDBLibrary
         }
     }
 }
+
+#pragma warning restore CS0618

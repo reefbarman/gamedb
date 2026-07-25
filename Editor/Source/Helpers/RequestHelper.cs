@@ -1,4 +1,6 @@
-﻿using GameDBLibrary;
+﻿#pragma warning disable CS0618 // Google Sheets still uses the retained legacy request transport internally.
+
+using GameDBLibrary;
 using GameDBLibraryUnity;
 using System;
 using System.Collections.Generic;
@@ -44,3 +46,5 @@ namespace GameDBEditorLibrary
         }
     }
 }
+
+#pragma warning restore CS0618

@@ -1,9 +1,12 @@
-﻿using GameDBLibraryUnity;
+﻿#pragma warning disable CS0618 // Retained implementation for the obsolete remote API and optional Google Sheets bridge.
+
+using GameDBLibraryUnity;
 using System;
 using System.Collections.Generic;
 
 namespace GameDBLibrary
 {
+    [Obsolete(LegacyRemoteApi.Message)]
     public static class WebRequestHelper
     {
         private static readonly UnityWebRequestTransport Transport = new UnityWebRequestTransport();
@@ -24,3 +27,5 @@ namespace GameDBLibrary
         }
     }
 }
+
+#pragma warning restore CS0618

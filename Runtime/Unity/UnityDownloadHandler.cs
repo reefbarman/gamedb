@@ -1,4 +1,6 @@
-﻿using GameDBLibrary;
+﻿#pragma warning disable CS0618 // Retained implementation for the obsolete remote API and optional Google Sheets bridge.
+
+using GameDBLibrary;
 using UnityEngine.Networking;
 
 namespace GameDBLibraryUnity
@@ -25,3 +27,5 @@ namespace GameDBLibraryUnity
         }
     }
 }
+
+#pragma warning restore CS0618

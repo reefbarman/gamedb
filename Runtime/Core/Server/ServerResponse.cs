@@ -5,6 +5,7 @@ namespace GameDBLibrary
     /// <summary>
     /// ServerResponse handles parsing basic responses from the GameDB server
     /// </summary>
+    [System.Obsolete(LegacyRemoteApi.Message)]
     public
         class ServerResponse
     {

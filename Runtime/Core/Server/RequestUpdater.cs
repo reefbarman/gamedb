@@ -6,6 +6,7 @@ namespace GameDBLibrary
     /// RequestUpdater is a class that allows an update method to be hooked into an update loop,
     /// to allow constant updating of a requests asynchronous handling mechanisms
     /// </summary>
+    [Obsolete(LegacyRemoteApi.Message)]
     public
         class RequestUpdater
     {

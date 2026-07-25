@@ -10,6 +10,94 @@ namespace GameDBEditorLibrary.Automation
         public string ExpectedRevision { get; set; }
     }
 
+    public enum GameDBBatchOperationKind
+    {
+        Unspecified,
+        AddTable,
+        RenameTable,
+        DeleteTable,
+        AddField,
+        ReplaceField,
+        RenameField,
+        DeleteField,
+        AddRow,
+        UpdateRow,
+        SetValue,
+        RenameRow,
+        DeleteRow
+    }
+
+    public sealed class GameDBBatchOptions
+    {
+        public bool DryRun { get; set; }
+        public string ExpectedRevision { get; set; }
+        public List<GameDBBatchOperationKind> AllowedDestructiveOperations { get; set; }
+            = new List<GameDBBatchOperationKind>();
+    }
+
+    public sealed class GameDBBatchRequest
+    {
+        public string DatabasePath { get; set; }
+        public List<GameDBBatchOperation> Operations { get; set; } = new List<GameDBBatchOperation>();
+        public GameDBBatchOptions Options { get; set; } = new GameDBBatchOptions();
+    }
+
+    public sealed class GameDBBatchOperation
+    {
+        public GameDBBatchOperationKind Kind { get; set; }
+        public GameDBBatchTableOperation Table { get; set; }
+        public GameDBBatchRenameOperation Rename { get; set; }
+        public GameDBBatchDeleteOperation Delete { get; set; }
+        public GameDBBatchFieldOperation Field { get; set; }
+        public GameDBBatchRowOperation Row { get; set; }
+        public GameDBBatchValueOperation Value { get; set; }
+    }
+
+    public sealed class GameDBBatchTableOperation
+    {
+        public string TableName { get; set; }
+        public KeyType KeyType { get; set; } = KeyType.@string;
+        public string KeyTypeArgument { get; set; }
+    }
+
+    public sealed class GameDBBatchRenameOperation
+    {
+        public string TableName { get; set; }
+        public string CurrentName { get; set; }
+        public string NewName { get; set; }
+    }
+
+    public sealed class GameDBBatchDeleteOperation
+    {
+        public string TableName { get; set; }
+        public string Name { get; set; }
+    }
+
+    public sealed class GameDBBatchFieldOperation
+    {
+        public string TableName { get; set; }
+        public string FieldName { get; set; }
+        public FieldType FieldType { get; set; } = FieldType.@string;
+        public bool IsArray { get; set; }
+        public string TypeArgument { get; set; }
+        public GameDBDictionaryTypeDefinition DictionaryType { get; set; }
+    }
+
+    public sealed class GameDBBatchRowOperation
+    {
+        public string TableName { get; set; }
+        public string RowKey { get; set; }
+        public Dictionary<string, object> Values { get; set; } = new Dictionary<string, object>();
+    }
+
+    public sealed class GameDBBatchValueOperation
+    {
+        public string TableName { get; set; }
+        public string RowKey { get; set; }
+        public string FieldName { get; set; }
+        public object Value { get; set; }
+    }
+
     public sealed class GameDBCreateRequest
     {
         public string DatabasePath { get; set; }

@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Added atomic editor-automation batches with ordered mutation operations, whole-batch dry runs and validation, revision guards, explicit destructive-operation allowlists, indexed failures, and structured commit outcomes.
+
 ### Changed
 
 - Added an internal document, command, transaction, and conflict-aware persistence core shared by editor automation operations.

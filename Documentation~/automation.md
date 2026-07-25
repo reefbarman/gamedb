@@ -43,6 +43,7 @@ GameDBExportResult ExportJson(string databasePath);
 ```csharp
 GameDBAutomationResult Create(GameDBCreateRequest request);
 GameDBAutomationResult Save(GameDBSaveRequest request);
+GameDBBatchResult ApplyBatch(GameDBBatchRequest request);
 
 GameDBAutomationResult AddTable(GameDBTableRequest request);
 GameDBAutomationResult RenameTable(GameDBRenameRequest request);
@@ -66,7 +67,7 @@ Every operation is path-addressed and loads an isolated model. It does not depen
 
 ## Operation options
 
-Mutating requests use `GameDBOperationOptions`:
+Single-operation requests use `GameDBOperationOptions`:
 
 ```csharp
 new GameDBOperationOptions
@@ -77,9 +78,71 @@ new GameDBOperationOptions
 }
 ```
 
+### Batch operations
+
+`ApplyBatch` loads one database, applies an ordered list of mutation commands to a detached model, validates the complete prospective model, and saves at most once. The transaction is all-or-nothing: if any operation fails, no staged operation is committed. Creation, raw save, reads, JSON export, C# generation, querying, and CSV side effects are not batch operations.
+
+```csharp
+var inspected = GameDBAutomationService.Inspect(path);
+var preview = GameDBAutomationService.ApplyBatch(new GameDBBatchRequest
+{
+    DatabasePath = path,
+    Operations = new List<GameDBBatchOperation>
+    {
+        new GameDBBatchOperation
+        {
+            Kind = GameDBBatchOperationKind.AddTable,
+            Table = new GameDBBatchTableOperation { TableName = "Items" }
+        },
+        new GameDBBatchOperation
+        {
+            Kind = GameDBBatchOperationKind.AddField,
+            Field = new GameDBBatchFieldOperation
+            {
+                TableName = "Items",
+                FieldName = "Damage",
+                FieldType = FieldType.@int
+            }
+        },
+        new GameDBBatchOperation
+        {
+            Kind = GameDBBatchOperationKind.AddRow,
+            Row = new GameDBBatchRowOperation
+            {
+                TableName = "Items",
+                RowKey = "Sword",
+                Values = new Dictionary<string, object> { { "Damage", 14L } }
+            }
+        }
+    },
+    Options = new GameDBBatchOptions
+    {
+        DryRun = true,
+        ExpectedRevision = inspected.Snapshot.Revision
+    }
+});
+```
+
+Each `GameDBBatchOperation` must set a non-`Unspecified` `Kind` and contain exactly one matching payload:
+
+| Operation kinds                           | Payload property | Payload type                 |
+| ----------------------------------------- | ---------------- | ---------------------------- |
+| `AddTable`                                | `Table`          | `GameDBBatchTableOperation`  |
+| `RenameTable`, `RenameField`, `RenameRow` | `Rename`         | `GameDBBatchRenameOperation` |
+| `DeleteTable`, `DeleteField`, `DeleteRow` | `Delete`         | `GameDBBatchDeleteOperation` |
+| `AddField`, `ReplaceField`                | `Field`          | `GameDBBatchFieldOperation`  |
+| `AddRow`, `UpdateRow`                     | `Row`            | `GameDBBatchRowOperation`    |
+| `SetValue`                                | `Value`          | `GameDBBatchValueOperation`  |
+
+Batch authorization is an explicit operation-kind allowlist, not the single-operation `AllowDestructive` boolean. Add every destructive kind the batch may execute to `GameDBBatchOptions.AllowedDestructiveOperations`. The destructive kinds are `RenameTable`, `DeleteTable`, `ReplaceField`, `RenameField`, `DeleteField`, `RenameRow`, and `DeleteRow`. Authorization applies to dry runs as well.
+
+`GameDBBatchResult.FailedOperationIndex` is the zero-based operation index for malformed payloads, authorization failures, and command failures. It is `-1` for whole-batch revision, validation, load, recovery, and commit failures. Snapshots/revisions returned by pre-commit transaction failures are prospective and were not committed. After a successful preview, rerun a non-dry batch against the latest inspected revision.
+
+`CommitStatus` distinguishes `DryRun`, `Saved`, `NoChanges`, serialization/validation failure, disk conflict, persistence failure, unknown persistence state, and `PostSavePending`. Before replaying a failed batch, inspect `CommitStatus`, `FilesCommitted`, and `RecoveryArtifacts`. `PostSavePending` means the data/schema pair is committed while Unity imports or the saved callback still need retrying. `PersistenceStateUnknown` means publication is ambiguous and requires recovery rather than replay. Load-time `RecoveryRequired` failures also populate `RecoveryArtifacts`. `PostSaveErrors` contains import/callback failures.
+
 ### Dry runs
 
-`DryRun = true` performs path, schema, value, reference, and generation validation and returns the prospective snapshot without writing files, creating output directories, importing assets, or refreshing the Asset Database.
+`DryRun = true` performs path, schema, value, reference, batch, and generation validation and returns the prospective snapshot without writing files, creating output directories, importing assets, invoking saved callbacks, or refreshing the Asset Database.
 
 ### Revision guards
 

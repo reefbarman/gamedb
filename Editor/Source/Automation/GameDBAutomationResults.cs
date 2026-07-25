@@ -3,6 +3,56 @@ using System.Collections.Generic;
 
 namespace GameDBEditorLibrary.Automation
 {
+    public enum GameDBBatchFailureKind
+    {
+        None,
+        InvalidRequest,
+        LoadFailed,
+        RecoveryRequired,
+        AuthorizationDenied,
+        RevisionConflict,
+        CommandFailed,
+        TransactionFailed,
+        ValidationFailed,
+        CommitFailed
+    }
+
+    public enum GameDBBatchCommitStatus
+    {
+        NotAttempted,
+        DryRun,
+        Saved,
+        NoChanges,
+        SerializationFailed,
+        ValidationFailed,
+        Conflict,
+        PersistenceFailed,
+        PersistenceStateUnknown,
+        PostSavePending
+    }
+
+    public sealed class GameDBBatchResult
+    {
+        public bool Success { get; internal set; }
+        public bool DryRun { get; internal set; }
+        public GameDBBatchFailureKind FailureKind { get; internal set; }
+        public GameDBBatchCommitStatus CommitStatus { get; internal set; }
+        public string Operation { get; internal set; }
+        public string DatabasePath { get; internal set; }
+        public string Message { get; internal set; }
+        public int FailedOperationIndex { get; internal set; } = -1;
+        public GameDBBatchOperationKind? DeniedOperationKind { get; internal set; }
+        public string RevisionBefore { get; internal set; }
+        public string RevisionAfter { get; internal set; }
+        public GameDBSnapshot Snapshot { get; internal set; }
+        public List<GameDBValidationIssue> Issues { get; internal set; } = new List<GameDBValidationIssue>();
+        public List<string> ChangedPaths { get; internal set; } = new List<string>();
+        public bool FilesCommitted { get; internal set; }
+        public bool PostSavePending { get; internal set; }
+        public List<string> PostSaveErrors { get; internal set; } = new List<string>();
+        public List<string> RecoveryArtifacts { get; internal set; } = new List<string>();
+    }
+
     public sealed class GameDBAutomationResult
     {
         public bool Success { get; internal set; }

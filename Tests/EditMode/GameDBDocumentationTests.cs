@@ -43,6 +43,19 @@ namespace GameDBLibrary.Tests
         }
 
         [Test]
+        public void ReadDocument_AutomationDescribesBatchContract()
+        {
+            var result = GameDBDocumentationService.ReadDocument("automation");
+
+            Assert.That(result.Success, Is.True, result.Message);
+            Assert.That(result.Content, Does.Contain("ApplyBatch"));
+            Assert.That(result.Content, Does.Contain("GameDBBatchRequest"));
+            Assert.That(result.Content, Does.Contain("AllowedDestructiveOperations"));
+            Assert.That(result.Content, Does.Contain("FailedOperationIndex"));
+            Assert.That(result.Content, Does.Contain("PostSavePending"));
+        }
+
+        [Test]
         public void ListDocuments_EveryEntryCanBeRead()
         {
             var catalog = GameDBDocumentationService.ListDocuments();

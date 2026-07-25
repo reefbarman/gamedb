@@ -237,6 +237,7 @@ public static class GameDBAutomationService
 
     public static GameDBAutomationResult Create(GameDBCreateRequest request);
     public static GameDBAutomationResult Save(GameDBSaveRequest request);
+    public static GameDBBatchResult ApplyBatch(GameDBBatchRequest request);
     public static GameDBAutomationResult AddTable(GameDBTableRequest request);
     public static GameDBAutomationResult RenameTable(GameDBRenameRequest request);
     public static GameDBAutomationResult DeleteTable(GameDBDeleteRequest request);
@@ -257,9 +258,11 @@ public static class GameDBAutomationService
 
 `Inspect` can return `Success == true` with non-empty validation issues; use `Validate` when validity must determine success. `ExportJson` can return `Success == false` while still supplying serialized data/schema JSON and issues. Early failures generally have no snapshot/issues, while validation-blocked operations can return a prospective snapshot and populated issues.
 
-Mutations support `DryRun`, `ExpectedRevision`, and `AllowDestructive` through `GameDBOperationOptions`. Results report operation/path/message, before/after revisions, a snapshot, validation issues, and changed paths. Result and snapshot properties have public getters with `internal` setters and are service-produced values. They are not deeply immutable: exposed lists/dictionaries remain mutable, row-value snapshots are shallow, and values may use runtime CLR objects rather than the original JSON wire representation.
+Single mutations support `DryRun`, `ExpectedRevision`, and `AllowDestructive` through `GameDBOperationOptions`. Results report operation/path/message, before/after revisions, a snapshot, validation issues, and changed paths. Result and snapshot properties have public getters with `internal` setters and are service-produced values. They are not deeply immutable: exposed lists/dictionaries remain mutable, row-value snapshots are shallow, and values may use runtime CLR objects rather than the original JSON wire representation.
 
-Request DTOs include `GameDBCreateRequest`, `GameDBSaveRequest`, `GameDBTableRequest`, `GameDBRenameRequest`, `GameDBDeleteRequest`, `GameDBFieldRequest`, `GameDBDictionaryTypeDefinition`, `GameDBRowRequest`, `GameDBValueRequest`, and `GameDBGenerateRequest`. Result DTOs include `GameDBAutomationResult`, `GameDBExportResult`, `GameDBListResult`, `GameDBSnapshot`, table/field/row snapshots, and `GameDBValidationIssue`.
+`ApplyBatch` uses `GameDBBatchRequest` and `GameDBBatchOptions` to apply ordered `GameDBBatchOperation` values with one database load, revision check, whole-model validation, and save. `GameDBBatchOperationKind` is the discriminant for table, rename, delete, field, row, and value payload DTOs. `AllowedDestructiveOperations` is an explicit kind allowlist. `GameDBBatchResult` adds `FailureKind`, `FailedOperationIndex`, `DeniedOperationKind`, `CommitStatus`, and structured file/post-save/recovery state so callers do not need to parse messages or blindly retry a partially published save.
+
+Request DTOs include `GameDBCreateRequest`, `GameDBSaveRequest`, `GameDBTableRequest`, `GameDBRenameRequest`, `GameDBDeleteRequest`, `GameDBFieldRequest`, `GameDBDictionaryTypeDefinition`, `GameDBRowRequest`, `GameDBValueRequest`, `GameDBGenerateRequest`, `GameDBBatchRequest`, `GameDBBatchOptions`, `GameDBBatchOperation`, and its six payload DTOs. Result DTOs include `GameDBAutomationResult`, `GameDBBatchResult`, `GameDBExportResult`, `GameDBListResult`, `GameDBSnapshot`, table/field/row snapshots, and `GameDBValidationIssue`.
 
 See [GameDB editor automation](automation.md) for the path contract, request DTO/value shapes, destructive-operation rules, revision semantics, reference integrity, dry runs, and examples. Those details are intentionally not duplicated here.
 

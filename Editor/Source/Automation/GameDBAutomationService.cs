@@ -209,6 +209,160 @@ namespace GameDBEditorLibrary.Automation
             }
         }
 
+        public static GameDBBatchResult ApplyBatch(GameDBBatchRequest request)
+        {
+            if (request == null)
+            {
+                return BatchFailure(null, false, GameDBBatchFailureKind.InvalidRequest,
+                    "Request is required.");
+            }
+
+            var options = request.Options ?? new GameDBBatchOptions();
+            try
+            {
+                var path = ResolveDatabasePath(request.DatabasePath);
+                if (request.Operations == null || request.Operations.Count == 0)
+                {
+                    return BatchFailure(path.AssetPath, options.DryRun,
+                        GameDBBatchFailureKind.InvalidRequest,
+                        "At least one batch operation is required.");
+                }
+
+                var operations = request.Operations.ToArray();
+                var allowed = options.AllowedDestructiveOperations == null
+                    ? new HashSet<GameDBBatchOperationKind>()
+                    : new HashSet<GameDBBatchOperationKind>(options.AllowedDestructiveOperations);
+                foreach (var allowedKind in allowed)
+                {
+                    if (!Enum.IsDefined(typeof(GameDBBatchOperationKind), allowedKind)
+                        || allowedKind == GameDBBatchOperationKind.Unspecified)
+                    {
+                        return BatchFailure(path.AssetPath, options.DryRun,
+                            GameDBBatchFailureKind.InvalidRequest,
+                            $"Unsupported destructive batch operation kind: {allowedKind}.");
+                    }
+                }
+
+                for (var index = 0; index < operations.Length; index++)
+                {
+                    var error = ValidateBatchOperation(operations[index]);
+                    if (error != null)
+                    {
+                        return BatchFailure(path.AssetPath, options.DryRun,
+                            GameDBBatchFailureKind.InvalidRequest, error, index);
+                    }
+
+                    if (IsDestructiveBatchOperation(operations[index].Kind)
+                        && !allowed.Contains(operations[index].Kind))
+                    {
+                        return BatchFailure(path.AssetPath, options.DryRun,
+                            GameDBBatchFailureKind.AuthorizationDenied,
+                            $"Destructive batch operation is not authorized: {operations[index].Kind}.",
+                            index, operations[index].Kind);
+                    }
+                }
+
+                var commands = new GameDBCommand[operations.Length];
+                for (var index = 0; index < operations.Length; index++)
+                {
+                    try
+                    {
+                        commands[index] = CreateBatchCommand(operations[index]);
+                    }
+                    catch (Exception exception)
+                    {
+                        return BatchFailure(path.AssetPath, options.DryRun,
+                            GameDBBatchFailureKind.InvalidRequest, exception.Message, index);
+                    }
+                }
+
+                GameDBDocument document;
+                try
+                {
+                    document = GameDBDocument.Load(path.AssetPath);
+                }
+                catch (GameDBRecoveryRequiredException exception)
+                {
+                    var recovery = BatchFailure(path.AssetPath, options.DryRun,
+                        GameDBBatchFailureKind.RecoveryRequired, exception.Message);
+                    recovery.RecoveryArtifacts = exception.Artifacts.ToList();
+                    return recovery;
+                }
+                catch (Exception exception)
+                {
+                    return BatchFailure(path.AssetPath, options.DryRun,
+                        GameDBBatchFailureKind.LoadFailed, exception.Message);
+                }
+
+                var transaction = document.ApplyTransaction(commands, new GameDBTransactionOptions
+                {
+                    ExpectedRevision = options.ExpectedRevision,
+                    AllowedDestructiveOperations = allowed.Select(ToCommandKind).ToArray()
+                });
+                if (!transaction.Success)
+                {
+                    return BatchTransactionFailure(path, options.DryRun, transaction);
+                }
+
+                var result = new GameDBBatchResult
+                {
+                    Success = true,
+                    DryRun = options.DryRun,
+                    FailureKind = GameDBBatchFailureKind.None,
+                    CommitStatus = options.DryRun
+                        ? GameDBBatchCommitStatus.DryRun
+                        : GameDBBatchCommitStatus.NotAttempted,
+                    Operation = "applyBatch",
+                    DatabasePath = path.AssetPath,
+                    Message = options.DryRun
+                        ? "Batch validated; no files were written."
+                        : "Batch applied.",
+                    RevisionBefore = transaction.RevisionBefore,
+                    RevisionAfter = transaction.AttemptedRevision,
+                    Snapshot = transaction.AttemptedSnapshot,
+                    Issues = transaction.Issues.ToList(),
+                    ChangedPaths = new List<string> { path.AssetPath, path.SchemaAssetPath }
+                };
+                if (options.DryRun)
+                {
+                    return result;
+                }
+
+                GameDBSaveOutcome save;
+                try
+                {
+                    save = document.Save();
+                }
+                catch (Exception exception)
+                {
+                    result.Success = false;
+                    result.FailureKind = GameDBBatchFailureKind.CommitFailed;
+                    result.Message = exception.Message;
+                    return result;
+                }
+
+                result.CommitStatus = ToBatchCommitStatus(save.Status);
+                result.FilesCommitted = save.FilesCommitted;
+                result.PostSavePending = save.PostSavePending;
+                result.PostSaveErrors = save.PostSaveErrors.ToList();
+                result.RecoveryArtifacts = save.RecoveryArtifacts.ToList();
+                result.ChangedPaths = save.ChangedPaths.ToList();
+                result.Message = save.Message;
+                if (!save.Success)
+                {
+                    result.Success = false;
+                    result.FailureKind = GameDBBatchFailureKind.CommitFailed;
+                }
+
+                return result;
+            }
+            catch (Exception exception)
+            {
+                return BatchFailure(request.DatabasePath, options.DryRun,
+                    GameDBBatchFailureKind.InvalidRequest, exception.Message);
+            }
+        }
+
         public static GameDBAutomationResult AddTable(GameDBTableRequest request)
         {
             if (request == null)
@@ -443,6 +597,226 @@ namespace GameDBEditorLibrary.Automation
             }
         }
 
+        private static string ValidateBatchOperation(GameDBBatchOperation operation)
+        {
+            if (operation == null)
+            {
+                return "Batch operations cannot contain null entries.";
+            }
+
+            if (!Enum.IsDefined(typeof(GameDBBatchOperationKind), operation.Kind)
+                || operation.Kind == GameDBBatchOperationKind.Unspecified)
+            {
+                return $"Unsupported batch operation kind: {operation.Kind}.";
+            }
+
+            var payloadCount = (operation.Table != null ? 1 : 0)
+                + (operation.Rename != null ? 1 : 0)
+                + (operation.Delete != null ? 1 : 0)
+                + (operation.Field != null ? 1 : 0)
+                + (operation.Row != null ? 1 : 0)
+                + (operation.Value != null ? 1 : 0);
+            if (payloadCount != 1)
+            {
+                return "Each batch operation must contain exactly one payload.";
+            }
+
+            var expectedPayloadPresent = operation.Kind == GameDBBatchOperationKind.AddTable
+                ? operation.Table != null
+                : operation.Kind == GameDBBatchOperationKind.RenameTable
+                    || operation.Kind == GameDBBatchOperationKind.RenameField
+                    || operation.Kind == GameDBBatchOperationKind.RenameRow
+                    ? operation.Rename != null
+                    : operation.Kind == GameDBBatchOperationKind.DeleteTable
+                        || operation.Kind == GameDBBatchOperationKind.DeleteField
+                        || operation.Kind == GameDBBatchOperationKind.DeleteRow
+                        ? operation.Delete != null
+                        : operation.Kind == GameDBBatchOperationKind.AddField
+                            || operation.Kind == GameDBBatchOperationKind.ReplaceField
+                            ? operation.Field != null
+                            : operation.Kind == GameDBBatchOperationKind.AddRow
+                                || operation.Kind == GameDBBatchOperationKind.UpdateRow
+                                ? operation.Row != null
+                                : operation.Value != null;
+            return expectedPayloadPresent
+                ? null
+                : $"Batch operation {operation.Kind} has the wrong payload type.";
+        }
+
+        private static bool IsDestructiveBatchOperation(GameDBBatchOperationKind kind)
+        {
+            switch (kind)
+            {
+                case GameDBBatchOperationKind.RenameTable:
+                case GameDBBatchOperationKind.DeleteTable:
+                case GameDBBatchOperationKind.ReplaceField:
+                case GameDBBatchOperationKind.RenameField:
+                case GameDBBatchOperationKind.DeleteField:
+                case GameDBBatchOperationKind.RenameRow:
+                case GameDBBatchOperationKind.DeleteRow:
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        private static GameDBCommand CreateBatchCommand(GameDBBatchOperation operation)
+        {
+            switch (operation.Kind)
+            {
+                case GameDBBatchOperationKind.AddTable:
+                    return new AddTableCommand(operation.Table.TableName,
+                        operation.Table.KeyType, operation.Table.KeyTypeArgument);
+                case GameDBBatchOperationKind.RenameTable:
+                    return new RenameTableCommand(operation.Rename.CurrentName, operation.Rename.NewName);
+                case GameDBBatchOperationKind.DeleteTable:
+                    return new DeleteTableCommand(operation.Delete.Name);
+                case GameDBBatchOperationKind.AddField:
+                    return new AddFieldCommand(operation.Field.TableName,
+                        operation.Field.FieldName, CreateFieldTypeSpec(operation.Field));
+                case GameDBBatchOperationKind.ReplaceField:
+                    return new ReplaceFieldCommand(operation.Field.TableName,
+                        operation.Field.FieldName, CreateFieldTypeSpec(operation.Field));
+                case GameDBBatchOperationKind.RenameField:
+                    return new RenameFieldCommand(operation.Rename.TableName,
+                        operation.Rename.CurrentName, operation.Rename.NewName);
+                case GameDBBatchOperationKind.DeleteField:
+                    return new DeleteFieldCommand(operation.Delete.TableName, operation.Delete.Name);
+                case GameDBBatchOperationKind.AddRow:
+                    return new AddRowCommand(operation.Row.TableName,
+                        operation.Row.RowKey, operation.Row.Values);
+                case GameDBBatchOperationKind.UpdateRow:
+                    return new UpdateRowCommand(operation.Row.TableName,
+                        operation.Row.RowKey, operation.Row.Values);
+                case GameDBBatchOperationKind.SetValue:
+                    return new SetValueCommand(operation.Value.TableName,
+                        operation.Value.RowKey, operation.Value.FieldName, operation.Value.Value);
+                case GameDBBatchOperationKind.RenameRow:
+                    return new RenameRowCommand(operation.Rename.TableName,
+                        operation.Rename.CurrentName, operation.Rename.NewName);
+                case GameDBBatchOperationKind.DeleteRow:
+                    return new DeleteRowCommand(operation.Delete.TableName, operation.Delete.Name);
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(operation.Kind));
+            }
+        }
+
+        private static GameDBCommandKind ToCommandKind(GameDBBatchOperationKind kind)
+        {
+            switch (kind)
+            {
+                case GameDBBatchOperationKind.AddTable: return GameDBCommandKind.AddTable;
+                case GameDBBatchOperationKind.RenameTable: return GameDBCommandKind.RenameTable;
+                case GameDBBatchOperationKind.DeleteTable: return GameDBCommandKind.DeleteTable;
+                case GameDBBatchOperationKind.AddField: return GameDBCommandKind.AddField;
+                case GameDBBatchOperationKind.ReplaceField: return GameDBCommandKind.ReplaceField;
+                case GameDBBatchOperationKind.RenameField: return GameDBCommandKind.RenameField;
+                case GameDBBatchOperationKind.DeleteField: return GameDBCommandKind.DeleteField;
+                case GameDBBatchOperationKind.AddRow: return GameDBCommandKind.AddRow;
+                case GameDBBatchOperationKind.UpdateRow: return GameDBCommandKind.UpdateRow;
+                case GameDBBatchOperationKind.SetValue: return GameDBCommandKind.SetValue;
+                case GameDBBatchOperationKind.RenameRow: return GameDBCommandKind.RenameRow;
+                case GameDBBatchOperationKind.DeleteRow: return GameDBCommandKind.DeleteRow;
+                default: throw new ArgumentOutOfRangeException(nameof(kind));
+            }
+        }
+
+        private static GameDBBatchOperationKind ToBatchOperationKind(GameDBCommandKind kind)
+        {
+            switch (kind)
+            {
+                case GameDBCommandKind.AddTable: return GameDBBatchOperationKind.AddTable;
+                case GameDBCommandKind.RenameTable: return GameDBBatchOperationKind.RenameTable;
+                case GameDBCommandKind.DeleteTable: return GameDBBatchOperationKind.DeleteTable;
+                case GameDBCommandKind.AddField: return GameDBBatchOperationKind.AddField;
+                case GameDBCommandKind.ReplaceField: return GameDBBatchOperationKind.ReplaceField;
+                case GameDBCommandKind.RenameField: return GameDBBatchOperationKind.RenameField;
+                case GameDBCommandKind.DeleteField: return GameDBBatchOperationKind.DeleteField;
+                case GameDBCommandKind.AddRow: return GameDBBatchOperationKind.AddRow;
+                case GameDBCommandKind.UpdateRow: return GameDBBatchOperationKind.UpdateRow;
+                case GameDBCommandKind.SetValue: return GameDBBatchOperationKind.SetValue;
+                case GameDBCommandKind.RenameRow: return GameDBBatchOperationKind.RenameRow;
+                case GameDBCommandKind.DeleteRow: return GameDBBatchOperationKind.DeleteRow;
+                default: throw new ArgumentOutOfRangeException(nameof(kind));
+            }
+        }
+
+        private static GameDBBatchResult BatchTransactionFailure(DatabasePath path, bool dryRun,
+            GameDBTransactionResult transaction)
+        {
+            var failedIndex = transaction.FailedCommandIndex >= 0
+                ? transaction.FailedCommandIndex
+                : transaction.DeniedCommandIndex;
+            var failureKind = GameDBBatchFailureKind.TransactionFailed;
+            if (transaction.FailureKind == GameDBTransactionFailureKind.AuthorizationDenied)
+            {
+                failureKind = GameDBBatchFailureKind.AuthorizationDenied;
+            }
+            else if (transaction.FailureKind == GameDBTransactionFailureKind.RevisionConflict)
+            {
+                failureKind = GameDBBatchFailureKind.RevisionConflict;
+            }
+            else if (transaction.FailureKind == GameDBTransactionFailureKind.CommandFailed
+                || transaction.FailureKind == GameDBTransactionFailureKind.CommandThrew)
+            {
+                failureKind = GameDBBatchFailureKind.CommandFailed;
+            }
+            else if (transaction.FailureKind == GameDBTransactionFailureKind.ValidationFailed)
+            {
+                failureKind = GameDBBatchFailureKind.ValidationFailed;
+            }
+
+            var result = BatchFailure(path.AssetPath, dryRun, failureKind,
+                transaction.Message, failedIndex,
+                transaction.DeniedCommandKind.HasValue
+                    ? (GameDBBatchOperationKind?)ToBatchOperationKind(transaction.DeniedCommandKind.Value)
+                    : null);
+            result.RevisionBefore = transaction.RevisionBefore;
+            result.RevisionAfter = transaction.AttemptedRevision;
+            result.Snapshot = transaction.AttemptedSnapshot;
+            result.Issues = transaction.Issues.ToList();
+            if (transaction.FailureKind == GameDBTransactionFailureKind.ValidationFailed)
+            {
+                result.ChangedPaths = new List<string> { path.AssetPath, path.SchemaAssetPath };
+            }
+
+            return result;
+        }
+
+        private static GameDBBatchResult BatchFailure(string databasePath, bool dryRun,
+            GameDBBatchFailureKind failureKind, string message, int failedOperationIndex = -1,
+            GameDBBatchOperationKind? deniedOperationKind = null)
+        {
+            return new GameDBBatchResult
+            {
+                Success = false,
+                DryRun = dryRun,
+                FailureKind = failureKind,
+                CommitStatus = GameDBBatchCommitStatus.NotAttempted,
+                Operation = "applyBatch",
+                DatabasePath = databasePath,
+                Message = message,
+                FailedOperationIndex = failedOperationIndex,
+                DeniedOperationKind = deniedOperationKind
+            };
+        }
+
+        private static GameDBBatchCommitStatus ToBatchCommitStatus(GameDBSaveStatus status)
+        {
+            switch (status)
+            {
+                case GameDBSaveStatus.Saved: return GameDBBatchCommitStatus.Saved;
+                case GameDBSaveStatus.NoChanges: return GameDBBatchCommitStatus.NoChanges;
+                case GameDBSaveStatus.SerializationFailed: return GameDBBatchCommitStatus.SerializationFailed;
+                case GameDBSaveStatus.ValidationFailed: return GameDBBatchCommitStatus.ValidationFailed;
+                case GameDBSaveStatus.Conflict: return GameDBBatchCommitStatus.Conflict;
+                case GameDBSaveStatus.PersistenceFailed: return GameDBBatchCommitStatus.PersistenceFailed;
+                case GameDBSaveStatus.PersistenceStateUnknown: return GameDBBatchCommitStatus.PersistenceStateUnknown;
+                case GameDBSaveStatus.PostSavePending: return GameDBBatchCommitStatus.PostSavePending;
+                default: throw new ArgumentOutOfRangeException(nameof(status));
+            }
+        }
+
         private static GameDBAutomationResult ExecuteCommand(string operation, string databasePath,
             GameDBOperationOptions options, Func<GameDBCommand> commandFactory)
         {
@@ -536,18 +910,30 @@ namespace GameDBEditorLibrary.Automation
 
         private static GameDBFieldTypeSpec CreateFieldTypeSpec(GameDBFieldRequest request)
         {
+            return CreateFieldTypeSpec(request.FieldType, request.IsArray,
+                request.TypeArgument, request.DictionaryType);
+        }
+
+        private static GameDBFieldTypeSpec CreateFieldTypeSpec(GameDBBatchFieldOperation operation)
+        {
+            return CreateFieldTypeSpec(operation.FieldType, operation.IsArray,
+                operation.TypeArgument, operation.DictionaryType);
+        }
+
+        private static GameDBFieldTypeSpec CreateFieldTypeSpec(FieldType fieldType, bool isArray,
+            string typeArgument, GameDBDictionaryTypeDefinition dictionaryDefinition)
+        {
             GameDBDictionaryTypeSpec dictionaryType = null;
-            if (request.DictionaryType != null)
+            if (dictionaryDefinition != null)
             {
                 dictionaryType = new GameDBDictionaryTypeSpec(
-                    request.DictionaryType.KeyType,
-                    request.DictionaryType.KeyTypeArgument,
-                    request.DictionaryType.ValueType,
-                    request.DictionaryType.ValueTypeArgument);
+                    dictionaryDefinition.KeyType,
+                    dictionaryDefinition.KeyTypeArgument,
+                    dictionaryDefinition.ValueType,
+                    dictionaryDefinition.ValueTypeArgument);
             }
 
-            return new GameDBFieldTypeSpec(request.FieldType, request.IsArray,
-                request.TypeArgument, dictionaryType);
+            return new GameDBFieldTypeSpec(fieldType, isArray, typeArgument, dictionaryType);
         }
 
 

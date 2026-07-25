@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- Added an internal document, command, transaction, and conflict-aware persistence core shared by editor automation operations.
 - Moved the supported data-only **Build GameDB** control into the main GameDB editor tab.
 - Hardened C# generation: generated database, table, and row types are now `partial`; schema strings are `const`; enum keys are `static readonly`; generated names are validated before writing; and complete scope output is staged and replaced so removed tables cannot leave stale source files.
 - Retained the networking path required by optional Google Sheets interoperability.

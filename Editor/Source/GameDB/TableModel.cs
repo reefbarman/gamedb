@@ -99,7 +99,9 @@ namespace GameDBEditorLibrary
         {
             bool success = string.IsNullOrEmpty(key);
 
-            if (!string.IsNullOrEmpty(key) && !m_data.ContainsKey(key))
+            if (!string.IsNullOrEmpty(key)
+                && key != FieldBase.NullRefToken
+                && !m_data.ContainsKey(key))
             {
                 var row = new RowModel(key);
 
@@ -122,7 +124,8 @@ namespace GameDBEditorLibrary
 
         public bool RenameKey(string oldKey, string newKey)
         {
-            if (!m_data.TryGetValue(oldKey, out var row) || m_data.ContainsKey(newKey))
+            if (oldKey == FieldBase.NullRefToken || newKey == FieldBase.NullRefToken
+                || !m_data.TryGetValue(oldKey, out var row) || m_data.ContainsKey(newKey))
             {
                 return false;
             }

@@ -1,8 +1,8 @@
-﻿using GameDBLibrary;
+﻿using GameDBEditorLibrary.Documents;
+using GameDBLibrary;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using UnityEditor;
 using UnityEngine;
 
 namespace GameDBEditorLibrary
@@ -12,6 +12,7 @@ namespace GameDBEditorLibrary
         internal static List<GameDBInternal> RuntimeDBs = new List<GameDBInternal>();
 
         private Dictionary<string, TableBase> m_tables = null;
+        private GameDBDocument m_persistenceDocument;
 
         private int m_loadedInGameDB = -1;
 
@@ -24,15 +25,18 @@ namespace GameDBEditorLibrary
         public bool Load(string gameDBPath)
         {
             var loaded = false;
+            m_persistenceDocument = null;
 
             try
             {
-                var schemaJSON = File.ReadAllText(Path.Combine(Application.dataPath, GetSchemaPath(gameDBPath)));
-                var gameDBJSON = File.ReadAllText(Path.Combine(Application.dataPath, gameDBPath));
-
-                loaded = Import(gameDBJSON, schemaJSON);
-
-                LoadedPath = gameDBPath;
+                var document = GameDBDocument.Load(ToAssetPath(gameDBPath));
+                var state = document.SerializeCurrent();
+                loaded = Import(state.DataJson, state.SchemaJson);
+                if (loaded)
+                {
+                    LoadedPath = gameDBPath;
+                    m_persistenceDocument = document;
+                }
             }
             catch (Exception e)
             {
@@ -53,6 +57,7 @@ namespace GameDBEditorLibrary
 
             LoadedPath = string.Empty;
             m_loadedInGameDB = -1;
+            m_persistenceDocument = null;
 
             try
             {
@@ -135,6 +140,19 @@ namespace GameDBEditorLibrary
         public void Create(string gameDBPath)
         {
             CreateInMemory(gameDBPath);
+            ScopeName = Path.GetFileNameWithoutExtension(gameDBPath);
+            try
+            {
+                m_persistenceDocument = GameDBDocument.CreateNew(
+                    ToAssetPath(gameDBPath), ScopeName, LocalizationDB);
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("failed to create gameDB: " + gameDBPath);
+                Debug.LogException(e);
+                return;
+            }
+
             Save();
         }
 
@@ -143,6 +161,7 @@ namespace GameDBEditorLibrary
             ScopeName = string.Empty;
             LocalizationDB = false;
             m_loadedInGameDB = -1;
+            m_persistenceDocument = null;
             LoadedPath = gameDBPath;
             m_tables = new Dictionary<string, TableBase>();
         }
@@ -151,21 +170,47 @@ namespace GameDBEditorLibrary
         {
             try
             {
-                var dataJSON = SerializeData();
-                var schemaJSON = SerializeSchema();
-                var dataPath = Path.Combine(Application.dataPath, LoadedPath);
-                var schemaPath = Path.Combine(Application.dataPath, GetSchemaPath(LoadedPath));
-
-                SavePair(dataPath, dataJSON, schemaPath, schemaJSON);
-
-                if (dataPath.Contains("Assets"))
+                if (m_persistenceDocument != null && m_persistenceDocument.HasPendingPostSaveWork)
                 {
-                    AssetDatabase.ImportAsset(dataPath.Substring(dataPath.IndexOf("Assets")), ImportAssetOptions.ForceUpdate);
-                    AssetDatabase.ImportAsset(schemaPath.Substring(schemaPath.IndexOf("Assets")), ImportAssetOptions.ForceUpdate);
+                    var pending = m_persistenceDocument.Save();
+                    if (!pending.Success)
+                    {
+                        Debug.LogError("failed to save gameDB: " + LoadedPath + ". " + pending.Message);
+                        return false;
+                    }
+
+                    if (GameDBModelCodec.ComputeRevision(this) == m_persistenceDocument.CurrentRevision)
+                    {
+                        return true;
+                    }
                 }
 
-                GameDBEditor.OnGameDBSaved?.Invoke(ScopeName);
-                return true;
+                var assetPath = ToAssetPath(LoadedPath);
+                var currentRevision = GameDBModelCodec.ComputeRevision(this);
+                var document = m_persistenceDocument;
+                if (document == null)
+                {
+                    document = GameDBDocument.CreateReplacement(
+                        assetPath, SerializeData(), SerializeSchema());
+                }
+                else if (currentRevision != document.CurrentRevision)
+                {
+                    document = document.CreateReplacement(SerializeData(), SerializeSchema());
+                }
+
+                var result = document.Save(new GameDBSaveOptions { ForceWrite = true });
+                if (result.Success || result.FilesCommitted
+                    || result.Status == GameDBSaveStatus.PersistenceStateUnknown)
+                {
+                    m_persistenceDocument = document;
+                }
+
+                if (!result.Success)
+                {
+                    Debug.LogError("failed to save gameDB: " + LoadedPath + ". " + result.Message);
+                }
+
+                return result.Success;
             }
             catch (Exception e)
             {
@@ -175,75 +220,12 @@ namespace GameDBEditorLibrary
             }
         }
 
-        private static void SavePair(string dataPath, string dataJSON, string schemaPath, string schemaJSON)
+        private static string ToAssetPath(string path)
         {
-            var directory = Path.GetDirectoryName(dataPath);
-            Directory.CreateDirectory(directory);
-
-            var operationId = Guid.NewGuid().ToString("N");
-            var dataTemporaryPath = dataPath + "." + operationId + ".tmp";
-            var schemaTemporaryPath = schemaPath + "." + operationId + ".tmp";
-            var dataBackupPath = dataPath + "." + operationId + ".bak";
-            var schemaBackupPath = schemaPath + "." + operationId + ".bak";
-            var dataExisted = File.Exists(dataPath);
-            var schemaExisted = File.Exists(schemaPath);
-
-            try
-            {
-                File.WriteAllText(dataTemporaryPath, dataJSON);
-                File.WriteAllText(schemaTemporaryPath, schemaJSON);
-                ReplaceFile(dataTemporaryPath, dataPath, dataBackupPath, dataExisted);
-
-                try
-                {
-                    ReplaceFile(schemaTemporaryPath, schemaPath, schemaBackupPath, schemaExisted);
-                }
-                catch
-                {
-                    RestoreFile(dataPath, dataBackupPath, dataExisted);
-                    RestoreFile(schemaPath, schemaBackupPath, schemaExisted);
-                    throw;
-                }
-            }
-            finally
-            {
-                DeleteFile(dataTemporaryPath);
-                DeleteFile(schemaTemporaryPath);
-                DeleteFile(dataBackupPath);
-                DeleteFile(schemaBackupPath);
-            }
-        }
-
-        private static void ReplaceFile(string temporaryPath, string destinationPath, string backupPath, bool destinationExisted)
-        {
-            if (destinationExisted)
-            {
-                File.Replace(temporaryPath, destinationPath, backupPath);
-            }
-            else
-            {
-                File.Move(temporaryPath, destinationPath);
-            }
-        }
-
-        private static void RestoreFile(string destinationPath, string backupPath, bool destinationExisted)
-        {
-            if (destinationExisted && File.Exists(backupPath))
-            {
-                File.Copy(backupPath, destinationPath, true);
-            }
-            else if (!destinationExisted)
-            {
-                DeleteFile(destinationPath);
-            }
-        }
-
-        private static void DeleteFile(string path)
-        {
-            if (File.Exists(path))
-            {
-                File.Delete(path);
-            }
+            var assetPath = path.Replace('\\', '/').TrimStart('/');
+            return assetPath.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase)
+                ? assetPath
+                : "Assets/" + assetPath;
         }
 
         public bool GetRawDataJSON(out string gameDBJSON)

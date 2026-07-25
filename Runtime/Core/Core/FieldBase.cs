@@ -78,6 +78,10 @@ namespace GameDBLibrary
                 if (valueList.Count == 0) return true;
 
                 value = valueList[0];
+                if (value == null)
+                {
+                    return Type == FieldType.tableRef;
+                }
             }
 
             if (Type == FieldType.@int)

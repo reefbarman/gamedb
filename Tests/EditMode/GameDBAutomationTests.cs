@@ -263,7 +263,7 @@ namespace GameDBLibrary.Tests
         }
 
         [Test]
-        public void RenameRowUpdatesTableReferencesAndDeleteBlocksWhileReferenced()
+        public void ReferenceSensitiveRenamesAndDeletesHandleScalarArrayAndDictionaryReferences()
         {
             CreateDatabase();
             AssertSuccess(GameDBAutomationService.AddTable(new GameDBTableRequest
@@ -284,6 +284,28 @@ namespace GameDBLibrary.Tests
                 FieldType = FieldType.tableRef,
                 TypeArgument = "Items"
             }));
+            AssertSuccess(GameDBAutomationService.AddField(new GameDBFieldRequest
+            {
+                DatabasePath = m_databasePath,
+                TableName = "Recipes",
+                FieldName = "Ingredients",
+                FieldType = FieldType.tableRef,
+                IsArray = true,
+                TypeArgument = "Items"
+            }));
+            AssertSuccess(GameDBAutomationService.AddField(new GameDBFieldRequest
+            {
+                DatabasePath = m_databasePath,
+                TableName = "Recipes",
+                FieldName = "Slots",
+                FieldType = FieldType.dictionary,
+                DictionaryType = new GameDBDictionaryTypeDefinition
+                {
+                    KeyType = KeyType.@string,
+                    ValueType = FieldType.tableRef,
+                    ValueTypeArgument = "Items"
+                }
+            }));
             AssertSuccess(GameDBAutomationService.AddRow(new GameDBRowRequest
             {
                 DatabasePath = m_databasePath,
@@ -295,17 +317,22 @@ namespace GameDBLibrary.Tests
                 DatabasePath = m_databasePath,
                 TableName = "Recipes",
                 RowKey = "ForgeSword",
-                Values = new Dictionary<string, object> { { "Result", "OldSword" } }
+                Values = new Dictionary<string, object>
+                {
+                    { "Result", "OldSword" },
+                    { "Ingredients", new List<object> { "OldSword" } },
+                    { "Slots", new Dictionary<string, object> { { "Primary", "OldSword" } } }
+                }
             }));
 
-            var blocked = GameDBAutomationService.DeleteRow(new GameDBDeleteRequest
+            var blockedRowDelete = GameDBAutomationService.DeleteRow(new GameDBDeleteRequest
             {
                 DatabasePath = m_databasePath,
                 TableName = "Items",
                 Name = "OldSword",
                 Options = DestructiveOptions()
             });
-            var renamed = GameDBAutomationService.RenameRow(new GameDBRenameRequest
+            var renamedRow = GameDBAutomationService.RenameRow(new GameDBRenameRequest
             {
                 DatabasePath = m_databasePath,
                 TableName = "Items",
@@ -313,12 +340,40 @@ namespace GameDBLibrary.Tests
                 NewName = "Sword",
                 Options = DestructiveOptions()
             });
+            var blockedTableDelete = GameDBAutomationService.DeleteTable(new GameDBDeleteRequest
+            {
+                DatabasePath = m_databasePath,
+                Name = "Items",
+                Options = DestructiveOptions()
+            });
+            var renamedTable = GameDBAutomationService.RenameTable(new GameDBRenameRequest
+            {
+                DatabasePath = m_databasePath,
+                CurrentName = "Items",
+                NewName = "Catalog",
+                Options = DestructiveOptions()
+            });
 
-            Assert.That(blocked.Success, Is.False);
-            Assert.That(blocked.Message, Does.Contain("referenced"));
-            Assert.That(renamed.Success, Is.True, renamed.Message);
-            var recipe = renamed.Snapshot.Tables.Single(table => table.Name == "Recipes").Rows.Single();
+            Assert.That(blockedRowDelete.Success, Is.False);
+            Assert.That(blockedRowDelete.Message, Does.Contain("Recipes[ForgeSword].Result"));
+            Assert.That(blockedRowDelete.Message, Does.Contain("Recipes[ForgeSword].Ingredients"));
+            Assert.That(blockedRowDelete.Message, Does.Contain("Recipes[ForgeSword].Slots"));
+            Assert.That(renamedRow.Success, Is.True, renamedRow.Message);
+            var recipe = renamedRow.Snapshot.Tables.Single(table => table.Name == "Recipes").Rows.Single();
             Assert.That(recipe.Values["Result"], Is.EqualTo("Sword"));
+            Assert.That(((IList<object>)recipe.Values["Ingredients"]).Single(), Is.EqualTo("Sword"));
+            Assert.That(((Dictionary<object, object>)recipe.Values["Slots"])["Primary"], Is.EqualTo("Sword"));
+
+            Assert.That(blockedTableDelete.Success, Is.False);
+            Assert.That(blockedTableDelete.Message, Does.Contain("Recipes.Result"));
+            Assert.That(blockedTableDelete.Message, Does.Contain("Recipes.Ingredients"));
+            Assert.That(blockedTableDelete.Message, Does.Contain("Recipes.Slots"));
+            Assert.That(renamedTable.Success, Is.True, renamedTable.Message);
+            var recipeFields = renamedTable.Snapshot.Tables.Single(table => table.Name == "Recipes").Fields;
+            Assert.That(recipeFields.Single(field => field.Name == "Result").TypeArgument, Is.EqualTo("Catalog"));
+            Assert.That(recipeFields.Single(field => field.Name == "Ingredients").TypeArgument, Is.EqualTo("Catalog"));
+            Assert.That(recipeFields.Single(field => field.Name == "Slots").DictionaryType.ValueTypeArgument,
+                Is.EqualTo("Catalog"));
         }
 
         [Test]

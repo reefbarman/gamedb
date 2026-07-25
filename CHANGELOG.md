@@ -1,0 +1,28 @@
+# Changelog
+
+All notable changes to GameDB are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+## [1.0.0-preview.1] - 2026-07-24
+
+### Added
+
+- Initial `com.reefbarman.gamedb` Unity Package Manager package for Unity 6000.5.4f1.
+- Runtime JSON game-data APIs, editor authoring, schema-driven C# generation, table references, dictionaries, localization, remote-update client APIs, and optional Google Sheets interoperability under the MIT license.
+- Transport-neutral editor automation API with path containment, dry runs, destructive-operation gates, revision checks, reference integrity, JSON export, and C# generation.
+- Basic UPM sample and package documentation for editor, runtime, automation, and Google Sheets workflows.
+
+### Changed
+
+- Replaced the legacy JSON parser with Unity's maintained Newtonsoft JSON package.
+- Modernized the Unity integration and package layout for Unity 6.5.
+
+### Removed
+
+- Legacy Free/Pro feature split, old project files, vendored promise/JSON sources, binary/encrypted build output, and the unshipped legacy deployment server workflow.
+
+[Unreleased]: https://github.com/reefbarman/gamedb/compare/v1.0.0-preview.1...HEAD
+[1.0.0-preview.1]: https://github.com/reefbarman/gamedb/releases/tag/v1.0.0-preview.1

@@ -1,0 +1,20 @@
+
+        public Exception Load(string path, string language, bool notify = true)
+        {
+            LocalizationLanguage = language;
+
+            var gameDBResource = UnityEngine.Resources.Load<UnityEngine.TextAsset>(path);
+
+            if (gameDBResource == null)
+            {
+                return new ArgumentException($"Failed to load GameDB {Name} at path: {path}");
+            }
+
+            return Import(gameDBResource.text, new[] { language }, notify);
+        }
+
+        public Exception Import(string json, string language, bool notify = true)
+        {
+            LocalizationLanguage = language;
+            return Import(json, new[] { language }, notify);
+        }

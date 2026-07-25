@@ -1,0 +1,34 @@
+{
+  "name": "com.reefbarman.gamedb",
+  "version": "1.0.0-preview.1",
+  "displayName": "GameDB",
+  "description": "A Unity game-data editor and runtime library with schema-driven C# code generation.",
+  "unity": "6000.5",
+  "unityRelease": "4f1",
+  "license": "MIT",
+  "dependencies": {
+    "com.unity.modules.imgui": "1.0.0",
+    "com.unity.modules.unitywebrequest": "1.0.0",
+    "com.unity.nuget.newtonsoft-json": "3.2.2"
+  },
+  "documentationUrl": "https://github.com/reefbarman/gamedb#readme",
+  "changelogUrl": "https://github.com/reefbarman/gamedb/blob/main/CHANGELOG.md",
+  "licensesUrl": "https://github.com/reefbarman/gamedb/blob/main/LICENSE.md",
+  "keywords": [
+    "database",
+    "game-data",
+    "code-generation",
+    "editor"
+  ],
+  "samples": [
+    {
+      "displayName": "Basic GameDB",
+      "description": "A small Resources-based GameDB with categories, items, arrays, and table references.",
+      "path": "Samples~/Basic"
+    }
+  ],
+  "author": {
+    "name": "reefbarman",
+    "url": "https://github.com/reefbarman"
+  }
+}

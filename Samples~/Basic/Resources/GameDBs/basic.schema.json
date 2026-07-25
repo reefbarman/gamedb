@@ -1,0 +1,47 @@
+{
+  "tables": {
+    "Categories": {
+      "fields": {
+        "DisplayName": {
+          "type": "string",
+          "isArray": false,
+          "typeArg": null
+        }
+      },
+      "key": {
+        "type": "string",
+        "typeArg": null
+      }
+    },
+    "Items": {
+      "fields": {
+        "Category": {
+          "type": "tableRef",
+          "isArray": false,
+          "typeArg": "Categories"
+        },
+        "Damage": {
+          "type": "int",
+          "isArray": false,
+          "typeArg": null
+        },
+        "DisplayName": {
+          "type": "string",
+          "isArray": false,
+          "typeArg": null
+        },
+        "Tags": {
+          "type": "string",
+          "isArray": true,
+          "typeArg": null
+        }
+      },
+      "key": {
+        "type": "string",
+        "typeArg": null
+      }
+    }
+  },
+  "scope": "Basic",
+  "localizationDB": false
+}

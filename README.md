@@ -1,1 +1,171 @@
-GameDB
+# GameDB
+
+GameDB is an open-source, schema-driven game-data editor and runtime library for Unity. Author tables in the Unity Editor, generate strongly typed C# accessors, load JSON at runtime, and automate local database changes through a public editor API.
+
+## Requirements
+
+- Unity `6000.5.4f1` or newer in the Unity 6.5 line
+- Git when installing directly from GitHub
+
+The package uses Unity's Newtonsoft JSON package and includes its required Unity module dependencies in `package.json`.
+
+## Install with Unity Package Manager
+
+In Unity, open **Window → Package Management → Package Manager**, select **Install package from git URL**, and enter:
+
+```text
+https://github.com/reefbarman/gamedb.git
+```
+
+For reproducible builds, install a release tag once published:
+
+```text
+https://github.com/reefbarman/gamedb.git#v1.0.0-preview.1
+```
+
+You can also add the dependency directly to your project's `Packages/manifest.json`:
+
+```json
+{
+  "dependencies": {
+    "com.reefbarman.gamedb": "https://github.com/reefbarman/gamedb.git#v1.0.0-preview.1"
+  }
+}
+```
+
+## Quick start
+
+1. Open **Window → GameDB → Open Editor**.
+2. Click **Create GameDB** and save the database under your project's `Assets` directory. GameDB creates a data `.json` file and a matching `.schema.json` file.
+3. Set a valid C# **Scope Name**.
+4. Create tables, fields, and rows, then click **Save GameDB**.
+5. Click **Generate Classes** and select an output folder under `Assets`.
+6. Put the database JSON under a `Resources` folder if you want to use the generated `Resources.Load` helper.
+
+Each generated namespace is named `GameDB{ScopeName}`. For a scope named `Basic`, runtime loading looks like this:
+
+```csharp
+using GameDBBasic;
+using UnityEngine;
+
+public sealed class LoadGameData : MonoBehaviour
+{
+    private void Start()
+    {
+        var gameDB = new GameDB("Main");
+        var error = gameDB.Load("GameDBs/basic");
+
+        if (error != null)
+        {
+            Debug.LogException(error);
+            return;
+        }
+
+        var sword = gameDB.ItemsTable.GetByKey(ItemsSchema.KeySword);
+        Debug.Log($"{sword.DisplayNameVal}: {sword.DamageVal}");
+    }
+}
+```
+
+The generated load path is relative to a `Resources` folder and omits the `.json` extension.
+
+## Supported data
+
+GameDB supports:
+
+- strings, 32-bit integers, floats, and booleans
+- colors and 2D/3D/4D vectors
+- Unity object resource paths
+- project enums
+- references to rows in another table
+- arrays of non-dictionary field types
+- dictionaries with string or enum keys
+
+Table references and schema changes are validated before the automation API saves them. Generated code should be regenerated after schema changes.
+
+## Documentation
+
+The package includes maintained Markdown documentation for:
+
+- [editor authoring](Documentation~/editor-authoring.md), including tables, fields, enums, arrays, dictionaries, settings, and data-only builds;
+- [runtime use and hot reload](Documentation~/runtime.md), including generated code, Play Mode editing, and localization;
+- the [supported API reference](Documentation~/api-reference.md);
+- [agent and editor automation](Documentation~/automation.md);
+- [optional Google Sheets interoperability](Documentation~/google-sheets.md).
+
+Start at [`Documentation~/index.md`](Documentation~/index.md). The supported workflows from the former GameDB 1.6 site have been rewritten for Unity 6.5; retired Free/Pro, binary/encrypted, and unshipped deployment-server workflows are explicitly excluded.
+
+## Basic sample
+
+Import **Basic GameDB** from the Package Manager's **Samples** tab. The sample includes a small `Categories` and `Items` database under `Resources/GameDBs` and instructions for loading it in the GameDB editor and generating its runtime classes.
+
+## Agent and editor automation
+
+The editor assembly exposes a transport-neutral API in:
+
+```csharp
+GameDBEditorLibrary.Automation.GameDBAutomationService
+```
+
+Agents can call this API through Coplay's existing Unity MCP `execute_code` capability; GameDB does not require a custom MCP server or a hosted service.
+
+Bundled documentation is also agent-readable through stable IDs:
+
+```csharp
+var catalog = GameDBDocumentationService.ListDocuments();
+var guide = GameDBDocumentationService.ReadDocument("index");
+UnityEngine.Debug.Log(guide.Content);
+```
+
+Example inspection:
+
+```csharp
+using GameDBEditorLibrary.Automation;
+using UnityEngine;
+
+var result = GameDBAutomationService.Inspect("Assets/Resources/GameDBs/basic.json");
+Debug.Log($"Success: {result.Success}, revision: {result.Snapshot?.Revision}");
+```
+
+Example guarded mutation:
+
+```csharp
+using GameDBEditorLibrary.Automation;
+
+var inspected = GameDBAutomationService.Inspect("Assets/Resources/GameDBs/basic.json");
+var result = GameDBAutomationService.AddRow(new GameDBRowRequest
+{
+    DatabasePath = "Assets/Resources/GameDBs/basic.json",
+    TableName = "Items",
+    RowKey = "Axe",
+    Values = new System.Collections.Generic.Dictionary<string, object>
+    {
+        { "DisplayName", "Iron Axe" },
+        { "Damage", 16L },
+        { "Category", "Weapons" }
+    },
+    Options = new GameDBOperationOptions
+    {
+        ExpectedRevision = inspected.Snapshot.Revision,
+        DryRun = true
+    }
+});
+```
+
+Use `DryRun` to validate a prospective change without writing. Renames, deletes, schema replacement, raw saves, database overwrite, and generated-file overwrite require `AllowDestructive = true`. See [`Documentation~/automation.md`](Documentation~/automation.md) for the complete contract.
+
+## Google Sheets
+
+A legacy-compatible Google Apps Script is retained as an **optional** interoperability tool. It requires deployment as a web app and its original protocol has no authentication. Do not expose it publicly without adding your own authorization checks. See [`Documentation~/google-sheets.md`](Documentation~/google-sheets.md).
+
+## Legacy-compatible remote client APIs
+
+The runtime still contains the original generic remote-update client APIs for source compatibility, but this preview does not provide, host, or validate the old Go/AWS deployment server. Treat this surface as unsupported legacy compatibility code: it is outside the agent mutation API and should not be used for a new production deployment without a separately secured and tested service implementation.
+
+## Development
+
+`TestProject~/` is the Unity 6.5 development project. The package is referenced locally from the repository root. EditMode tests live in `Tests/EditMode`.
+
+## License
+
+GameDB is licensed under the [MIT License](LICENSE.md). Third-party notices are listed in [Third Party Notices.md](Third%20Party%20Notices.md).

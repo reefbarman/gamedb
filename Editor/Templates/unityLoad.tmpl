@@ -1,0 +1,12 @@
+
+        public Exception Load(string path, bool notify = true)
+        {
+            var gameDBResource = UnityEngine.Resources.Load<UnityEngine.TextAsset>(path);
+
+            if (gameDBResource == null)
+            {
+                return new ArgumentException($"Failed to load GameDB {Name} at path: {path}");
+            }
+
+            return Import(gameDBResource.text, notify);
+        }

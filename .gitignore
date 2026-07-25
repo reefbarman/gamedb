@@ -21,10 +21,12 @@ UserSettings/
 
 # IDE-generated files
 .vs/
-.vscode/
+**/.vscode/*
+!/.vscode/settings.json
 .idea/
 /gamedb*.csproj
 /gamedb.sln
+/TestProject~/*.csproj
 *.csproj.user
 *.suo
 *.tmp
@@ -52,3 +54,6 @@ UserSettings/GameDB/
 # OS files
 .DS_Store
 Thumbs.db
+
+plans/
+/plans.meta

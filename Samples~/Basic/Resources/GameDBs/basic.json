@@ -1,0 +1,26 @@
+{
+  "tables": {
+    "Categories": {
+      "Consumables": {
+        "DisplayName": "Consumables"
+      },
+      "Weapons": {
+        "DisplayName": "Weapons"
+      }
+    },
+    "Items": {
+      "HealthPotion": {
+        "Category": "Consumables",
+        "Damage": 0,
+        "DisplayName": "Health Potion",
+        "Tags": ["healing", "potion"]
+      },
+      "Sword": {
+        "Category": "Weapons",
+        "Damage": 12,
+        "DisplayName": "Iron Sword",
+        "Tags": ["melee", "starter"]
+      }
+    }
+  }
+}

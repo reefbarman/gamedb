@@ -1,0 +1,4 @@
+*.asset whitespace=-blank-at-eol
+*.meta whitespace=-blank-at-eol
+*.cs text eol=lf
+*.slnx text eol=lf

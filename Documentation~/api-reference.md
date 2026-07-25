@@ -72,7 +72,7 @@ When C# is generated without Unity-specific accessors, color and vector fields r
 | Type      | Public shape                                                                                                                 | Parsing/formatting                                                                                                                                                                      |
 | --------- | ---------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `Color`   | `byte r/g/b/a { get; set; }`; `string Hex { get; set; }`; `Color(string hex)`; `Color(byte r, byte g, byte b, byte a = 255)` | Accepts `#RRGGBB`, `RRGGBB`, `0xRRGGBB`, and 8-digit equivalents. Invalid length/digits can throw parsing or range exceptions. `ToString()` returns `Hex`; alpha is omitted when `255`. |
-| `Vector2` | `float x/y { get; set; }`; numeric and `string` constructors                                                                 | String form is comma-separated and parsed with the current culture. Missing/invalid components can throw. `ToString()` emits comma-separated components.                                |
+| `Vector2` | `float x/y { get; set; }`; numeric and `string` constructors                                                                 | String form is invariant-culture comma-separated components. Missing, invalid, or non-finite components can throw. `ToString()` emits invariant round-trip components.                  |
 | `Vector3` | `float x/y/z { get; set; }`; numeric and `string` constructors                                                               | Same semantics with three components.                                                                                                                                                   |
 | `Vector4` | `float x/y/z/w { get; set; }`; numeric and `string` constructors                                                             | Same semantics with four components.                                                                                                                                                    |
 
@@ -232,6 +232,7 @@ public static class GameDBAutomationService
     public static GameDBListResult ListDatabases(string searchDirectory = "Assets");
     public static GameDBAutomationResult Load(string databasePath);
     public static GameDBAutomationResult Inspect(string databasePath);
+    public static GameDBQueryResult Query(GameDBQueryRequest request);
     public static GameDBAutomationResult Validate(string databasePath);
     public static GameDBExportResult ExportJson(string databasePath);
 
@@ -254,15 +255,21 @@ public static class GameDBAutomationService
 }
 ```
 
-`Load` is an alias for `Inspect` and reports `Operation == "inspect"`. Expected bad input, invalid paths, conflicts, validation failures, and caught implementation exceptions are represented by `Success == false` and `Message`; inspect `Issues` for structured validation details. Callers should not rely on exceptions for normal failure handling.
+`Load` is an alias for `Inspect` and reports `Operation == "inspect"`. Expected bad input, invalid paths, conflicts, validation failures, and caught implementation exceptions are represented by `Success == false` and `Message`; general automation operations expose structured validation details through `Issues`, while Query uses `GameDBQueryResult.FailureKind` and `Errors`. Callers should not rely on exceptions for normal failure handling.
 
 `Inspect` can return `Success == true` with non-empty validation issues; use `Validate` when validity must determine success. `ExportJson` can return `Success == false` while still supplying serialized data/schema JSON and issues. Early failures generally have no snapshot/issues, while validation-blocked operations can return a prospective snapshot and populated issues.
+
+#### Query API
+
+`Query` accepts a `GameDBQueryRequest` containing one or more exact `GameDBQueryTableProjection` values. Each projection selects rows and fields and may contain AND-combined typed `GameDBQueryPredicate` values. Results use deterministic ordinal table/row/field ordering and a global `Limit`; continuation uses an opaque database-, revision-, and query-bound cursor. `GameDBQueryResult` reports structured `GameDBQueryFailureKind` and `GameDBQueryError` values and returns projected rows as normalized JSON-compatible CLR shapes rather than the model CLR values exposed by `GameDBSnapshot`.
+
+Query request types are `GameDBQueryRequest`, `GameDBQueryTableProjection`, `GameDBQueryPredicate`, and `GameDBQueryPredicateKind`. Result types are `GameDBQueryResult`, `GameDBQueryTableResult`, `GameDBQueryRowResult`, `GameDBQueryError`, and `GameDBQueryFailureKind`. See the [Query API contract](automation.md#query-api) for projection, predicate/type compatibility, ordering, global pagination, cursor, failure, and wire-value semantics.
 
 Single mutations support `DryRun`, `ExpectedRevision`, and `AllowDestructive` through `GameDBOperationOptions`. Results report operation/path/message, before/after revisions, a snapshot, validation issues, and changed paths. Result and snapshot properties have public getters with `internal` setters and are service-produced values. They are not deeply immutable: exposed lists/dictionaries remain mutable, row-value snapshots are shallow, and values may use runtime CLR objects rather than the original JSON wire representation.
 
 `ApplyBatch` uses `GameDBBatchRequest` and `GameDBBatchOptions` to apply ordered `GameDBBatchOperation` values with one database load, revision check, whole-model validation, and save. `GameDBBatchOperationKind` is the discriminant for table, rename, delete, field, row, and value payload DTOs. `AllowedDestructiveOperations` is an explicit kind allowlist. `GameDBBatchResult` adds `FailureKind`, `FailedOperationIndex`, `DeniedOperationKind`, `CommitStatus`, and structured file/post-save/recovery state so callers do not need to parse messages or blindly retry a partially published save.
 
-Request DTOs include `GameDBCreateRequest`, `GameDBSaveRequest`, `GameDBTableRequest`, `GameDBRenameRequest`, `GameDBDeleteRequest`, `GameDBFieldRequest`, `GameDBDictionaryTypeDefinition`, `GameDBRowRequest`, `GameDBValueRequest`, `GameDBGenerateRequest`, `GameDBBatchRequest`, `GameDBBatchOptions`, `GameDBBatchOperation`, and its six payload DTOs. Result DTOs include `GameDBAutomationResult`, `GameDBBatchResult`, `GameDBExportResult`, `GameDBListResult`, `GameDBSnapshot`, table/field/row snapshots, and `GameDBValidationIssue`.
+Request DTOs include `GameDBCreateRequest`, `GameDBSaveRequest`, `GameDBTableRequest`, `GameDBRenameRequest`, `GameDBDeleteRequest`, `GameDBFieldRequest`, `GameDBDictionaryTypeDefinition`, `GameDBRowRequest`, `GameDBValueRequest`, `GameDBGenerateRequest`, `GameDBBatchRequest`, `GameDBBatchOptions`, `GameDBBatchOperation`, its six payload DTOs, `GameDBQueryRequest`, `GameDBQueryTableProjection`, and `GameDBQueryPredicate`. Result DTOs include `GameDBAutomationResult`, `GameDBBatchResult`, `GameDBQueryResult`, `GameDBQueryTableResult`, `GameDBQueryRowResult`, `GameDBQueryError`, `GameDBExportResult`, `GameDBListResult`, `GameDBSnapshot`, table/field/row snapshots, and `GameDBValidationIssue`.
 
 See [GameDB editor automation](automation.md) for the path contract, request DTO/value shapes, destructive-operation rules, revision semantics, reference integrity, dry runs, and examples. Those details are intentionally not duplicated here.
 

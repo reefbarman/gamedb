@@ -32,11 +32,82 @@ Attempts to use rooted paths or `..` traversal outside `Assets` fail without wri
 GameDBListResult ListDatabases(string searchDirectory = "Assets");
 GameDBAutomationResult Load(string databasePath);
 GameDBAutomationResult Inspect(string databasePath);
+GameDBQueryResult Query(GameDBQueryRequest request);
 GameDBAutomationResult Validate(string databasePath);
 GameDBExportResult ExportJson(string databasePath);
 ```
 
-`Load` is an alias for `Inspect`. Read results include a stable snapshot of tables, fields, rows, validation issues, and a SHA-256 revision token.
+`Load` is an alias for `Inspect`. Their results include a stable snapshot of tables, fields, rows, validation issues, and a SHA-256 revision token.
+
+### Query API
+
+`Query` is a read-only, transport-oriented projection API. It loads one database snapshot without saving files, importing assets, refreshing the Asset Database, or invoking saved callbacks.
+
+```csharp
+var page = GameDBAutomationService.Query(new GameDBQueryRequest
+{
+    DatabasePath = path,
+    Tables = new List<GameDBQueryTableProjection>
+    {
+        new GameDBQueryTableProjection
+        {
+            TableName = "Items",
+            RowKeys = new List<string> { "Sword", "Axe" },
+            FieldNames = new List<string> { "Name", "Power" },
+            Predicates = new List<GameDBQueryPredicate>
+            {
+                new GameDBQueryPredicate
+                {
+                    Kind = GameDBQueryPredicateKind.NumericRange,
+                    FieldName = "Power",
+                    Minimum = 10L,
+                    Maximum = 20L
+                }
+            }
+        }
+    },
+    Limit = 100
+});
+```
+
+`GameDBQueryRequest.Tables` is required and must contain at least one uniquely named table projection. Names and selectors are exact and case-sensitive. An empty or `null` `RowKeys` list selects every row in that table; an empty or `null` `FieldNames` list projects every field. Blank, duplicate, or unknown table/row/field selectors return a structured `InvalidRequest` failure. Predicates may use fields that are not projected. Every returned row exposes its key separately through `GameDBQueryRowResult.Key`; `Values` contains only projected fields. Each projection still produces a table envelope and projected field metadata when no row from that table appears on the current page.
+
+Predicates in one table projection are **AND-combined**. Query does not support OR, NOT, nested expressions, joins, arbitrary sorting, total counts, or per-table limits.
+
+| Predicate       | Compatible field shape                                               | Payload and behavior                                                                                                                                |
+| --------------- | -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Equals`        | Non-collection scalar fields                                         | Uses `Value` and compares normalized wire values. `null` is accepted only for scalar `tableRef` and matches an unset reference.                     |
+| `Contains`      | Scalar `string`, non-reference arrays, or dictionary keys            | Uses `Value`. Strings use case-sensitive ordinal substring matching; arrays use exact element equality; dictionaries test key presence, not values. |
+| `NumericRange`  | Scalar `int` or `float`                                              | Uses inclusive `Minimum`/`Maximum`; at least one bound is required. `int` bounds must fit `Int32`; `float` bounds must be finite `Single` values.   |
+| `ReferencesRow` | Scalar/array `tableRef`, or a dictionary whose values are `tableRef` | Uses a non-empty row-key `Value`; the target row must exist. It matches any referenced value in the scalar, array, or dictionary-value field.       |
+
+`Equals` does not accept arrays or dictionaries. `Contains` validates array values against the element type; table-reference arrays use `ReferencesRow` instead. Enum values and enum dictionary keys must be declared member names. Color and vector values use their documented strings; Query parses and emits vector components with invariant culture. `Equals`, `Contains`, and `ReferencesRow` accept only `Value`; `NumericRange` accepts only `Minimum` and/or `Maximum`, and rejects a minimum greater than its maximum.
+
+#### Ordering and global pagination
+
+Tables and rows are evaluated in ordinal `(table name, row key)` order. Result table envelopes, rows, and projected field metadata use ordinal name order rather than request order. Dictionary entries are inserted by ordinal normalized key; callers that require map traversal order independent of runtime dictionary behavior should sort the keys with `StringComparer.Ordinal`.
+
+`Limit` defaults to `100`, accepts `1` through `1000`, and applies globally across all projected tables. `ReturnedRowCount` is the page's total row count. When `HasMore` is true, pass `NextCursor` unchanged as the next request's `Cursor`. The opaque cursor is bound to the resolved database path, database revision, canonical projection/predicates, and an authenticated global matching-row offset. It may be reused with a different `Limit`, but a different database/query or altered offset returns `InvalidCursor` and any database revision change returns `StaleCursor`. Cursors survive Unity domain reloads but expire when the editor session ends. A cursor is a continuation token, not an authentication or authorization credential.
+
+#### Query result values
+
+`GameDBQueryRowResult.Values` contains JSON-compatible CLR shapes suitable for transport; it is not serialized JSON.
+
+| Field shape             | Query value                                                         |
+| ----------------------- | ------------------------------------------------------------------- |
+| `int` / `float`         | boxed `long` / boxed `double`                                       |
+| `bool`                  | boxed `bool`                                                        |
+| `string`, `unityObject` | `string`                                                            |
+| `tableRef`              | row-key `string`, or `null` when unset                              |
+| enum, color, vector     | normalized `string`; vector formatting is invariant                 |
+| array                   | `List<object>` preserving stored element order                      |
+| dictionary              | `Dictionary<string, object>` with normalized keys and scalar values |
+
+This differs from `GameDBSnapshot`, returned by `Inspect`/`Load`: snapshot row dictionaries are detached model values and may contain runtime CLR objects such as `GameDBLibrary.Color` or vector instances. Query normalizes the projected values into the transport-oriented shapes above.
+
+#### Query failures
+
+Expected failures are reported through `Success`, `GameDBQueryFailureKind`, `Message`, and `Errors`, not exceptions. Failure kinds are `InvalidRequest`, `InvalidPath`, `LoadFailed`, `RecoveryRequired`, `InvalidCursor`, `StaleCursor`, and `EvaluationFailed`. Each `GameDBQueryError` can identify its `Code`, `Message`, zero-based `ProjectionIndex`/`PredicateIndex`, `TableName`, and `FieldName`; indexes are `-1` when not applicable. `Revision` is populated after a database snapshot is loaded, and recovery failures populate `RecoveryArtifacts`. Failed queries return no projected tables or partial rows.
 
 ## Write operations
 

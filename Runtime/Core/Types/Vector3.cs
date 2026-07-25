@@ -1,5 +1,6 @@
 ﻿
 using System;
+using System.Globalization;
 
 namespace GameDBLibrary
 {
@@ -11,23 +12,41 @@ namespace GameDBLibrary
 
         public Vector3(float x, float y, float z)
         {
-            this.x = x;
-            this.y = y;
-            this.z = z;
+            this.x = RequireFinite(x);
+            this.y = RequireFinite(y);
+            this.z = RequireFinite(z);
         }
 
         public Vector3(string vecStr)
         {
             var aParts = vecStr.Split(',');
 
-            x = Convert.ToSingle(aParts[0]);
-            y = Convert.ToSingle(aParts[1]);
-            z = Convert.ToSingle(aParts[2]);
+            x = ParseComponent(aParts[0]);
+            y = ParseComponent(aParts[1]);
+            z = ParseComponent(aParts[2]);
         }
 
         public override string ToString()
         {
-            return $"{x},{y},{z}";
+            return string.Join(",",
+                RequireFinite(x).ToString("R", CultureInfo.InvariantCulture),
+                RequireFinite(y).ToString("R", CultureInfo.InvariantCulture),
+                RequireFinite(z).ToString("R", CultureInfo.InvariantCulture));
+        }
+
+        private static float ParseComponent(string value)
+        {
+            return RequireFinite(float.Parse(value, NumberStyles.Float,
+                CultureInfo.InvariantCulture));
+        }
+
+        private static float RequireFinite(float component)
+        {
+            if (float.IsNaN(component) || float.IsInfinity(component))
+            {
+                throw new FormatException("Vector components must be finite.");
+            }
+            return component;
         }
     }
 }

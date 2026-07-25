@@ -11,12 +11,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - Added atomic editor-automation batches with ordered mutation operations, whole-batch dry runs and validation, revision guards, explicit destructive-operation allowlists, indexed failures, and structured commit outcomes.
+- Added deterministic read-only editor-automation queries with table, row, and field projections; AND-combined typed predicates; ordinal global pagination; opaque revision- and query-bound cursors; structured failures; and JSON-compatible wire-shaped result values.
 
 ### Changed
 
 - Added an internal document, command, transaction, and conflict-aware persistence core shared by editor automation operations.
 - Moved the supported data-only **Build GameDB** control into the main GameDB editor tab.
 - Hardened C# generation: generated database, table, and row types are now `partial`; schema strings are `const`; enum keys are `static readonly`; generated names are validated before writing; and complete scope output is staged and replaced so removed tables cannot leave stale source files.
+- Made runtime vector strings invariant-culture and reject non-finite components so editor automation and persisted data use deterministic wire values.
 - Retained the networking path required by optional Google Sheets interoperability.
 
 Regenerate all GameDB C# classes after updating to `1.0.0-preview.2`; generated schema members and output replacement behavior are intentionally breaking changes from `1.0.0-preview.1`.

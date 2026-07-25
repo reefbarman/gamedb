@@ -3,6 +3,64 @@ using System.Collections.Generic;
 
 namespace GameDBEditorLibrary.Automation
 {
+    public enum GameDBQueryFailureKind
+    {
+        None,
+        InvalidRequest,
+        InvalidPath,
+        LoadFailed,
+        RecoveryRequired,
+        InvalidCursor,
+        StaleCursor,
+        EvaluationFailed
+    }
+
+    public sealed class GameDBQueryResult
+    {
+        public bool Success { get; internal set; }
+        public GameDBQueryFailureKind FailureKind { get; internal set; }
+        public string DatabasePath { get; internal set; }
+        public string Message { get; internal set; }
+        public string Revision { get; internal set; }
+        public List<GameDBQueryTableResult> Tables { get; internal set; }
+            = new List<GameDBQueryTableResult>();
+        public int ReturnedRowCount { get; internal set; }
+        public bool HasMore { get; internal set; }
+        public string NextCursor { get; internal set; }
+        public List<GameDBQueryError> Errors { get; internal set; }
+            = new List<GameDBQueryError>();
+        public List<string> RecoveryArtifacts { get; internal set; }
+            = new List<string>();
+    }
+
+    public sealed class GameDBQueryTableResult
+    {
+        public string Name { get; internal set; }
+        public KeyType KeyType { get; internal set; }
+        public string KeyTypeArgument { get; internal set; }
+        public List<GameDBFieldSnapshot> Fields { get; internal set; }
+            = new List<GameDBFieldSnapshot>();
+        public List<GameDBQueryRowResult> Rows { get; internal set; }
+            = new List<GameDBQueryRowResult>();
+    }
+
+    public sealed class GameDBQueryRowResult
+    {
+        public string Key { get; internal set; }
+        public Dictionary<string, object> Values { get; internal set; }
+            = new Dictionary<string, object>();
+    }
+
+    public sealed class GameDBQueryError
+    {
+        public string Code { get; internal set; }
+        public string Message { get; internal set; }
+        public int ProjectionIndex { get; internal set; } = -1;
+        public int PredicateIndex { get; internal set; } = -1;
+        public string TableName { get; internal set; }
+        public string FieldName { get; internal set; }
+    }
+
     public enum GameDBBatchFailureKind
     {
         None,

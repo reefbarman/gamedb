@@ -98,6 +98,42 @@ namespace GameDBEditorLibrary.Automation
         public object Value { get; set; }
     }
 
+    public enum GameDBQueryPredicateKind
+    {
+        Unspecified,
+        Equals,
+        Contains,
+        NumericRange,
+        ReferencesRow
+    }
+
+    public sealed class GameDBQueryRequest
+    {
+        public string DatabasePath { get; set; }
+        public List<GameDBQueryTableProjection> Tables { get; set; }
+            = new List<GameDBQueryTableProjection>();
+        public int Limit { get; set; } = 100;
+        public string Cursor { get; set; }
+    }
+
+    public sealed class GameDBQueryTableProjection
+    {
+        public string TableName { get; set; }
+        public List<string> RowKeys { get; set; } = new List<string>();
+        public List<string> FieldNames { get; set; } = new List<string>();
+        public List<GameDBQueryPredicate> Predicates { get; set; }
+            = new List<GameDBQueryPredicate>();
+    }
+
+    public sealed class GameDBQueryPredicate
+    {
+        public GameDBQueryPredicateKind Kind { get; set; }
+        public string FieldName { get; set; }
+        public object Value { get; set; }
+        public object Minimum { get; set; }
+        public object Maximum { get; set; }
+    }
+
     public sealed class GameDBCreateRequest
     {
         public string DatabasePath { get; set; }

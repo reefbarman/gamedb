@@ -25,6 +25,10 @@ namespace GameDBLibrary.Tests
                 "changelog"
             }));
             Assert.That(result.Documents.All(document => !string.IsNullOrWhiteSpace(document.Title)), Is.True);
+            Assert.That(result.Documents.Single(document => document.Id == "automation").RelativePath,
+                Is.EqualTo("Documentation~/automation.md"));
+            Assert.That(result.Documents.Single(document => document.Id == "api-reference").RelativePath,
+                Is.EqualTo("Documentation~/api-reference.md"));
         }
 
         [TestCase("index", "# GameDB documentation")]
@@ -53,6 +57,35 @@ namespace GameDBLibrary.Tests
             Assert.That(result.Content, Does.Contain("AllowedDestructiveOperations"));
             Assert.That(result.Content, Does.Contain("FailedOperationIndex"));
             Assert.That(result.Content, Does.Contain("PostSavePending"));
+        }
+
+        [Test]
+        public void ReadDocument_AutomationDescribesQueryContract()
+        {
+            var result = GameDBDocumentationService.ReadDocument("automation");
+
+            Assert.That(result.Success, Is.True, result.Message);
+            Assert.That(result.Content, Does.Contain("GameDBQueryRequest"));
+            Assert.That(result.Content, Does.Contain("GameDBQueryTableProjection"));
+            Assert.That(result.Content, Does.Contain("GameDBQueryPredicateKind"));
+            Assert.That(result.Content, Does.Contain("NumericRange"));
+            Assert.That(result.Content, Does.Contain("ReferencesRow"));
+            Assert.That(result.Content, Does.Contain("AND-combined"));
+            Assert.That(result.Content, Does.Contain("ReturnedRowCount"));
+            Assert.That(result.Content, Does.Contain("NextCursor"));
+            Assert.That(result.Content, Does.Contain("GameDBQueryFailureKind"));
+            Assert.That(result.Content, Does.Contain("GameDBSnapshot"));
+        }
+
+        [Test]
+        public void ReadDocument_ApiReferenceLinksToQueryContract()
+        {
+            var result = GameDBDocumentationService.ReadDocument("api-reference");
+
+            Assert.That(result.Success, Is.True, result.Message);
+            Assert.That(result.Content,
+                Does.Contain("GameDBQueryResult Query(GameDBQueryRequest request)"));
+            Assert.That(result.Content, Does.Contain("(automation.md#query-api)"));
         }
 
         [Test]

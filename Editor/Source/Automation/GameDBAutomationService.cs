@@ -64,6 +64,65 @@ namespace GameDBEditorLibrary.Automation
             }
         }
 
+        public static GameDBQueryResult Query(GameDBQueryRequest request)
+        {
+            if (request == null)
+            {
+                return GameDBQueryEngine.Failure(null, GameDBQueryFailureKind.InvalidRequest,
+                    "request.required", "Request is required.");
+            }
+
+            DatabasePath path;
+            try
+            {
+                path = ResolveDatabasePath(request.DatabasePath);
+            }
+            catch (Exception exception)
+            {
+                return GameDBQueryEngine.Failure(request.DatabasePath,
+                    GameDBQueryFailureKind.InvalidPath, "path.invalid", exception.Message);
+            }
+
+            var preflight = GameDBQueryEngine.Preflight(path.AssetPath, request);
+            if (preflight != null)
+            {
+                return preflight;
+            }
+
+            GameDBDocument document;
+            try
+            {
+                document = GameDBDocument.Load(path.AssetPath);
+            }
+            catch (GameDBRecoveryRequiredException exception)
+            {
+                var result = GameDBQueryEngine.Failure(path.AssetPath,
+                    GameDBQueryFailureKind.RecoveryRequired, "database.recoveryRequired",
+                    exception.Message);
+                result.RecoveryArtifacts = exception.Artifacts.ToList();
+                return result;
+            }
+            catch (Exception exception)
+            {
+                return GameDBQueryEngine.Failure(path.AssetPath,
+                    GameDBQueryFailureKind.LoadFailed, "database.loadFailed", exception.Message);
+            }
+
+            GameDBSnapshot snapshot;
+            try
+            {
+                snapshot = document.CreateSnapshot();
+            }
+            catch (Exception exception)
+            {
+                return GameDBQueryEngine.Failure(path.AssetPath,
+                    GameDBQueryFailureKind.EvaluationFailed, "query.snapshotFailed", exception.Message,
+                    document.BaselineRevision);
+            }
+
+            return GameDBQueryEngine.Execute(path.AssetPath, snapshot, request);
+        }
+
         public static GameDBAutomationResult Validate(string databasePath)
         {
             try

@@ -167,10 +167,23 @@ jobs:
 
             - name: Validate repository whitespace
               shell: bash
+              env:
+                  BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
               run: |
                   set -euo pipefail
-                  empty_tree="$(git hash-object -t tree /dev/null)"
-                  git diff --check "$empty_tree" HEAD
+                  base_sha="$BASE_SHA"
+
+                  if [[ "$GITHUB_EVENT_NAME" == "pull_request" && -n "$base_sha" ]]; then
+                    base_sha="$(git merge-base "$base_sha" HEAD)"
+                  elif [[ -z "$base_sha" || "$base_sha" =~ ^0+$ ]]; then
+                    if git rev-parse HEAD^ >/dev/null 2>&1; then
+                      base_sha="$(git rev-parse HEAD^)"
+                    else
+                      base_sha="$(git hash-object -t tree /dev/null)"
+                    fi
+                  fi
+
+                  git diff --check "$base_sha" HEAD
 
     unity-editmode-clean-install:
         name: Unity Git install and EditMode tests

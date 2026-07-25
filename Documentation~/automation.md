@@ -33,6 +33,7 @@ GameDBListResult ListDatabases(string searchDirectory = "Assets");
 GameDBAutomationResult Load(string databasePath);
 GameDBAutomationResult Inspect(string databasePath);
 GameDBQueryResult Query(GameDBQueryRequest request);
+GameDBCsvExportResult ExportCsv(GameDBCsvExportRequest request);
 GameDBAutomationResult Validate(string databasePath);
 GameDBExportResult ExportJson(string databasePath);
 ```
@@ -109,12 +110,78 @@ This differs from `GameDBSnapshot`, returned by `Inspect`/`Load`: snapshot row d
 
 Expected failures are reported through `Success`, `GameDBQueryFailureKind`, `Message`, and `Errors`, not exceptions. Failure kinds are `InvalidRequest`, `InvalidPath`, `LoadFailed`, `RecoveryRequired`, `InvalidCursor`, `StaleCursor`, and `EvaluationFailed`. Each `GameDBQueryError` can identify its `Code`, `Message`, zero-based `ProjectionIndex`/`PredicateIndex`, `TableName`, and `FieldName`; indexes are `-1` when not applicable. `Revision` is populated after a database snapshot is loaded, and recovery failures populate `RecoveryArtifacts`. Failed queries return no projected tables or partial rows.
 
+### CSV import and export
+
+`ExportCsv` and `ImportCsv` are the supported table interchange path and the replacement for the legacy Google Sheets protocol. Each request addresses one existing table and returns or accepts CSV text in memory; the API does not read or write a separate `.csv` file.
+
+```csharp
+var exported = GameDBAutomationService.ExportCsv(new GameDBCsvExportRequest
+{
+    DatabasePath = path,
+    TableName = "Items"
+});
+
+var imported = GameDBAutomationService.ImportCsv(new GameDBCsvImportRequest
+{
+    DatabasePath = path,
+    TableName = "Items",
+    CsvText = exported.CsvText,
+    Mode = GameDBCsvImportMode.Replace,
+    Options = new GameDBOperationOptions
+    {
+        AllowDestructive = true,
+        ExpectedRevision = exported.Revision,
+        DryRun = true
+    }
+});
+```
+
+#### Dialect
+
+- The delimiter is comma and the quote character is `"`. Quoted cells use doubled quotes and may contain commas, quotes, CRLF, or LF, following RFC 4180.
+- Export is deterministic: fields and rows use ordinal name/key order, records use CRLF, and cells are quoted only when needed. Import accepts CRLF or LF and one leading UTF-8 BOM character.
+- The exact decoded first header is `__key`. A schema field named `__key` is rejected as a reserved collision.
+- Remaining decoded headers are exact, case-sensitive field names. Empty, duplicate, and unknown columns are rejected. Whitespace is data and is never trimmed.
+- Every record must have the header width. Blank records are rejected rather than skipped. Error coordinates distinguish 1-based logical record, physical line, and column numbers, including records with multiline cells.
+- Tables containing any array or dictionary field are rejected for the entire operation. Collection cell encoding is not part of this dialect.
+
+#### Formula-injection protection
+
+Export protects every header, row key, and value cell before RFC quoting. If the decoded text starts with apostrophe, `=`, `+`, `-`, `@`, tab, CR, or LF, export prefixes one apostrophe. Import removes one apostrophe only when the following character is in that same set. This transform is reversible: stored `=SUM(A1:A2)` exports as `'=SUM(A1:A2)`, while stored `'=literal` exports as `''=literal` and both import without ambiguity. Negative numbers are protected for spreadsheet safety and parsed normally after decoding.
+
+#### CSV scalar values
+
+| GameDB shape                    | Export/import text                                                                                                        |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| string key                      | Exact non-empty, non-whitespace-only text except reserved `~not-set~`                                                     |
+| enum key                        | Exact declared enum member name                                                                                           |
+| `string`, `unityObject`         | Exact text; empty is valid                                                                                                |
+| `bool`                          | `true` or `false`; import is case-insensitive                                                                             |
+| `int`                           | Invariant signed decimal in `Int32` range; fractions, thousands separators, and overflow are rejected                     |
+| `float`                         | Invariant round-trip finite `Single`; decimal and scientific input are accepted, while NaN/infinity/overflow are rejected |
+| enum                            | Exact declared member name                                                                                                |
+| `tableRef`                      | Referenced row key; empty means unset; literal `~not-set~` is rejected                                                    |
+| `color`                         | Canonical hex string; import accepts 6 or 8 hex digits with optional `#` or `0x`                                          |
+| `vector2`, `vector3`, `vector4` | Exact component count with invariant finite `Single` values; canonical output is comma-separated and therefore quoted     |
+
+Empty numeric, boolean, enum, color, and vector cells are invalid. Whole-document validation runs after every parsed row is staged, so forward table references within an import can succeed while missing references or references broken by replacement roll back the complete operation.
+
+#### Replace and upsert
+
+- `Upsert` updates only columns present in the CSV for existing keys, adds missing keys with current schema defaults for omitted columns, and leaves rows absent from the CSV unchanged.
+- `Replace` replaces the table's complete row set while preserving its schema. It requires every scalar field column and `Options.AllowDestructive = true`, including during a dry run. Rows absent from the CSV are deleted.
+- Duplicate CSV row keys are rejected. Enum-backed table keys must be declared members.
+- Both modes parse and type-check the complete CSV, execute one `GameDBDocument` transaction, validate the complete prospective database, and save at most once. Any parse, command, revision, value, or reference failure leaves the loaded document and files unchanged.
+
+`GameDBCsvExportResult` reports `Revision`, `CsvText`, `RowCount`, validation `Issues`, structured `Errors`, and recovery artifacts. `GameDBCsvImportResult` additionally reports the mode, dry-run flag, before/after revisions, prospective snapshot, imported row count, `GameDBCsvCommitStatus`, file/post-save/recovery facts, and `GameDBCsvFailureKind`. Each `GameDBCsvError` can identify `Code`, `Message`, 1-based `RecordNumber`/`LineNumber`/`ColumnNumber`, `ColumnName`, `RowKey`, and `FieldName`; coordinates are `-1` when an error is not tied to one CSV cell.
+
 ## Write operations
 
 ```csharp
 GameDBAutomationResult Create(GameDBCreateRequest request);
 GameDBAutomationResult Save(GameDBSaveRequest request);
 GameDBBatchResult ApplyBatch(GameDBBatchRequest request);
+GameDBCsvImportResult ImportCsv(GameDBCsvImportRequest request);
 
 GameDBAutomationResult AddTable(GameDBTableRequest request);
 GameDBAutomationResult RenameTable(GameDBRenameRequest request);
@@ -228,7 +295,8 @@ Set `AllowDestructive = true` for operations that can remove, rename, reset, or 
 - database overwrite and raw `Save` replacement;
 - table, field, and row rename/delete;
 - `ReplaceField`, which resets that field in every row to its new default;
-- C# generation into an existing non-empty scope folder.
+- C# generation into an existing non-empty scope folder;
+- CSV `Replace`, which replaces one table's complete row set.
 
 Authorization does not bypass path containment, type validation, revision checks, or reference integrity.
 

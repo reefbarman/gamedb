@@ -233,12 +233,14 @@ public static class GameDBAutomationService
     public static GameDBAutomationResult Load(string databasePath);
     public static GameDBAutomationResult Inspect(string databasePath);
     public static GameDBQueryResult Query(GameDBQueryRequest request);
+    public static GameDBCsvExportResult ExportCsv(GameDBCsvExportRequest request);
     public static GameDBAutomationResult Validate(string databasePath);
     public static GameDBExportResult ExportJson(string databasePath);
 
     public static GameDBAutomationResult Create(GameDBCreateRequest request);
     public static GameDBAutomationResult Save(GameDBSaveRequest request);
     public static GameDBBatchResult ApplyBatch(GameDBBatchRequest request);
+    public static GameDBCsvImportResult ImportCsv(GameDBCsvImportRequest request);
     public static GameDBAutomationResult AddTable(GameDBTableRequest request);
     public static GameDBAutomationResult RenameTable(GameDBRenameRequest request);
     public static GameDBAutomationResult DeleteTable(GameDBDeleteRequest request);
@@ -265,11 +267,17 @@ public static class GameDBAutomationService
 
 Query request types are `GameDBQueryRequest`, `GameDBQueryTableProjection`, `GameDBQueryPredicate`, and `GameDBQueryPredicateKind`. Result types are `GameDBQueryResult`, `GameDBQueryTableResult`, `GameDBQueryRowResult`, `GameDBQueryError`, and `GameDBQueryFailureKind`. See the [Query API contract](automation.md#query-api) for projection, predicate/type compatibility, ordering, global pagination, cursor, failure, and wire-value semantics.
 
+#### CSV API
+
+`ExportCsv` and `ImportCsv` exchange one existing table as in-memory RFC 4180 CSV. The reserved first column is `__key`; fields and rows use ordinal ordering; scalar and enum values use invariant canonical text; and exported headers, keys, and values receive reversible formula-injection escaping. Arrays and dictionaries are deliberately unsupported by the current CSV dialect. `GameDBCsvImportMode.Upsert` permits partial field columns, while `Replace` requires every scalar field plus destructive authorization and replaces the table's complete row set.
+
+Request types are `GameDBCsvExportRequest`, `GameDBCsvImportRequest`, and `GameDBCsvImportMode`. Result types are `GameDBCsvExportResult`, `GameDBCsvImportResult`, `GameDBCsvError`, `GameDBCsvFailureKind`, and `GameDBCsvCommitStatus`. Import uses `GameDBOperationOptions` for dry runs, revision guards, and replace authorization. See the [CSV import and export contract](automation.md#csv-import-and-export) for the dialect, scalar/empty-cell matrix, transaction behavior, formula escaping, and 1-based error coordinates.
+
 Single mutations support `DryRun`, `ExpectedRevision`, and `AllowDestructive` through `GameDBOperationOptions`. Results report operation/path/message, before/after revisions, a snapshot, validation issues, and changed paths. Result and snapshot properties have public getters with `internal` setters and are service-produced values. They are not deeply immutable: exposed lists/dictionaries remain mutable, row-value snapshots are shallow, and values may use runtime CLR objects rather than the original JSON wire representation.
 
 `ApplyBatch` uses `GameDBBatchRequest` and `GameDBBatchOptions` to apply ordered `GameDBBatchOperation` values with one database load, revision check, whole-model validation, and save. `GameDBBatchOperationKind` is the discriminant for table, rename, delete, field, row, and value payload DTOs. `AllowedDestructiveOperations` is an explicit kind allowlist. `GameDBBatchResult` adds `FailureKind`, `FailedOperationIndex`, `DeniedOperationKind`, `CommitStatus`, and structured file/post-save/recovery state so callers do not need to parse messages or blindly retry a partially published save.
 
-Request DTOs include `GameDBCreateRequest`, `GameDBSaveRequest`, `GameDBTableRequest`, `GameDBRenameRequest`, `GameDBDeleteRequest`, `GameDBFieldRequest`, `GameDBDictionaryTypeDefinition`, `GameDBRowRequest`, `GameDBValueRequest`, `GameDBGenerateRequest`, `GameDBBatchRequest`, `GameDBBatchOptions`, `GameDBBatchOperation`, its six payload DTOs, `GameDBQueryRequest`, `GameDBQueryTableProjection`, and `GameDBQueryPredicate`. Result DTOs include `GameDBAutomationResult`, `GameDBBatchResult`, `GameDBQueryResult`, `GameDBQueryTableResult`, `GameDBQueryRowResult`, `GameDBQueryError`, `GameDBExportResult`, `GameDBListResult`, `GameDBSnapshot`, table/field/row snapshots, and `GameDBValidationIssue`.
+Request DTOs include `GameDBCreateRequest`, `GameDBSaveRequest`, `GameDBTableRequest`, `GameDBRenameRequest`, `GameDBDeleteRequest`, `GameDBFieldRequest`, `GameDBDictionaryTypeDefinition`, `GameDBRowRequest`, `GameDBValueRequest`, `GameDBGenerateRequest`, `GameDBBatchRequest`, `GameDBBatchOptions`, `GameDBBatchOperation`, its six payload DTOs, `GameDBQueryRequest`, `GameDBQueryTableProjection`, `GameDBQueryPredicate`, `GameDBCsvExportRequest`, and `GameDBCsvImportRequest`. Result DTOs include `GameDBAutomationResult`, `GameDBBatchResult`, `GameDBQueryResult`, `GameDBQueryTableResult`, `GameDBQueryRowResult`, `GameDBQueryError`, `GameDBCsvExportResult`, `GameDBCsvImportResult`, `GameDBCsvError`, `GameDBExportResult`, `GameDBListResult`, `GameDBSnapshot`, table/field/row snapshots, and `GameDBValidationIssue`.
 
 See [GameDB editor automation](automation.md) for the path contract, request DTO/value shapes, destructive-operation rules, revision semantics, reference integrity, dry runs, and examples. Those details are intentionally not duplicated here.
 

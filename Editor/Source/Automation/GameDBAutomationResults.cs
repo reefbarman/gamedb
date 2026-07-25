@@ -3,6 +3,86 @@ using System.Collections.Generic;
 
 namespace GameDBEditorLibrary.Automation
 {
+    public enum GameDBCsvFailureKind
+    {
+        None,
+        InvalidRequest,
+        InvalidPath,
+        LoadFailed,
+        RecoveryRequired,
+        UnsupportedSchema,
+        InvalidCsv,
+        AuthorizationDenied,
+        RevisionConflict,
+        TransactionFailed,
+        ValidationFailed,
+        CommitFailed
+    }
+
+    public enum GameDBCsvCommitStatus
+    {
+        NotAttempted,
+        DryRun,
+        Saved,
+        NoChanges,
+        SerializationFailed,
+        ValidationFailed,
+        Conflict,
+        PersistenceFailed,
+        PersistenceStateUnknown,
+        PostSavePending
+    }
+
+    public sealed class GameDBCsvError
+    {
+        public string Code { get; internal set; }
+        public string Message { get; internal set; }
+        public int RecordNumber { get; internal set; } = -1;
+        public int LineNumber { get; internal set; } = -1;
+        public int ColumnNumber { get; internal set; } = -1;
+        public string ColumnName { get; internal set; }
+        public string RowKey { get; internal set; }
+        public string FieldName { get; internal set; }
+    }
+
+    public sealed class GameDBCsvExportResult
+    {
+        public bool Success { get; internal set; }
+        public GameDBCsvFailureKind FailureKind { get; internal set; }
+        public string DatabasePath { get; internal set; }
+        public string TableName { get; internal set; }
+        public string Message { get; internal set; }
+        public string Revision { get; internal set; }
+        public string CsvText { get; internal set; }
+        public int RowCount { get; internal set; }
+        public List<GameDBCsvError> Errors { get; internal set; } = new List<GameDBCsvError>();
+        public List<GameDBValidationIssue> Issues { get; internal set; } = new List<GameDBValidationIssue>();
+        public List<string> RecoveryArtifacts { get; internal set; } = new List<string>();
+    }
+
+    public sealed class GameDBCsvImportResult
+    {
+        public bool Success { get; internal set; }
+        public bool DryRun { get; internal set; }
+        public GameDBCsvFailureKind FailureKind { get; internal set; }
+        public GameDBCsvCommitStatus CommitStatus { get; internal set; }
+        public string DatabasePath { get; internal set; }
+        public string TableName { get; internal set; }
+        public string Message { get; internal set; }
+        public GameDBCsvImportMode Mode { get; internal set; }
+        public string RevisionBefore { get; internal set; }
+        public string RevisionAfter { get; internal set; }
+        public GameDBSnapshot Snapshot { get; internal set; }
+        public int ImportedRowCount { get; internal set; }
+        public List<GameDBCsvError> Errors { get; internal set; } = new List<GameDBCsvError>();
+        public List<GameDBValidationIssue> Issues { get; internal set; } = new List<GameDBValidationIssue>();
+        public List<string> ChangedPaths { get; internal set; } = new List<string>();
+        public bool FilesCommitted { get; internal set; }
+        public bool PostSavePending { get; internal set; }
+        public List<string> PostSaveErrors { get; internal set; } = new List<string>();
+        public List<string> RecoveryArtifacts { get; internal set; } = new List<string>();
+    }
+
     public enum GameDBQueryFailureKind
     {
         None,

@@ -8,8 +8,8 @@ GameDB is a schema-driven game-data editor, runtime library, C# generator, and e
 - [Editor authoring](editor-authoring.md)
 - [Runtime use and hot reload](runtime.md)
 - [Supported API reference](api-reference.md)
-- [Agent and editor automation](automation.md)
-- [Optional Google Sheets interoperability](google-sheets.md)
+- [Agent and editor automation](automation.md), including transactional CSV import/export
+- [Legacy optional Google Sheets interoperability](google-sheets.md)
 - [Basic sample](../Samples~/Basic/README.md)
 - [Changelog](../CHANGELOG.md)
 

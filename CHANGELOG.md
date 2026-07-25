@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Added atomic editor-automation batches with ordered mutation operations, whole-batch dry runs and validation, revision guards, explicit destructive-operation allowlists, indexed failures, and structured commit outcomes.
 - Added deterministic read-only editor-automation queries with table, row, and field projections; AND-combined typed predicates; ordinal global pagination; opaque revision- and query-bound cursors; structured failures; and JSON-compatible wire-shaped result values.
+- Added transactional per-table CSV import/export with an RFC 4180 dialect, reserved `__key` column, invariant scalar and enum values, reversible formula-injection protection, explicit replace/upsert modes, revision guards, structured cell coordinates, and whole-document rollback. Arrays and dictionaries remain deferred.
 
 ### Changed
 
@@ -19,7 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Moved the supported data-only **Build GameDB** control into the main GameDB editor tab.
 - Hardened C# generation: generated database, table, and row types are now `partial`; schema strings are `const`; enum keys are `static readonly`; generated names are validated before writing; and complete scope output is staged and replaced so removed tables cannot leave stale source files.
 - Made runtime vector strings invariant-culture and reject non-finite components so editor automation and persisted data use deterministic wire values.
-- Retained the networking path required by optional Google Sheets interoperability.
+- Made CSV the supported spreadsheet interchange path; retained the legacy Google Sheets script and networking path only as optional interoperability.
 
 Regenerate all GameDB C# classes after updating to `1.0.0-preview.2`; generated schema members and output replacement behavior are intentionally breaking changes from `1.0.0-preview.1`.
 

@@ -1,6 +1,6 @@
 # Optional Google Sheets interoperability
 
-GameDB retains the original Google Sheets import/export protocol for projects that still need spreadsheet interoperability. It is optional and is **not** the recommended authoring or agent-automation path.
+GameDB retains the original Google Sheets import/export protocol only as a legacy interoperability option. The supported spreadsheet interchange path is the transport-neutral [`ExportCsv`/`ImportCsv` API](automation.md#csv-import-and-export), which needs no web app, sends no data to a hosted endpoint, validates revisions and references transactionally, and reports structured cell errors.
 
 ## Security warning
 
@@ -47,4 +47,4 @@ It is the coherent monolithic output of the original `Main.gs`, `Import.gs`, and
 - Export a database to a new spreadsheet before attempting spreadsheet-to-Unity import so the expected layout and validation ranges exist.
 - Use a separate spreadsheet per GameDB scope to reduce accidental collisions.
 
-For agent-driven local authoring, use `GameDBAutomationService` instead; it validates revisions, references, paths, and destructive operations without exposing data through a web endpoint.
+For new editor tooling, agent automation, or manual spreadsheet interchange, use `GameDBAutomationService.ExportCsv` and `ImportCsv`. Use this retained `.gs` workflow only when direct Google Sheets integration is worth maintaining and securing separately.

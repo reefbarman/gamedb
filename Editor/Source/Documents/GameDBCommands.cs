@@ -1,5 +1,6 @@
 using GameDBLibrary;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace GameDBEditorLibrary.Documents
 {
@@ -16,7 +17,9 @@ namespace GameDBEditorLibrary.Documents
         UpdateRow,
         SetValue,
         RenameRow,
-        DeleteRow
+        DeleteRow,
+        UpsertTableRows,
+        ReplaceTableRows
     }
 
     internal sealed class GameDBCommandExecution
@@ -405,6 +408,106 @@ namespace GameDBEditorLibrary.Documents
             GameDBModelOperations.RenameRowReferences(context.Model,
                 m_tableName, m_currentName, m_newName);
             return GameDBCommandExecution.Succeeded();
+        }
+    }
+
+    internal sealed class GameDBTableRowInput
+    {
+        internal string Key { get; }
+        internal Dictionary<string, object> Values { get; }
+
+        internal GameDBTableRowInput(string key, IDictionary<string, object> values)
+        {
+            Key = key;
+            Values = GameDBModelOperations.CopyWireValues(values);
+        }
+    }
+
+    internal abstract class TableRowsCommand : GameDBCommand
+    {
+        private readonly string m_tableName;
+        private readonly List<GameDBTableRowInput> m_rows;
+
+        protected TableRowsCommand(string tableName, IEnumerable<GameDBTableRowInput> rows)
+        {
+            m_tableName = tableName;
+            m_rows = rows == null
+                ? new List<GameDBTableRowInput>()
+                : rows.Select(row => new GameDBTableRowInput(row.Key, row.Values)).ToList();
+        }
+
+        protected GameDBCommandExecution ExecuteRows(GameDBCommandContext context, bool replace)
+        {
+            var table = GameDBModelOperations.GetTable(context.Model, m_tableName);
+            foreach (var row in m_rows)
+            {
+                GameDBModelOperations.RequireRowKey(row.Key, nameof(row.Key));
+                var error = GameDBModelOperations.ValidateValues(table, row.Values);
+                if (error != null)
+                {
+                    return GameDBCommandExecution.Failed(error);
+                }
+            }
+
+            if (replace)
+            {
+                foreach (var key in table.Data.Keys.ToArray())
+                {
+                    table.RemoveKey(key);
+                }
+            }
+
+            foreach (var row in m_rows)
+            {
+                if (!table.Data.ContainsKey(row.Key) && !table.AddKey(row.Key))
+                {
+                    return GameDBCommandExecution.Failed(
+                        $"Row could not be added or already exists: {row.Key}");
+                }
+
+                foreach (var value in row.Values)
+                {
+                    if (!table.SetValue(row.Key, value.Key, value.Value))
+                    {
+                        return GameDBCommandExecution.Failed(
+                            $"Value could not be applied to field: {value.Key}");
+                    }
+                }
+            }
+
+            return GameDBCommandExecution.Succeeded();
+        }
+    }
+
+    internal sealed class UpsertTableRowsCommand : TableRowsCommand
+    {
+        internal override GameDBCommandKind Kind => GameDBCommandKind.UpsertTableRows;
+        internal override bool IsDestructive => false;
+
+        internal UpsertTableRowsCommand(string tableName, IEnumerable<GameDBTableRowInput> rows)
+            : base(tableName, rows)
+        {
+        }
+
+        internal override GameDBCommandExecution Execute(GameDBCommandContext context)
+        {
+            return ExecuteRows(context, false);
+        }
+    }
+
+    internal sealed class ReplaceTableRowsCommand : TableRowsCommand
+    {
+        internal override GameDBCommandKind Kind => GameDBCommandKind.ReplaceTableRows;
+        internal override bool IsDestructive => true;
+
+        internal ReplaceTableRowsCommand(string tableName, IEnumerable<GameDBTableRowInput> rows)
+            : base(tableName, rows)
+        {
+        }
+
+        internal override GameDBCommandExecution Execute(GameDBCommandContext context)
+        {
+            return ExecuteRows(context, true);
         }
     }
 

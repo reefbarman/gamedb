@@ -1103,7 +1103,9 @@ namespace GameDBEditorLibrary.Documents
                 { typeof(UpdateRowCommand), new CommandDescriptor(GameDBCommandKind.UpdateRow, false) },
                 { typeof(SetValueCommand), new CommandDescriptor(GameDBCommandKind.SetValue, false) },
                 { typeof(RenameRowCommand), new CommandDescriptor(GameDBCommandKind.RenameRow, true) },
-                { typeof(DeleteRowCommand), new CommandDescriptor(GameDBCommandKind.DeleteRow, true) }
+                { typeof(DeleteRowCommand), new CommandDescriptor(GameDBCommandKind.DeleteRow, true) },
+                { typeof(UpsertTableRowsCommand), new CommandDescriptor(GameDBCommandKind.UpsertTableRows, false) },
+                { typeof(ReplaceTableRowsCommand), new CommandDescriptor(GameDBCommandKind.ReplaceTableRows, true) }
             };
         }
 

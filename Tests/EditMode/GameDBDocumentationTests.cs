@@ -78,6 +78,47 @@ namespace GameDBLibrary.Tests
         }
 
         [Test]
+        public void ReadDocument_AutomationDescribesCsvContract()
+        {
+            var result = GameDBDocumentationService.ReadDocument("automation");
+
+            Assert.That(result.Success, Is.True, result.Message);
+            Assert.That(result.Content, Does.Contain("ExportCsv"));
+            Assert.That(result.Content, Does.Contain("ImportCsv"));
+            Assert.That(result.Content, Does.Contain("GameDBCsvImportMode"));
+            Assert.That(result.Content, Does.Contain("RFC 4180"));
+            Assert.That(result.Content, Does.Contain("__key"));
+            Assert.That(result.Content, Does.Contain("Formula-injection protection"));
+            Assert.That(result.Content, Does.Contain("Replace and upsert"));
+            Assert.That(result.Content, Does.Contain("RecordNumber"));
+            Assert.That(result.Content, Does.Contain("array or dictionary field"));
+        }
+
+        [Test]
+        public void ReadDocument_ApiReferenceLinksToCsvContract()
+        {
+            var result = GameDBDocumentationService.ReadDocument("api-reference");
+
+            Assert.That(result.Success, Is.True, result.Message);
+            Assert.That(result.Content,
+                Does.Contain("GameDBCsvExportResult ExportCsv(GameDBCsvExportRequest request)"));
+            Assert.That(result.Content,
+                Does.Contain("GameDBCsvImportResult ImportCsv(GameDBCsvImportRequest request)"));
+            Assert.That(result.Content, Does.Contain("(automation.md#csv-import-and-export)"));
+        }
+
+        [Test]
+        public void ReadDocument_GoogleSheetsPointsToSupportedCsvPath()
+        {
+            var result = GameDBDocumentationService.ReadDocument("google-sheets");
+
+            Assert.That(result.Success, Is.True, result.Message);
+            Assert.That(result.Content, Does.Contain("legacy interoperability option"));
+            Assert.That(result.Content, Does.Contain("ExportCsv"));
+            Assert.That(result.Content, Does.Contain("ImportCsv"));
+        }
+
+        [Test]
         public void ReadDocument_ApiReferenceLinksToQueryContract()
         {
             var result = GameDBDocumentationService.ReadDocument("api-reference");

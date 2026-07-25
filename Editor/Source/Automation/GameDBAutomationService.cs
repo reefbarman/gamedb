@@ -123,6 +123,215 @@ namespace GameDBEditorLibrary.Automation
             return GameDBQueryEngine.Execute(path.AssetPath, snapshot, request);
         }
 
+        public static GameDBCsvExportResult ExportCsv(GameDBCsvExportRequest request)
+        {
+            if (request == null)
+            {
+                return CsvExportFailure(null, null, GameDBCsvFailureKind.InvalidRequest,
+                    "csv.requestRequired", "Request is required.");
+            }
+
+            DatabasePath path;
+            try
+            {
+                path = ResolveDatabasePath(request.DatabasePath);
+            }
+            catch (Exception exception)
+            {
+                return CsvExportFailure(request.DatabasePath, request.TableName,
+                    GameDBCsvFailureKind.InvalidPath, "csv.pathInvalid", exception.Message);
+            }
+
+            if (string.IsNullOrWhiteSpace(request.TableName))
+            {
+                return CsvExportFailure(path.AssetPath, request.TableName,
+                    GameDBCsvFailureKind.InvalidRequest, "csv.tableRequired",
+                    "TableName is required.");
+            }
+
+            try
+            {
+                var document = GameDBDocument.Load(path.AssetPath);
+                return GameDBCsvEngine.Export(path.AssetPath, document.CreateSnapshot(),
+                    request.TableName, document.Validate());
+            }
+            catch (GameDBRecoveryRequiredException exception)
+            {
+                var result = CsvExportFailure(path.AssetPath, request.TableName,
+                    GameDBCsvFailureKind.RecoveryRequired, "csv.recoveryRequired",
+                    exception.Message);
+                result.RecoveryArtifacts = exception.Artifacts.ToList();
+                return result;
+            }
+            catch (Exception exception)
+            {
+                return CsvExportFailure(path.AssetPath, request.TableName,
+                    GameDBCsvFailureKind.LoadFailed, "csv.loadFailed", exception.Message);
+            }
+        }
+
+        public static GameDBCsvImportResult ImportCsv(GameDBCsvImportRequest request)
+        {
+            if (request == null)
+            {
+                return CsvImportFailure(null, null, GameDBCsvImportMode.Unspecified, false,
+                    GameDBCsvFailureKind.InvalidRequest, "csv.requestRequired",
+                    "Request is required.");
+            }
+
+            var options = request.Options ?? new GameDBOperationOptions();
+            DatabasePath path;
+            try
+            {
+                path = ResolveDatabasePath(request.DatabasePath);
+            }
+            catch (Exception exception)
+            {
+                return CsvImportFailure(request.DatabasePath, request.TableName, request.Mode,
+                    options.DryRun, GameDBCsvFailureKind.InvalidPath,
+                    "csv.pathInvalid", exception.Message);
+            }
+
+            if (string.IsNullOrWhiteSpace(request.TableName))
+            {
+                return CsvImportFailure(path.AssetPath, request.TableName, request.Mode,
+                    options.DryRun, GameDBCsvFailureKind.InvalidRequest,
+                    "csv.tableRequired", "TableName is required.");
+            }
+            if (request.CsvText == null)
+            {
+                return CsvImportFailure(path.AssetPath, request.TableName, request.Mode,
+                    options.DryRun, GameDBCsvFailureKind.InvalidRequest,
+                    "csv.textRequired", "CsvText is required.");
+            }
+            if (!Enum.IsDefined(typeof(GameDBCsvImportMode), request.Mode)
+                || request.Mode == GameDBCsvImportMode.Unspecified)
+            {
+                return CsvImportFailure(path.AssetPath, request.TableName, request.Mode,
+                    options.DryRun, GameDBCsvFailureKind.InvalidRequest,
+                    "csv.modeInvalid", $"Unsupported CSV import mode: {request.Mode}.");
+            }
+            if (request.Mode == GameDBCsvImportMode.Replace && !options.AllowDestructive)
+            {
+                return CsvImportFailure(path.AssetPath, request.TableName, request.Mode,
+                    options.DryRun, GameDBCsvFailureKind.AuthorizationDenied,
+                    "csv.destructiveDenied",
+                    "Replace mode can discard rows. Set Options.AllowDestructive to true.");
+            }
+
+            GameDBDocument document;
+            try
+            {
+                document = GameDBDocument.Load(path.AssetPath);
+            }
+            catch (GameDBRecoveryRequiredException exception)
+            {
+                var recovery = CsvImportFailure(path.AssetPath, request.TableName, request.Mode,
+                    options.DryRun, GameDBCsvFailureKind.RecoveryRequired,
+                    "csv.recoveryRequired", exception.Message);
+                recovery.RecoveryArtifacts = exception.Artifacts.ToList();
+                return recovery;
+            }
+            catch (Exception exception)
+            {
+                return CsvImportFailure(path.AssetPath, request.TableName, request.Mode,
+                    options.DryRun, GameDBCsvFailureKind.LoadFailed,
+                    "csv.loadFailed", exception.Message);
+            }
+
+            GameDBSnapshot snapshot;
+            try
+            {
+                snapshot = document.CreateSnapshot();
+            }
+            catch (Exception exception)
+            {
+                return CsvImportFailure(path.AssetPath, request.TableName, request.Mode,
+                    options.DryRun, GameDBCsvFailureKind.LoadFailed,
+                    "csv.snapshotFailed", exception.Message);
+            }
+
+            var plan = GameDBCsvEngine.PrepareImport(snapshot, request);
+            if (!plan.Success)
+            {
+                var failure = CsvImportFailure(path.AssetPath, request.TableName, request.Mode,
+                    options.DryRun, plan.FailureKind, null, plan.Message);
+                failure.Errors = plan.Errors;
+                failure.RevisionBefore = snapshot.Revision;
+                return failure;
+            }
+
+            GameDBCommand command = request.Mode == GameDBCsvImportMode.Replace
+                ? (GameDBCommand)new ReplaceTableRowsCommand(request.TableName, plan.Rows)
+                : new UpsertTableRowsCommand(request.TableName, plan.Rows);
+            var transaction = document.ApplyTransaction(new[] { command },
+                new GameDBTransactionOptions
+                {
+                    ExpectedRevision = options.ExpectedRevision,
+                    AllowedDestructiveOperations = request.Mode == GameDBCsvImportMode.Replace
+                        ? new[] { GameDBCommandKind.ReplaceTableRows }
+                        : Array.Empty<GameDBCommandKind>()
+                });
+            if (!transaction.Success)
+            {
+                return CsvTransactionFailure(path, request, options.DryRun,
+                    plan, transaction);
+            }
+
+            var result = new GameDBCsvImportResult
+            {
+                Success = true,
+                DryRun = options.DryRun,
+                FailureKind = GameDBCsvFailureKind.None,
+                CommitStatus = options.DryRun
+                    ? GameDBCsvCommitStatus.DryRun
+                    : GameDBCsvCommitStatus.NotAttempted,
+                DatabasePath = path.AssetPath,
+                TableName = request.TableName,
+                Message = options.DryRun
+                    ? "CSV import validated; no files were written."
+                    : "CSV imported.",
+                Mode = request.Mode,
+                RevisionBefore = transaction.RevisionBefore,
+                RevisionAfter = transaction.AttemptedRevision,
+                Snapshot = transaction.AttemptedSnapshot,
+                ImportedRowCount = plan.Rows.Count,
+                Issues = transaction.Issues.ToList(),
+                ChangedPaths = new List<string> { path.AssetPath, path.SchemaAssetPath }
+            };
+            if (options.DryRun)
+            {
+                return result;
+            }
+
+            GameDBSaveOutcome save;
+            try
+            {
+                save = document.Save();
+            }
+            catch (Exception exception)
+            {
+                result.Success = false;
+                result.FailureKind = GameDBCsvFailureKind.CommitFailed;
+                result.Message = exception.Message;
+                return result;
+            }
+
+            result.CommitStatus = ToCsvCommitStatus(save.Status);
+            result.FilesCommitted = save.FilesCommitted;
+            result.PostSavePending = save.PostSavePending;
+            result.PostSaveErrors = save.PostSaveErrors.ToList();
+            result.RecoveryArtifacts = save.RecoveryArtifacts.ToList();
+            result.ChangedPaths = save.ChangedPaths.ToList();
+            result.Message = save.Message;
+            if (!save.Success)
+            {
+                result.Success = false;
+                result.FailureKind = GameDBCsvFailureKind.CommitFailed;
+            }
+            return result;
+        }
+
         public static GameDBAutomationResult Validate(string databasePath)
         {
             try
@@ -797,6 +1006,96 @@ namespace GameDBEditorLibrary.Automation
                 case GameDBCommandKind.RenameRow: return GameDBBatchOperationKind.RenameRow;
                 case GameDBCommandKind.DeleteRow: return GameDBBatchOperationKind.DeleteRow;
                 default: throw new ArgumentOutOfRangeException(nameof(kind));
+            }
+        }
+
+        private static GameDBCsvImportResult CsvTransactionFailure(DatabasePath path,
+            GameDBCsvImportRequest request, bool dryRun, GameDBCsvImportPlan plan,
+            GameDBTransactionResult transaction)
+        {
+            var failureKind = GameDBCsvFailureKind.TransactionFailed;
+            if (transaction.FailureKind == GameDBTransactionFailureKind.AuthorizationDenied)
+            {
+                failureKind = GameDBCsvFailureKind.AuthorizationDenied;
+            }
+            else if (transaction.FailureKind == GameDBTransactionFailureKind.RevisionConflict)
+            {
+                failureKind = GameDBCsvFailureKind.RevisionConflict;
+            }
+            else if (transaction.FailureKind == GameDBTransactionFailureKind.ValidationFailed)
+            {
+                failureKind = GameDBCsvFailureKind.ValidationFailed;
+            }
+
+            var result = CsvImportFailure(path.AssetPath, request.TableName, request.Mode,
+                dryRun, failureKind, null, transaction.Message);
+            result.RevisionBefore = transaction.RevisionBefore;
+            result.RevisionAfter = transaction.AttemptedRevision;
+            result.Snapshot = transaction.AttemptedSnapshot;
+            result.ImportedRowCount = plan.Rows.Count;
+            result.Issues = transaction.Issues.ToList();
+            if (transaction.FailureKind == GameDBTransactionFailureKind.ValidationFailed)
+            {
+                result.Errors = GameDBCsvEngine.MapValidationIssues(
+                    plan, transaction.Issues, request.TableName);
+                result.ChangedPaths = new List<string> { path.AssetPath, path.SchemaAssetPath };
+            }
+            return result;
+        }
+
+        private static GameDBCsvExportResult CsvExportFailure(string databasePath,
+            string tableName, GameDBCsvFailureKind failureKind, string code, string message)
+        {
+            var result = new GameDBCsvExportResult
+            {
+                Success = false,
+                FailureKind = failureKind,
+                DatabasePath = databasePath,
+                TableName = tableName,
+                Message = message
+            };
+            if (!string.IsNullOrEmpty(code))
+            {
+                result.Errors.Add(new GameDBCsvError { Code = code, Message = message });
+            }
+            return result;
+        }
+
+        private static GameDBCsvImportResult CsvImportFailure(string databasePath,
+            string tableName, GameDBCsvImportMode mode, bool dryRun,
+            GameDBCsvFailureKind failureKind, string code, string message)
+        {
+            var result = new GameDBCsvImportResult
+            {
+                Success = false,
+                DryRun = dryRun,
+                FailureKind = failureKind,
+                CommitStatus = GameDBCsvCommitStatus.NotAttempted,
+                DatabasePath = databasePath,
+                TableName = tableName,
+                Message = message,
+                Mode = mode
+            };
+            if (!string.IsNullOrEmpty(code))
+            {
+                result.Errors.Add(new GameDBCsvError { Code = code, Message = message });
+            }
+            return result;
+        }
+
+        private static GameDBCsvCommitStatus ToCsvCommitStatus(GameDBSaveStatus status)
+        {
+            switch (status)
+            {
+                case GameDBSaveStatus.Saved: return GameDBCsvCommitStatus.Saved;
+                case GameDBSaveStatus.NoChanges: return GameDBCsvCommitStatus.NoChanges;
+                case GameDBSaveStatus.SerializationFailed: return GameDBCsvCommitStatus.SerializationFailed;
+                case GameDBSaveStatus.ValidationFailed: return GameDBCsvCommitStatus.ValidationFailed;
+                case GameDBSaveStatus.Conflict: return GameDBCsvCommitStatus.Conflict;
+                case GameDBSaveStatus.PersistenceFailed: return GameDBCsvCommitStatus.PersistenceFailed;
+                case GameDBSaveStatus.PersistenceStateUnknown: return GameDBCsvCommitStatus.PersistenceStateUnknown;
+                case GameDBSaveStatus.PostSavePending: return GameDBCsvCommitStatus.PostSavePending;
+                default: throw new ArgumentOutOfRangeException(nameof(status));
             }
         }
 

@@ -98,6 +98,28 @@ namespace GameDBEditorLibrary.Automation
         public object Value { get; set; }
     }
 
+    public enum GameDBCsvImportMode
+    {
+        Unspecified,
+        Replace,
+        Upsert
+    }
+
+    public sealed class GameDBCsvExportRequest
+    {
+        public string DatabasePath { get; set; }
+        public string TableName { get; set; }
+    }
+
+    public sealed class GameDBCsvImportRequest
+    {
+        public string DatabasePath { get; set; }
+        public string TableName { get; set; }
+        public string CsvText { get; set; }
+        public GameDBCsvImportMode Mode { get; set; }
+        public GameDBOperationOptions Options { get; set; } = new GameDBOperationOptions();
+    }
+
     public enum GameDBQueryPredicateKind
     {
         Unspecified,

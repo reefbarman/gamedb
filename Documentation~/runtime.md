@@ -9,9 +9,10 @@ For scope `Main`, generated types use the `GameDBMain` namespace:
 - `GameDB` derives from `GameDBLibrary.GameDBBase`.
 - Each table `Items` produces row class `Items`, table class `ItemsTable`, and static schema class `ItemsSchema`.
 - `GameDB.ItemsTable` exposes the generated table.
-- `ItemsSchema.TableName`, `ItemsSchema.Field<FieldName>`, and `ItemsSchema.Key<RowKey>` expose generated names and keys as public static fields. String-key fields are `string`; enum-key fields use the configured enum type.
+- Generated `GameDB`, row, and table classes are `partial`, so game code can extend them in separate files without editing generated output.
+- `ItemsSchema.TableName`, `ItemsSchema.Field<FieldName>`, and string-key `ItemsSchema.Key<RowKey>` members are `const string`; enum-key members are `static readonly` values of the configured enum type.
 
-Generated files are derived output and must not be edited by hand. Names used in the schema must be valid C# identifiers.
+Generated files are derived output and must not be edited by hand. Generation validates scope, table, field, row-key, member, type, and case-insensitive filename collisions before writing. It stages a complete scope and replaces the existing scope directory, preserving `.cs.meta` files for unchanged generated filenames while deleting stale files for removed tables. Regenerate all classes after updating from `1.0.0-preview.1`.
 
 ## Construct and load a database
 

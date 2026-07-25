@@ -1,25 +1,25 @@
         
 #if UNITY_EDITOR
-            GameDBEditorInvoker.AddRuntimeDB(this);
+            global::GameDBLibrary.GameDBEditorInvoker.AddRuntimeDB(this);
 #endif
             this.Logger = new UnityLogger();
         }}
 
         {0}
 
-        public class UnityLogger : GameDBLibrary.Logger
+        public class UnityLogger : global::GameDBLibrary.Logger
         {{
             public override void Log(string message)
             {{
-                UnityEngine.Debug.Log(message);
+                global::UnityEngine.Debug.Log(message);
             }}
 
             public override void LogError(string message)
             {{
-                UnityEngine.Debug.LogError(message);
+                global::UnityEngine.Debug.LogError(message);
             }}
 
-            public override void LogException(Exception e)
+            public override void LogException(global::System.Exception e)
             {{
-                UnityEngine.Debug.LogException(e);
+                global::UnityEngine.Debug.LogException(e);
             }}

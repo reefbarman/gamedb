@@ -34,7 +34,7 @@ To add a table:
 3. Click **Create Table**.
 4. Expand the table and enter a key, then click **Create Key** to add a row.
 
-Names used by generated classes should be valid, distinct C# identifiers. Avoid changing keys and schemas casually after game code depends on them, and regenerate classes after every schema change.
+Scope, table, and field names must be valid non-keyword C# identifiers. Row keys must produce distinct valid `Key<RowKey>` members after whitespace is removed. Generation also rejects generated accessor/type collisions and case-insensitive filename conflicts before writing any output. Avoid changing keys and schemas casually after game code depends on them, and regenerate classes after every schema change.
 
 ## Create and edit fields
 
@@ -82,7 +82,9 @@ Enable **Localization DB** before defining a localization schema. Localization t
 - **Save GameDB** writes both the data and schema documents.
 - **Generate Classes** writes strongly typed C# files under the selected `Assets` folder.
 
-Generated files are derived output: do not hand-edit them. Regenerate after changing the scope, tables, keys, fields, field types, enum definitions, or localization mode. If generation targets an existing non-empty scope folder through `GameDBAutomationService`, it requires explicit destructive authorization.
+Generated files are derived output: do not hand-edit them. Generated database, table, and row classes are `partial`, so add game-specific members in separate files. Regenerate after changing the scope, tables, keys, fields, field types, enum definitions, or localization mode, and regenerate all classes after updating from package `1.0.0-preview.1`.
+
+Generation validates the complete symbol and filename set before touching the destination. It writes a complete scope to staging and replaces the existing scope folder, preserving `.cs.meta` files for unchanged generated filenames and removing stale source and metadata for deleted tables. Any other hand-authored file inside the generated scope folder is also removed; keep extensions outside that folder. If generation targets an existing non-empty scope folder through `GameDBAutomationService`, it requires explicit destructive authorization.
 
 ## Build data-only JSON
 

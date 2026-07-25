@@ -1,11 +1,11 @@
 
-        public Exception Load(string path, bool notify = true)
+        public global::System.Exception Load(string path, bool notify = true)
         {
-            var gameDBResource = UnityEngine.Resources.Load<UnityEngine.TextAsset>(path);
+            var gameDBResource = global::UnityEngine.Resources.Load<global::UnityEngine.TextAsset>(path);
 
             if (gameDBResource == null)
             {
-                return new ArgumentException($"Failed to load GameDB {Name} at path: {path}");
+                return new global::System.ArgumentException($"Failed to load GameDB {Name} at path: {path}");
             }
 
             return Import(gameDBResource.text, notify);

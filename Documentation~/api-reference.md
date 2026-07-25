@@ -354,6 +354,6 @@ Some of these declarations may remain binary/source compatible incidentally, but
 - The unsupported legacy remote client types and members are compiler-deprecated with warning-only `[Obsolete]` and are planned for removal in GameDB `1.0.0`.
 - `Row` and `GameDBEditorWindow` are public in the global namespace, while most APIs use explicit GameDB namespaces.
 - Generated-code infrastructure is a required compile-time ABI for generated files even where it is not a recommended direct consumer API.
-- Generated schema members are mutable static fields even though callers should treat them as constants.
-- Generated identifiers are derived from scope, table, field, and row names. Regeneration can therefore change the C# API after schema/name changes; row-key static-member normalization is not fully validated by generation.
+- Generated schema string members are `const`; enum-key members are `static readonly`. Generated database, table, and row classes are `partial`, while schema classes remain static.
+- Generated identifiers are derived from scope, table, field, and row names. Regeneration can therefore change the C# API after schema/name changes, but generation validates the complete symbol and case-insensitive filename set before replacing output.
 - Supported package documents are exposed to editor agents through stable catalog IDs; use `ListDocuments()` rather than hard-coding PackageCache paths.

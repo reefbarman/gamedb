@@ -56,21 +56,35 @@ namespace GameDBEditorLibrary
             if (GUILayout.Button("Generate", GUILayout.Width(140)))
             {
                 ClosePopup();
-                ExportGameDB(m_exportForUnity);
-                EditorUtility.DisplayDialog("Generate", "The class generation was successful", "OK");
+                if (ExportGameDB(m_exportForUnity))
+                {
+                    EditorUtility.DisplayDialog("Generate", "The class generation was successful", "OK");
+                }
             }
 
             GUI.DragWindow();
         }
 
-        public void ExportGameDB(bool exportForUnity)
+        public bool ExportGameDB(bool exportForUnity)
         {
-            GameDB.Instance.Save();
+            if (!GameDB.Instance.Save())
+            {
+                EditorUtility.DisplayDialog("Generate", "GameDB could not be saved, so no classes were generated.", "OK");
+                return false;
+            }
 
-            var exporter = new CSharpExporter();
-            exporter.Export(Settings.Instance.ExportPath, GameDB.Instance, exportForUnity);
-
-            AssetDatabase.Refresh();
+            try
+            {
+                new CSharpExporter().Export(Settings.Instance.ExportPath, GameDB.Instance, exportForUnity);
+                AssetDatabase.Refresh();
+                return true;
+            }
+            catch (Exception exception)
+            {
+                Debug.LogException(exception);
+                EditorUtility.DisplayDialog("Generate", exception.Message, "OK");
+                return false;
+            }
         }
 
         public string GetExportLocation()

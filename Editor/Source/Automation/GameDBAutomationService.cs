@@ -6,7 +6,6 @@ using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEngine;
 
@@ -15,7 +14,6 @@ namespace GameDBEditorLibrary.Automation
     public static class GameDBAutomationService
     {
         private static readonly StringComparer NameComparer = StringComparer.Ordinal;
-        private static readonly Regex CSharpIdentifier = new Regex(@"^@?[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.Compiled);
 
         public static GameDBListResult ListDatabases(string searchDirectory = "Assets")
         {
@@ -486,7 +484,16 @@ namespace GameDBEditorLibrary.Automation
                 }
 
                 var issues = ValidateModel(gameDB);
-                issues.AddRange(ValidateCodeGenerationNames(gameDB));
+                foreach (var exporterIssue in CSharpExporter.Validate(gameDB, request.IncludeUnityLoader).Select(ToAutomationIssue))
+                {
+                    if (!issues.Any(issue => issue.Code == exporterIssue.Code
+                        && issue.TableName == exporterIssue.TableName
+                        && issue.FieldName == exporterIssue.FieldName
+                        && issue.RowKey == exporterIssue.RowKey))
+                    {
+                        issues.Add(exporterIssue);
+                    }
+                }
                 if (issues.Count > 0)
                 {
                     var invalid = Success("generateCSharp", path.AssetPath, options.DryRun,
@@ -1066,35 +1073,9 @@ namespace GameDBEditorLibrary.Automation
             }
         }
 
-        private static List<GameDBValidationIssue> ValidateCodeGenerationNames(GameDB gameDB)
+        private static GameDBValidationIssue ToAutomationIssue(CSharpExporter.ValidationIssue issue)
         {
-            var issues = new List<GameDBValidationIssue>();
-            ValidateIdentifier(gameDB.ScopeName, "scope.identifier.invalid", "ScopeName is not a valid C# identifier.", issues);
-            foreach (var tablePair in gameDB.Tables)
-            {
-                if (!CSharpIdentifier.IsMatch(tablePair.Key ?? string.Empty))
-                {
-                    issues.Add(Issue("table.identifier.invalid", "Table name is not a valid C# identifier.", tablePair.Key));
-                }
-
-                foreach (var fieldPair in tablePair.Value.Fields)
-                {
-                    if (!CSharpIdentifier.IsMatch(fieldPair.Key ?? string.Empty))
-                    {
-                        issues.Add(Issue("field.identifier.invalid", "Field name is not a valid C# identifier.", tablePair.Key, fieldPair.Key));
-                    }
-                }
-            }
-
-            return issues;
-        }
-
-        private static void ValidateIdentifier(string value, string code, string message, List<GameDBValidationIssue> issues)
-        {
-            if (!CSharpIdentifier.IsMatch(value ?? string.Empty))
-            {
-                issues.Add(Issue(code, message));
-            }
+            return Issue(issue.Code, issue.Message, issue.TableName, issue.FieldName, issue.RowKey);
         }
 
         private static void RenameTableReferences(GameDB gameDB, string oldName, string newName)

@@ -11,7 +11,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed
 
 - Moved the supported data-only **Build GameDB** control into the main GameDB editor tab.
+- Hardened C# generation: generated database, table, and row types are now `partial`; schema strings are `const`; enum keys are `static readonly`; generated names are validated before writing; and complete scope output is staged and replaced so removed tables cannot leave stale source files.
 - Retained the networking path required by optional Google Sheets interoperability.
+
+Regenerate all GameDB C# classes after updating to `1.0.0-preview.2`; generated schema members and output replacement behavior are intentionally breaking changes from `1.0.0-preview.1`.
 
 ### Deprecated
 

@@ -166,6 +166,30 @@ The old editor upload, retrieval, and revision-promotion controls were removed. 
 
 `TestProject~/` is the Unity 6.5 development project. The package is referenced locally from the repository root. EditMode tests live in `Tests/EditMode`.
 
+Run the package-integrity checks from the repository root:
+
+```bash
+python3 Tools~/validate_package.py
+git diff --check
+```
+
+Run the EditMode suite with a locally activated Unity installation. Replace `UNITY_PATH` if Unity is installed elsewhere:
+
+```bash
+UNITY_PATH="/Applications/Unity/Hub/Editor/6000.5.4f1/Unity.app/Contents/MacOS/Unity"
+"$UNITY_PATH" \
+  -batchmode \
+  -nographics \
+  -projectPath "$PWD/TestProject~" \
+  -runTests \
+  -testPlatform EditMode \
+  -assemblyNames GameDBLibrary.Tests \
+  -testResults "$PWD/TestProject~/TestResults/editmode.xml" \
+  -logFile "$PWD/TestProject~/Logs/editmode.log"
+```
+
+Do not add `-quit`; Unity's test runner exits after writing the results. GitHub Actions and hosted Unity license secrets are not required for package installation or this local workflow.
+
 ## License
 
 GameDB is licensed under the [MIT License](LICENSE.md). Third-party notices are listed in [Third Party Notices.md](Third%20Party%20Notices.md).

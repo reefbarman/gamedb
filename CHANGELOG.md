@@ -21,7 +21,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Moved the supported data-only **Build GameDB** control into the main GameDB editor tab.
 - Hardened C# generation: generated database, table, and row types are now `partial`; schema strings are `const`; enum keys are `static readonly`; generated names are validated before writing; and complete scope output is staged and replaced so removed tables cannot leave stale source files.
 - Made runtime vector strings invariant-culture and reject non-finite components so editor automation and persisted data use deterministic wire values.
-- Made CSV the supported spreadsheet interchange path; retained the legacy Google Sheets script and networking path only as optional interoperability.
+- Made CSV the sole supported spreadsheet interchange path.
 - Established schema format version `3`: every `.schema.json` carries the required current `formatVersion`, and editor/automation loads refuse missing, malformed, older, or newer formats before hydrating or rewriting database files.
 - Replaced path-string Unity-object values with strict `{guid,path}` references. Real editor saves refresh paths from GUID identity for scalar, array, and dictionary values and accept any loadable main project asset under `Assets`; synchronous object projections remain Resources-only.
 - Expanded generated Unity-object scalar and array APIs with value, GUID, and path projections in every output plus object projections in Unity-enabled output; dictionary values remain accessor objects.
@@ -33,6 +33,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Removed
 
 - Removed the legacy server-management, upload, retrieval, and revision-promotion editor UI.
+- Removed the legacy Google Sheets editor workflow, settings, Apps Script, and documentation after CSV replaced it.
 
 ## [1.0.0-preview.1] - 2026-07-24
 

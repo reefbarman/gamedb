@@ -21,7 +21,6 @@ namespace GameDBLibrary.Tests
                 "addressables",
                 "api-reference",
                 "automation",
-                "google-sheets",
                 "basic-sample",
                 "changelog"
             }));
@@ -64,18 +63,13 @@ namespace GameDBLibrary.Tests
         {
             var automation = GameDBDocumentationService.ReadDocument("automation");
             var runtime = GameDBDocumentationService.ReadDocument("runtime");
-            var googleSheets = GameDBDocumentationService.ReadDocument("google-sheets");
 
             Assert.That(automation.Success, Is.True, automation.Message);
             Assert.That(runtime.Success, Is.True, runtime.Message);
-            Assert.That(googleSheets.Success, Is.True, googleSheets.Message);
             Assert.That(automation.Content, Does.Contain("Compact canonical JSON"));
             Assert.That(automation.Content, Does.Contain("string `guid` and `path` entries"));
             Assert.That(runtime.Content, Does.Contain("IconGuidVal"));
             Assert.That(runtime.Content, Does.Contain("UnityObjectReference"));
-            Assert.That(googleSheets.Content,
-                Does.Contain("rejects databases containing direct Unity-object fields"));
-            Assert.That(googleSheets.Content, Does.Contain("use CSV"));
         }
 
         [Test]
@@ -151,17 +145,6 @@ namespace GameDBLibrary.Tests
             Assert.That(result.Content,
                 Does.Contain("GameDBCsvImportResult ImportCsv(GameDBCsvImportRequest request)"));
             Assert.That(result.Content, Does.Contain("(automation.md#csv-import-and-export)"));
-        }
-
-        [Test]
-        public void ReadDocument_GoogleSheetsPointsToSupportedCsvPath()
-        {
-            var result = GameDBDocumentationService.ReadDocument("google-sheets");
-
-            Assert.That(result.Success, Is.True, result.Message);
-            Assert.That(result.Content, Does.Contain("legacy interoperability option"));
-            Assert.That(result.Content, Does.Contain("ExportCsv"));
-            Assert.That(result.Content, Does.Contain("ImportCsv"));
         }
 
         [Test]

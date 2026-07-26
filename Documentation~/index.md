@@ -10,7 +10,6 @@ GameDB is a schema-driven game-data editor, runtime library, C# generator, and e
 - [Optional Addressables integration](addressables.md)
 - [Supported API reference](api-reference.md)
 - [Agent and editor automation](automation.md), including transactional CSV import/export
-- [Legacy optional Google Sheets interoperability](google-sheets.md)
 - [Basic sample](../Samples~/Basic/README.md)
 - [Changelog](../CHANGELOG.md)
 
@@ -47,6 +46,6 @@ Stable document IDs are returned by `ListDocuments()`. `ReadDocument()` only acc
 
 ## Legacy documentation coverage
 
-The supported workflows from the former GameDB 1.6 documentation have been rewritten for this Unity 6.5 package rather than copied verbatim. The editor, generated runtime API, Play Mode hot reload, localization, settings, Google Sheets, and supported public APIs are covered by the guides above.
+The supported workflows from the former GameDB 1.6 documentation have been rewritten for this Unity 6.5 package rather than copied verbatim. The editor, generated runtime API, Play Mode hot reload, localization, settings, CSV interchange, and supported public APIs are covered by the guides above.
 
 The old Free/Pro split, dedicated prefab type, binary/encrypted output, and Go/AWS deployment-server instructions are intentionally not carried forward. The editor server controls were removed; warning-only obsolete runtime remote clients remain temporarily for source compatibility, but this package does not ship or support the old hosted backend. The **Build GameDB** data-only JSON command remains supported in the GameDB tab and is documented in [Editor authoring](editor-authoring.md#build-data-only-json).

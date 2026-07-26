@@ -84,7 +84,6 @@ def validate_package_contract():
         "Documentation~/runtime.md",
         "Documentation~/api-reference.md",
         "Documentation~/automation.md",
-        "Documentation~/google-sheets.md",
         "Samples~/Basic/README.md",
         "Samples~/Basic/Resources/GameDBs/basic.json",
         "Samples~/Basic/Resources/GameDBs/basic.schema.json",

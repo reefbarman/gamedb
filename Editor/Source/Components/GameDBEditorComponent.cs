@@ -8,14 +8,12 @@ namespace GameDBEditorLibrary
     internal class GameDBEditorComponent : Component
     {
         private GenerateClassesPopupComponent m_exportPopup = null;
-        private GSheetsPopupComponent m_gSheetsPopup = null;
 
         private string m_loadedGameDB = string.Empty;
         private bool m_inited = false;
 
         private string m_addTableName = "";
         private bool m_exportGameDB = false;
-        private bool m_gsheetsExport = false;
         private int m_selectedKeyType = (int)KeyType.@string;
         private int m_selectedEnum = 0;
         private object m_typeArg = null;
@@ -23,14 +21,12 @@ namespace GameDBEditorLibrary
         public GameDBEditorComponent(string name) : base(name)
         {
             m_exportPopup = new GenerateClassesPopupComponent("GenerateClassesPopup");
-            m_gSheetsPopup = new GSheetsPopupComponent("GSheetsPopup");
 
             var source = new GameDBDataSource();
             source.UpdateSource(GameDB.Instance);
 
             AddChild(new TablesComponent("Tables", source));
             AddChild(m_exportPopup);
-            AddChild(m_gSheetsPopup);
         }
 
         public override void Init()
@@ -40,7 +36,6 @@ namespace GameDBEditorLibrary
                 EventSystem.Instance.RegisterEvent(Events.GAMEDB_LOADED, OnGameDBLoaded);
 
                 m_exportPopup.OnPopupClosed += ExportPopupClosed;
-                m_gSheetsPopup.OnPopupClosed += GSheetsPopupClosed;
             }
 
             m_inited = true;
@@ -51,7 +46,6 @@ namespace GameDBEditorLibrary
         ~GameDBEditorComponent()
         {
             m_exportPopup.OnPopupClosed -= ExportPopupClosed;
-            m_gSheetsPopup.OnPopupClosed -= GSheetsPopupClosed;
 
             EventSystem.Instance.DeregisterEvent(Events.GAMEDB_LOADED, OnGameDBLoaded);
         }
@@ -147,19 +141,9 @@ namespace GameDBEditorLibrary
                         }
                     }
 
-                    if (!inGame && GUILayout.Button("Google Sheets", GUILayout.Width(150)))
-                    {
-                        m_gsheetsExport = true;
-                    }
-
                     if (m_exportGameDB)
                     {
                         RenderChild("GenerateClassesPopup");
-                    }
-
-                    if (m_gsheetsExport)
-                    {
-                        RenderChild("GSheetsPopup");
                     }
                 });
             }
@@ -190,11 +174,6 @@ namespace GameDBEditorLibrary
         private void ExportPopupClosed()
         {
             m_exportGameDB = false;
-        }
-
-        private void GSheetsPopupClosed()
-        {
-            m_gsheetsExport = false;
         }
     }
 }

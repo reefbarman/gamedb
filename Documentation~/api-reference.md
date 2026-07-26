@@ -323,7 +323,7 @@ Returned DTOs are read-only to consumers (`internal` setters):
 | `GameDBDocumentationEntry`   | `Id`, `Title`, `RelativePath`                                          |
 | `GameDBDocumentationResult`  | `Success`, `DocumentId`, `Title`, `RelativePath`, `Content`, `Message` |
 
-The current stable IDs are `index`, `readme`, `editor-authoring`, `runtime`, `api-reference`, `automation`, `google-sheets`, `basic-sample`, and `changelog`.
+The current stable IDs are `index`, `readme`, `editor-authoring`, `runtime`, `addressables`, `api-reference`, `automation`, `basic-sample`, and `changelog`.
 
 ### Stateful editor facade
 

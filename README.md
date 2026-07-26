@@ -103,8 +103,7 @@ The package includes maintained Markdown documentation for:
 - [runtime use and hot reload](Documentation~/runtime.md), including generated code, Play Mode editing, and localization;
 - [optional Addressables integration](Documentation~/addressables.md), including GUID loading and deterministic lease ownership;
 - the [supported API reference](Documentation~/api-reference.md);
-- [agent and editor automation](Documentation~/automation.md), including transactional CSV import/export;
-- [legacy optional Google Sheets interoperability](Documentation~/google-sheets.md).
+- [agent and editor automation](Documentation~/automation.md), including transactional CSV import/export.
 
 Start at [`Documentation~/index.md`](Documentation~/index.md). The supported workflows from the former GameDB 1.6 site have been rewritten for Unity 6.5; retired Free/Pro, binary/encrypted, and unshipped deployment-server workflows are explicitly excluded.
 
@@ -167,11 +166,9 @@ var result = GameDBAutomationService.AddRow(new GameDBRowRequest
 
 Use `DryRun` to validate a prospective change without writing. Renames, deletes, schema replacement, raw saves, database overwrite, generated-file overwrite, and CSV table replacement require `AllowDestructive = true`. See [`Documentation~/automation.md`](Documentation~/automation.md) for the complete contract.
 
-## CSV and Google Sheets
+## CSV spreadsheet interchange
 
 Use `GameDBAutomationService.ExportCsv` and `ImportCsv` for supported one-table spreadsheet interchange. The RFC 4180 dialect uses a reserved `__key` column, invariant scalar and enum values, compact canonical JSON for Unity-object cells, reversible formula-injection protection, explicit `Replace`/`Upsert` modes, revision guards, and transactional validation. Arrays and dictionaries are intentionally deferred. See the [CSV contract](Documentation~/automation.md#csv-import-and-export).
-
-A legacy-compatible Google Apps Script remains as an **optional** interoperability tool. It requires deployment as a web app and its original protocol has no authentication. Do not expose it publicly without adding your own authorization checks. See [`Documentation~/google-sheets.md`](Documentation~/google-sheets.md).
 
 ## Legacy-compatible remote client APIs
 

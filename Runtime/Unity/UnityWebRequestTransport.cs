@@ -1,4 +1,4 @@
-﻿#pragma warning disable CS0618 // Retained implementation for the obsolete remote API and optional Google Sheets bridge.
+﻿#pragma warning disable CS0618 // Retained implementation for the obsolete remote API.
 
 using GameDBLibrary;
 using System;

@@ -17,7 +17,6 @@ namespace GameDBEditorLibrary.Automation
             new GameDBDocumentationEntry("addressables", "Optional Addressables integration", "Documentation~/addressables.md"),
             new GameDBDocumentationEntry("api-reference", "Supported API reference", "Documentation~/api-reference.md"),
             new GameDBDocumentationEntry("automation", "Agent and editor automation", "Documentation~/automation.md"),
-            new GameDBDocumentationEntry("google-sheets", "Optional Google Sheets interoperability", "Documentation~/google-sheets.md"),
             new GameDBDocumentationEntry("basic-sample", "Basic GameDB sample", "Samples~/Basic/README.md"),
             new GameDBDocumentationEntry("changelog", "Changelog", "CHANGELOG.md")
         };

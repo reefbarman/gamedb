@@ -9,15 +9,8 @@ namespace GameDBEditorLibrary
 {
     internal class Settings : Singleton<Settings>
     {
-        public struct GoogleSheetsSettings
-        {
-            public string WebAppUrl;
-            public string SheetID;
-        }
-
         private readonly List<string> m_gameDBPaths = new List<string>();
         private readonly List<string> m_importedEnums = new List<string>();
-        private readonly Dictionary<string, GoogleSheetsSettings> m_googleSheets = new Dictionary<string, GoogleSheetsSettings>();
 
         public List<string> GameDBPaths
         {
@@ -40,8 +33,6 @@ namespace GameDBEditorLibrary
                 m_importedEnums.AddRange(enums);
             }
         }
-
-        public Dictionary<string, GoogleSheetsSettings> GoogleSheets => m_googleSheets;
 
         public string ExportPath { get; set; } = string.Empty;
         public string BuildPath { get; set; } = string.Empty;
@@ -72,7 +63,6 @@ namespace GameDBEditorLibrary
 
                 ExportPath = ReadString(settings, "exportPath");
                 BuildPath = ReadString(settings, "buildPath");
-                ReadGoogleSheets(settings);
             }
             catch (Exception exception)
             {
@@ -85,23 +75,12 @@ namespace GameDBEditorLibrary
 
         public void Save()
         {
-            var googleSheets = new Dictionary<string, object>();
-            foreach (var pair in m_googleSheets)
-            {
-                googleSheets[pair.Key] = new Dictionary<string, object>
-                {
-                    { "sheetID", pair.Value.SheetID },
-                    { "webAppUrl", pair.Value.WebAppUrl }
-                };
-            }
-
             var settings = new Dictionary<string, object>
             {
                 { "gameDBPaths", m_gameDBPaths },
                 { "exportPath", ExportPath },
                 { "importedEnums", m_importedEnums },
-                { "buildPath", BuildPath },
-                { "googleSheets", googleSheets }
+                { "buildPath", BuildPath }
             };
 
             var path = GetSettingsPath();
@@ -113,31 +92,8 @@ namespace GameDBEditorLibrary
         {
             m_gameDBPaths.Clear();
             m_importedEnums.Clear();
-            m_googleSheets.Clear();
             ExportPath = string.Empty;
             BuildPath = string.Empty;
-        }
-
-        private void ReadGoogleSheets(IDictionary<string, object> settings)
-        {
-            if (!settings.TryGetValue("googleSheets", out var value) || !(value is IDictionary<string, object> sheets))
-            {
-                return;
-            }
-
-            foreach (var pair in sheets)
-            {
-                if (!(pair.Value is IDictionary<string, object> sheet))
-                {
-                    continue;
-                }
-
-                m_googleSheets[pair.Key] = new GoogleSheetsSettings
-                {
-                    SheetID = ReadString(sheet, "sheetID"),
-                    WebAppUrl = ReadString(sheet, "webAppUrl")
-                };
-            }
         }
 
         private static void ReadStringList(IDictionary<string, object> source, string key, ICollection<string> destination)

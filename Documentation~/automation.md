@@ -130,7 +130,7 @@ Expected failures are reported through `Success`, `GameDBQueryFailureKind`, `Mes
 
 ### CSV import and export
 
-`ExportCsv` and `ImportCsv` are the supported table interchange path and the replacement for the legacy Google Sheets protocol. Each request addresses one existing table and returns or accepts CSV text in memory; the API does not read or write a separate `.csv` file.
+`ExportCsv` and `ImportCsv` are the supported spreadsheet interchange path. Each request addresses one existing table and returns or accepts CSV text in memory; the API does not read or write a separate `.csv` file.
 
 ```csharp
 var exported = GameDBAutomationService.ExportCsv(new GameDBCsvExportRequest

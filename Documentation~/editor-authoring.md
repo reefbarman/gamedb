@@ -109,7 +109,7 @@ GameDB stores editor state in:
 ProjectSettings/GameDBSettings.json
 ```
 
-It includes registered database paths, imported enums, code-generation and build paths, and Google Sheets configuration. Review it before committing because Google Sheets URLs can be sensitive.
+It includes registered database paths, imported enums, and code-generation and build paths.
 
 If the file is missing, GameDB creates it. If it cannot be parsed, GameDB logs a warning, restores defaults, and rewrites a valid settings file. You can close Unity and delete or repair this file to reset the GameDB editor workspace; database and schema files under `Assets` are unaffected.
 

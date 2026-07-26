@@ -13,12 +13,16 @@
         "Category": "Consumables",
         "Damage": 0,
         "DisplayName": "Health Potion",
+        "PrecisionScale": 1.0000000000000002,
+        "StableId": 9007199254740993,
         "Tags": ["healing", "potion"]
       },
       "Sword": {
         "Category": "Weapons",
         "Damage": 12,
         "DisplayName": "Iron Sword",
+        "PrecisionScale": 1.7976931348623157e308,
+        "StableId": 9223372036854775807,
         "Tags": ["melee", "starter"]
       }
     }

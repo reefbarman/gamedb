@@ -75,7 +75,7 @@ namespace GameDBLibrary.Tests
         {
             CreateDatabase();
             File.WriteAllText(m_schemaAbsolutePath,
-                File.ReadAllText(m_schemaAbsolutePath).Replace("\"formatVersion\": 3", "\"formatVersion\": 4"));
+                File.ReadAllText(m_schemaAbsolutePath).Replace("\"formatVersion\": 4", "\"formatVersion\": 5"));
             var dataBefore = File.ReadAllBytes(m_databaseAbsolutePath);
             var schemaBefore = File.ReadAllBytes(m_schemaAbsolutePath);
 
@@ -91,7 +91,7 @@ namespace GameDBLibrary.Tests
             {
                 Assert.That(result.Success, Is.False);
                 Assert.That(result.Message,
-                    Does.Contain("format version 4").And.Contain("supported version 3")
+                    Does.Contain("format version 5").And.Contain("supported version 4")
                         .And.Contain("newer GameDB package"));
                 AssertGenericFailure(result);
             }
@@ -113,7 +113,7 @@ namespace GameDBLibrary.Tests
             {
                 DatabasePath = m_databasePath,
                 DataJson = dataJson,
-                SchemaJson = "{\"formatVersion\":3,\"tables\":\"invalid\"}"
+                SchemaJson = "{\"formatVersion\":4,\"tables\":\"invalid\"}"
             });
 
             Assert.That(missingVersion.Success, Is.False);
@@ -326,7 +326,7 @@ namespace GameDBLibrary.Tests
         {
             WriteDatabasePair(
                 "{\n  \"tables\": {}\n}",
-                "{\n  \"formatVersion\": 3,\n  \"tables\": {},\n  \"scope\": \"\",\n  \"localizationDB\": false\n}");
+                "{\n  \"formatVersion\": 4,\n  \"tables\": {},\n  \"scope\": \"\",\n  \"localizationDB\": false\n}");
             var dataBefore = File.ReadAllBytes(m_databaseAbsolutePath);
             var schemaBefore = File.ReadAllBytes(m_schemaAbsolutePath);
             var revisionBefore = InspectRevision();
@@ -380,7 +380,7 @@ namespace GameDBLibrary.Tests
             CreateDatabase();
             var exported = GameDBAutomationService.ExportJson(m_databasePath);
             File.WriteAllText(m_schemaAbsolutePath,
-                File.ReadAllText(m_schemaAbsolutePath).Replace("\"formatVersion\": 3", "\"formatVersion\": 4"));
+                File.ReadAllText(m_schemaAbsolutePath).Replace("\"formatVersion\": 4", "\"formatVersion\": 5"));
             var dataBefore = File.ReadAllBytes(m_databaseAbsolutePath);
             var schemaBefore = File.ReadAllBytes(m_schemaAbsolutePath);
 
@@ -403,7 +403,7 @@ namespace GameDBLibrary.Tests
             {
                 Assert.That(result.Success, Is.False);
                 Assert.That(result.Message,
-                    Does.Contain("format version 4").And.Contain("supported version 3"));
+                    Does.Contain("format version 5").And.Contain("supported version 4"));
                 AssertGenericFailure(result);
             }
             Assert.That(File.ReadAllBytes(m_databaseAbsolutePath), Is.EqualTo(dataBefore));

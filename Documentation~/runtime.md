@@ -133,15 +133,19 @@ foreach (var pair in db.ItemsTable.GetRows())
 - `GetRows` creates a new dictionary containing the current row objects. Mutating that dictionary does not add or remove database rows.
 - Every row inherits `Name`, which is its key represented as a string.
 
-Generated field properties are named `<FieldName>Val`. They return concrete values for strings, `int`, `float`, `bool`, project enums, `UnityEngine.Color`, and `UnityEngine.Vector2`/`Vector3`/`Vector4`:
+Generated field properties are named `<FieldName>Val`. They return concrete values for strings, `int`, `long`, `float`, `double`, `bool`, project enums, `UnityEngine.Color`, and `UnityEngine.Vector2`/`Vector3`/`Vector4`:
 
 ```csharp
 string label = sword.DisplayNameVal;
 int damage = sword.DamageVal;
+long stableId = sword.StableIdVal;
+double precisionScale = sword.PrecisionScaleVal;
 List<string> tags = sword.TagsVal;
 ```
 
-All non-dictionary field types may be arrays and are exposed as `List<T>`. Dictionaries cannot be arrays. A dictionary is exposed as `Dictionary<TKey,TValue>`; keys are `string` or a configured enum, and values may be any supported non-dictionary field type. Returned lists and dictionaries are cached mutable objects owned by that row; treat them as read-only game data unless temporary local mutation is intentional.
+All non-dictionary field types may be arrays and are exposed as `List<T>`. Dictionaries cannot be arrays. A dictionary is exposed as `Dictionary<TKey,TValue>`; keys are `string` or a configured enum, and values may be any supported non-dictionary field type. Generated numeric shapes include `long`, `double`, `List<long>`, `List<double>`, `Dictionary<TKey,long>`, and `Dictionary<TKey,double>`.
+
+Runtime JSON represents `long` with an integer token and preserves the full signed Int64 range exactly. General JavaScript parsers can lose precision outside ±9,007,199,254,740,991 unless configured for lossless integers. `double` accepts finite JSON numbers, preserves Double precision, rejects NaN/infinities/overflow, and normalizes negative zero to positive zero. Scalar, array, and dictionary values follow the same rules. Returned lists and dictionaries are cached mutable objects owned by that row; treat them as read-only game data unless temporary local mutation is intentional.
 
 Unity-object scalar and array fields have parallel generated projections: `<Field>Val` returns `UnityObjectReference` values, `<Field>GuidVal` returns GUID strings, and `<Field>PathVal` returns paths. Unity-enabled generation additionally emits `<Field>ObjectVal`; core-only generation contains no `UnityEngine.Object` member.
 

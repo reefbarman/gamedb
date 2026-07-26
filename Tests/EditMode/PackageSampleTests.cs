@@ -30,6 +30,10 @@ namespace GameDBLibrary.Tests
                 var sword = items.Data["Sword"];
                 Assert.That(sword.GetValue("DisplayName"), Is.EqualTo("Iron Sword"));
                 Assert.That(sword.GetValue("Damage"), Is.EqualTo(12L));
+                Assert.That(sword.GetValue("StableId"),
+                    Is.TypeOf<long>().And.EqualTo(long.MaxValue));
+                Assert.That(sword.GetValue("PrecisionScale"),
+                    Is.TypeOf<double>().And.EqualTo(double.MaxValue));
                 Assert.That(sword.GetValue("Category"), Is.EqualTo("Weapons"));
 
                 new CSharpExporter().Export(outputDirectory, gameDB, true);

@@ -518,7 +518,11 @@ namespace GameDBEditorLibrary.Documents
                 case FieldType.@int:
                     return IsInt32Value(value);
                 case FieldType.@float:
-                    return IsFiniteNumber(value);
+                    return IsFiniteSingle(value);
+                case FieldType.@long:
+                    return NumericValue.TryNormalizeInt64(value, out _);
+                case FieldType.@double:
+                    return NumericValue.TryNormalizeDouble(value, out _);
                 case FieldType.@string:
                 case FieldType.tableRef:
                 case FieldType.color:
@@ -549,7 +553,11 @@ namespace GameDBEditorLibrary.Documents
                 case FieldType.@int:
                     return IsInt32Value(value);
                 case FieldType.@float:
-                    return IsFiniteNumber(value);
+                    return IsFiniteSingle(value);
+                case FieldType.@long:
+                    return value is long;
+                case FieldType.@double:
+                    return value is double && NumericValue.TryNormalizeDouble(value, out _);
                 case FieldType.@string:
                 case FieldType.tableRef:
                     return value is string;
@@ -583,47 +591,12 @@ namespace GameDBEditorLibrary.Documents
 
         private static bool IsInt32Value(object value)
         {
-            if (!IsNumber(value))
-            {
-                return false;
-            }
-
-            try
-            {
-                var converted = Convert.ToInt64(value);
-                return converted >= int.MinValue && converted <= int.MaxValue
-                    && Convert.ToDecimal(value) == converted;
-            }
-            catch (Exception)
-            {
-                return false;
-            }
+            return NumericValue.TryNormalizeInt32(value, out _);
         }
 
-        private static bool IsFiniteNumber(object value)
+        private static bool IsFiniteSingle(object value)
         {
-            if (!IsNumber(value))
-            {
-                return false;
-            }
-
-            try
-            {
-                var converted = Convert.ToDouble(value);
-                return !double.IsNaN(converted) && !double.IsInfinity(converted)
-                    && converted <= float.MaxValue && converted >= -float.MaxValue;
-            }
-            catch (Exception)
-            {
-                return false;
-            }
-        }
-
-        private static bool IsNumber(object value)
-        {
-            return value is byte || value is sbyte || value is short || value is ushort
-                || value is int || value is uint || value is long || value is ulong
-                || value is float || value is double || value is decimal;
+            return NumericValue.TryNormalizeSingle(value, out _);
         }
 
         private static void ValidateFieldReferences(GameDB gameDB, string tableName,

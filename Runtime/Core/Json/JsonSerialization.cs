@@ -62,7 +62,12 @@ namespace GameDBLibrary
                 case JTokenType.Integer:
                     return token.Value<long>();
                 case JTokenType.Float:
-                    return token.Value<double>();
+                    var value = token.Value<double>();
+                    if (!NumericValue.TryNormalizeDouble(value, out var normalized))
+                    {
+                        throw new FormatException("JSON numbers must be finite.");
+                    }
+                    return normalized;
                 case JTokenType.Boolean:
                     return token.Value<bool>();
                 case JTokenType.String:
@@ -94,6 +99,26 @@ namespace GameDBLibrary
                 foreach (var item in list)
                 {
                     normalized.Add(NormalizeForSerialization(item));
+                }
+
+                return normalized;
+            }
+
+            if (value is double doubleValue)
+            {
+                if (!NumericValue.TryNormalizeDouble(doubleValue, out var normalized))
+                {
+                    throw new FormatException("JSON numbers must be finite.");
+                }
+
+                return normalized;
+            }
+
+            if (value is float floatValue)
+            {
+                if (!NumericValue.TryNormalizeSingle(floatValue, out var normalized))
+                {
+                    throw new FormatException("JSON numbers must be finite.");
                 }
 
                 return normalized;

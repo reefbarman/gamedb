@@ -219,6 +219,89 @@ namespace GameDBLibrary.Tests
         }
 
         [Test]
+        public void Query_LongAndDoublePreservePrecisionAcrossPredicatesAndProjection()
+        {
+            CreateRepresentativeDatabase();
+            var exactLong = QueryTable("Items", new List<GameDBQueryPredicate>
+            {
+                Predicate(GameDBQueryPredicateKind.Equals, "LargeId", 9007199254740993L),
+                Range("LargeId", 9007199254740993L, 9007199254740993L)
+            });
+            var adjacentLong = QueryTable("Items", new List<GameDBQueryPredicate>
+            {
+                Predicate(GameDBQueryPredicateKind.Equals, "LargeId", 9007199254740992L)
+            });
+            var exactDouble = QueryTable("Items", new List<GameDBQueryPredicate>
+            {
+                Predicate(GameDBQueryPredicateKind.Equals, "Precision", 1.0000000000000002d),
+                Range("Precision", 1.0000000000000002d, 1.0000000000000002d)
+            });
+            var invalidLong = QueryTable("Items", new List<GameDBQueryPredicate>
+            {
+                Predicate(GameDBQueryPredicateKind.Equals, "LargeId", 9007199254740993d)
+            });
+
+            Assert.That(exactLong.Success, Is.True, exactLong.Message);
+            Assert.That(exactLong.Tables.Single().Rows.Select(row => row.Key),
+                Is.EqualTo(new[] { "Sword" }));
+            Assert.That(adjacentLong.Success, Is.True, adjacentLong.Message);
+            Assert.That(adjacentLong.Tables.Single().Rows.Select(row => row.Key),
+                Is.EqualTo(new[] { "Axe" }));
+            Assert.That(exactDouble.Success, Is.True, exactDouble.Message);
+            Assert.That(exactDouble.Tables.Single().Rows.Select(row => row.Key),
+                Is.EqualTo(new[] { "Sword" }));
+            AssertFailure(invalidLong, GameDBQueryFailureKind.InvalidRequest,
+                "predicate.valueInvalid");
+
+            var values = exactLong.Tables.Single().Rows.Single().Values;
+            Assert.That(values["LargeId"], Is.TypeOf<long>().And.EqualTo(9007199254740993L));
+            Assert.That(values["Precision"], Is.TypeOf<double>().And.EqualTo(1.0000000000000002d));
+            Assert.That(values["LargeIds"], Is.TypeOf<List<object>>());
+            Assert.That((List<object>)values["LargeIds"], Is.All.TypeOf<long>());
+            Assert.That(values["Precisions"], Is.TypeOf<Dictionary<string, object>>());
+            Assert.That(((Dictionary<string, object>)values["Precisions"])["Exact"],
+                Is.TypeOf<double>().And.EqualTo(1.0000000000000002d));
+        }
+
+        [Test]
+        public void Query_NumericCursorHashesDistinguishAdjacentLongAndDoubleBounds()
+        {
+            CreateRepresentativeDatabase();
+
+            var lowerLong = NumericPaginationRequest("LargeId", 9007199254740992L);
+            var firstLong = GameDBAutomationService.Query(lowerLong);
+            var higherLong = NumericPaginationRequest("LargeId", 9007199254740993L);
+            var exactLong = GameDBAutomationService.Query(higherLong);
+            higherLong.Cursor = firstLong.NextCursor;
+            var mismatchedLong = GameDBAutomationService.Query(higherLong);
+
+            Assert.That(firstLong.Success, Is.True, firstLong.Message);
+            Assert.That(firstLong.HasMore, Is.True);
+            Assert.That(firstLong.NextCursor, Is.Not.Null.And.Not.Empty);
+            Assert.That(exactLong.Success, Is.True, exactLong.Message);
+            Assert.That(exactLong.Tables.Single().Rows.Select(row => row.Key),
+                Is.EqualTo(new[] { "Sword" }));
+            AssertFailure(mismatchedLong, GameDBQueryFailureKind.InvalidCursor,
+                "cursor.mismatch");
+
+            var lowerDouble = NumericPaginationRequest("Precision", 1d);
+            var firstDouble = GameDBAutomationService.Query(lowerDouble);
+            var higherDouble = NumericPaginationRequest("Precision", 1.0000000000000002d);
+            var exactDouble = GameDBAutomationService.Query(higherDouble);
+            higherDouble.Cursor = firstDouble.NextCursor;
+            var mismatchedDouble = GameDBAutomationService.Query(higherDouble);
+
+            Assert.That(firstDouble.Success, Is.True, firstDouble.Message);
+            Assert.That(firstDouble.HasMore, Is.True);
+            Assert.That(firstDouble.NextCursor, Is.Not.Null.And.Not.Empty);
+            Assert.That(exactDouble.Success, Is.True, exactDouble.Message);
+            Assert.That(exactDouble.Tables.Single().Rows.Select(row => row.Key),
+                Is.EqualTo(new[] { "Sword" }));
+            AssertFailure(mismatchedDouble, GameDBQueryFailureKind.InvalidCursor,
+                "cursor.mismatch");
+        }
+
+        [Test]
         public void Query_NumericRangeSupportsOpenBoundsAndRejectsInvalidOrder()
         {
             CreateRepresentativeDatabase();
@@ -698,7 +781,7 @@ namespace GameDBLibrary.Tests
         {
             CreateRepresentativeDatabase();
             File.WriteAllText(m_schemaAbsolutePath,
-                File.ReadAllText(m_schemaAbsolutePath).Replace("\"formatVersion\": 3", "\"formatVersion\": 4"));
+                File.ReadAllText(m_schemaAbsolutePath).Replace("\"formatVersion\": 4", "\"formatVersion\": 5"));
 
             var result = GameDBAutomationService.Query(new GameDBQueryRequest
             {
@@ -708,7 +791,7 @@ namespace GameDBLibrary.Tests
 
             AssertFailure(result, GameDBQueryFailureKind.LoadFailed, "database.loadFailed");
             Assert.That(result.Errors.Single().Message,
-                Does.Contain("format version 4").And.Contain("supported version 3"));
+                Does.Contain("format version 5").And.Contain("supported version 4"));
             Assert.That(result.Tables, Is.Empty);
         }
 
@@ -757,7 +840,9 @@ namespace GameDBLibrary.Tests
                 AddTable("Categories"),
                 Field("Items", "Name", FieldType.@string),
                 Field("Items", "Power", FieldType.@int),
+                Field("Items", "LargeId", FieldType.@long),
                 Field("Items", "Weight", FieldType.@float),
+                Field("Items", "Precision", FieldType.@double),
                 Field("Items", "Enabled", FieldType.@bool),
 
                 Field("Items", "Tint", FieldType.color),
@@ -765,7 +850,9 @@ namespace GameDBLibrary.Tests
                 Field("Items", "Icon", FieldType.unityObject),
                 Field("Items", "Icons", FieldType.unityObject, isArray: true),
                 Field("Items", "Tags", FieldType.@string, isArray: true),
+                Field("Items", "LargeIds", FieldType.@long, isArray: true),
                 DictionaryField("Items", "Attributes", FieldType.@int),
+                DictionaryField("Items", "Precisions", FieldType.@double),
                 Field("Recipes", "Result", FieldType.tableRef, typeArgument: "Items"),
                 Field("Recipes", "Ingredients", FieldType.tableRef, isArray: true, typeArgument: "Items"),
                 DictionaryField("Recipes", "Slots", FieldType.tableRef, "Items"),
@@ -775,7 +862,9 @@ namespace GameDBLibrary.Tests
                 {
                     { "Name", "Sword" },
                     { "Power", 12L },
+                    { "LargeId", 9007199254740993L },
                     { "Weight", 2.5d },
+                    { "Precision", 1.0000000000000002d },
                     { "Enabled", true },
 
                     { "Tint", "#FF8000" },
@@ -783,13 +872,18 @@ namespace GameDBLibrary.Tests
                     { "Icon", icon },
                     { "Icons", new List<object> { icon } },
                     { "Tags", new List<object> { "melee", "sharp" } },
-                    { "Attributes", new Dictionary<string, object> { { "Power", 12L } } }
+                    { "LargeIds", new List<object> { long.MinValue, 9007199254740993L } },
+                    { "Attributes", new Dictionary<string, object> { { "Power", 12L } } },
+                    { "Precisions", new Dictionary<string, object>
+                        { { "Exact", 1.0000000000000002d } } }
                 }),
                 Row("Items", "Axe", new Dictionary<string, object>
                 {
                     { "Name", "Axe" },
                     { "Power", 8L },
+                    { "LargeId", 9007199254740992L },
                     { "Weight", 3d },
+                    { "Precision", 1d },
                     { "Enabled", false },
 
                     { "Tags", new List<object> { "melee" } },
@@ -856,6 +950,26 @@ namespace GameDBLibrary.Tests
                     }
                 }
             });
+        }
+
+        private GameDBQueryRequest NumericPaginationRequest(string fieldName, object minimum)
+        {
+            return new GameDBQueryRequest
+            {
+                DatabasePath = m_databasePath,
+                Limit = 1,
+                Tables = new List<GameDBQueryTableProjection>
+                {
+                    new GameDBQueryTableProjection
+                    {
+                        TableName = "Items",
+                        Predicates = new List<GameDBQueryPredicate>
+                        {
+                            Range(fieldName, minimum, null)
+                        }
+                    }
+                }
+            };
         }
 
         private GameDBQueryRequest PaginationRequest(int limit)

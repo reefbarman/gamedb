@@ -12,8 +12,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Added atomic editor-automation batches with ordered mutation operations, whole-batch dry runs and validation, revision guards, explicit destructive-operation allowlists, indexed failures, and structured commit outcomes.
 - Added deterministic read-only editor-automation queries with table, row, and field projections; AND-combined typed predicates; ordinal global pagination; opaque revision- and query-bound cursors; structured failures; and JSON-compatible wire-shaped result values, including canonical Unity-object projections compared by GUID identity.
-- Added transactional per-table CSV import/export with an RFC 4180 dialect, reserved `__key` column, invariant scalar and enum values, compact canonical JSON for Unity-object cells, reversible formula-injection protection, explicit replace/upsert modes, revision guards, structured cell coordinates, and whole-document rollback. Arrays and dictionaries remain deferred.
+- Added transactional per-table CSV import/export with an RFC 4180 dialect, reserved `__key` column, invariant scalar and enum values, compact canonical JSON for Unity-object cells, reversible formula-injection protection, explicit replace/upsert modes, revision guards, structured cell coordinates, and whole-document rollback. Tables containing collection fields remain unsupported by CSV.
 - Added an optional package-gated Addressables runtime assembly that loads GUID-backed Unity-object references through a WebGL-safe Unity `Awaitable` API and returns deterministic disposable leases without adding Addressables to GameDB's package dependencies or generated code.
+- Added exact signed Int64 (`long`) and finite Double (`double`) field types across editor authoring, runtime hydration, arrays, dictionary values, automation, precision-safe Query predicates/cursors, invariant scalar CSV (`Int64`/`G17`), and generated C# APIs; Double rejects non-finite values and normalizes negative zero.
 
 ### Changed
 
@@ -22,7 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Hardened C# generation: generated database, table, and row types are now `partial`; schema strings are `const`; enum keys are `static readonly`; generated names are validated before writing; and complete scope output is staged and replaced so removed tables cannot leave stale source files.
 - Made runtime vector strings invariant-culture and reject non-finite components so editor automation and persisted data use deterministic wire values.
 - Made CSV the sole supported spreadsheet interchange path.
-- Established schema format version `3`: every `.schema.json` carries the required current `formatVersion`, and editor/automation loads refuse missing, malformed, older, or newer formats before hydrating or rewriting database files.
+- Advanced the current-only schema contract to format version `4` for exact Int64 and finite Double values; editor, runtime, document, and automation loads refuse missing, malformed, older, or newer formats before hydrating or rewriting database files.
 - Replaced path-string Unity-object values with strict `{guid,path}` references. Real editor saves refresh paths from GUID identity for scalar, array, and dictionary values and accept any loadable main project asset under `Assets`; synchronous object projections remain Resources-only.
 - Expanded generated Unity-object scalar and array APIs with value, GUID, and path projections in every output plus object projections in Unity-enabled output; dictionary values remain accessor objects.
 

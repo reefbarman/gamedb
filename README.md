@@ -71,21 +71,23 @@ The generated load path is relative to a `Resources` folder and omits the `.json
 
 ## Schema format version
 
-Every `.schema.json` file requires the root-level integer `"formatVersion": 3`. GameDB writes this marker when it creates or saves a database and validates it before loading any schema, data, editor state, or automation operation.
+Every `.schema.json` file requires the root-level integer `"formatVersion": 4`. GameDB writes this marker when it creates or saves a database and validates it before loading any schema, data, editor state, or automation operation.
 
-Unversioned, malformed, older, and newer schema formats are refused without rewriting either database file. Format version `3` is the only supported schema contract.
+Unversioned, malformed, older, and newer schema formats are refused without rewriting either database file. Format version `4` is the only supported schema contract.
 
 ## Supported data
 
 GameDB supports:
 
-- strings, 32-bit integers, floats, and booleans
+- strings, signed 32-bit integers, finite `float`/`Single` values, signed 64-bit integers (`long`/`Int64`), finite `double`/`Double` values, and booleans
 - colors and 2D/3D/4D vectors
 - Unity object references stored as exact `{ "guid": "...", "path": "Assets/..." }` objects; both strings are empty when unassigned
 - project enums
 - references to rows in another table
 - arrays of non-dictionary field types
 - dictionaries with string or enum keys
+
+`long` values use exact JSON integer tokens across the full signed Int64 range. General JavaScript consumers need lossless integer parsing outside ±9,007,199,254,740,991. `double` values accept only finite numbers and normalize negative zero to positive zero. These rules also apply to arrays and dictionary values.
 
 Table references and schema changes are validated before the automation API saves them. Generated code should be regenerated after schema changes.
 
@@ -168,7 +170,7 @@ Use `DryRun` to validate a prospective change without writing. Renames, deletes,
 
 ## CSV spreadsheet interchange
 
-Use `GameDBAutomationService.ExportCsv` and `ImportCsv` for supported one-table spreadsheet interchange. The RFC 4180 dialect uses a reserved `__key` column, invariant scalar and enum values, compact canonical JSON for Unity-object cells, reversible formula-injection protection, explicit `Replace`/`Upsert` modes, revision guards, and transactional validation. Arrays and dictionaries are intentionally deferred. See the [CSV contract](Documentation~/automation.md#csv-import-and-export).
+Use `GameDBAutomationService.ExportCsv` and `ImportCsv` for supported one-table spreadsheet interchange. The RFC 4180 dialect uses a reserved `__key` column, invariant scalar and enum values, exact signed Int64 text, finite `G17` Double text, compact canonical JSON for Unity-object cells, reversible formula-injection protection, explicit `Replace`/`Upsert` modes, revision guards, and transactional validation. Tables containing array or dictionary fields remain unsupported because the dialect has no collection-cell encoding. See the [CSV contract](Documentation~/automation.md#csv-import-and-export).
 
 ## Legacy-compatible remote client APIs
 

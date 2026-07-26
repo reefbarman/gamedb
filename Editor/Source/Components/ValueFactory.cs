@@ -19,6 +19,10 @@ namespace GameDBEditorLibrary
                     return new BoolValueComponent();
                 case FieldType.@float:
                     return new FloatValueComponent();
+                case FieldType.@long:
+                    return new LongValueComponent();
+                case FieldType.@double:
+                    return new DoubleValueComponent();
                 case FieldType.@enum:
                     return (ValueComponent)Activator.CreateInstance(typeof(EnumValueComponent<>).MakeGenericType(systemType));
                 case FieldType.tableRef:

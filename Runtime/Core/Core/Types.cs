@@ -4,7 +4,7 @@ using System.Linq;
 
 namespace GameDBLibrary
 {
-    public enum FieldType { @bool, color, dictionary, @enum, @float, @int, @string, tableRef, unityObject, vector2, vector3, vector4 }
+    public enum FieldType { @bool, color, dictionary, @enum, @float, @int, @string, tableRef, unityObject, vector2, vector3, vector4, @long, @double }
     public enum KeyType { @enum, @string }
 
     internal static class TypeUtils
@@ -81,6 +81,28 @@ namespace GameDBLibrary
                     else
                     {
                         val = UnityObjectReferenceWire.Parse(val);
+                    }
+                    break;
+                case FieldType.@long:
+                    if (isArray)
+                    {
+                        var listVal = val as List<object>;
+                        val = listVal.Select(NormalizeInt64).Cast<object>().ToList();
+                    }
+                    else
+                    {
+                        val = NormalizeInt64(val);
+                    }
+                    break;
+                case FieldType.@double:
+                    if (isArray)
+                    {
+                        var listVal = val as List<object>;
+                        val = listVal.Select(NormalizeDouble).Cast<object>().ToList();
+                    }
+                    else
+                    {
+                        val = NormalizeDouble(val);
                     }
                     break;
                 case FieldType.color:
@@ -200,6 +222,26 @@ namespace GameDBLibrary
                         defaultValue = 0f;
                     }
                     break;
+                case FieldType.@long:
+                    if (isArray)
+                    {
+                        defaultValue = new List<long>();
+                    }
+                    else
+                    {
+                        defaultValue = 0L;
+                    }
+                    break;
+                case FieldType.@double:
+                    if (isArray)
+                    {
+                        defaultValue = new List<double>();
+                    }
+                    else
+                    {
+                        defaultValue = 0d;
+                    }
+                    break;
                 case FieldType.@bool:
                     if (isArray)
                     {
@@ -308,6 +350,12 @@ namespace GameDBLibrary
                 case FieldType.@float:
                     type = typeof(Single);
                     break;
+                case FieldType.@long:
+                    type = typeof(Int64);
+                    break;
+                case FieldType.@double:
+                    type = typeof(Double);
+                    break;
                 case FieldType.@bool:
                     type = typeof(Boolean);
                     break;
@@ -338,6 +386,26 @@ namespace GameDBLibrary
             }
 
             return type;
+        }
+
+        private static long NormalizeInt64(object value)
+        {
+            if (!NumericValue.TryNormalizeInt64(value, out var normalized))
+            {
+                throw new FormatException("Value is not a valid Int64.");
+            }
+
+            return normalized;
+        }
+
+        private static double NormalizeDouble(object value)
+        {
+            if (!NumericValue.TryNormalizeDouble(value, out var normalized))
+            {
+                throw new FormatException("Value is not a finite Double.");
+            }
+
+            return normalized;
         }
     }
 }

@@ -22,7 +22,7 @@ namespace GameDBEditorLibrary
 
     internal static class GameDBSchemaFormat
     {
-        internal const int CurrentVersion = 3;
+        internal const int CurrentVersion = 4;
 
         internal static IDictionary<string, object> ParseAndValidate(string schemaJson)
         {

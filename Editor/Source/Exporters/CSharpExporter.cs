@@ -235,8 +235,14 @@ namespace GameDBEditorLibrary
                     case FieldType.@int:
                         accessors.Add(new Accessor { Name = fieldPair.Key, Type = "global::GameDBLibrary.IntAccessor", ReturnType = "int", FieldName = fieldPair.Key, IsArray = isArray });
                         break;
+                    case FieldType.@long:
+                        accessors.Add(new Accessor { Name = fieldPair.Key, Type = "global::GameDBLibrary.LongAccessor", ReturnType = "long", FieldName = fieldPair.Key, IsArray = isArray });
+                        break;
                     case FieldType.@float:
                         accessors.Add(new Accessor { Name = fieldPair.Key, Type = "global::GameDBLibrary.FloatAccessor", ReturnType = "float", FieldName = fieldPair.Key, IsArray = isArray });
+                        break;
+                    case FieldType.@double:
+                        accessors.Add(new Accessor { Name = fieldPair.Key, Type = "global::GameDBLibrary.DoubleAccessor", ReturnType = "double", FieldName = fieldPair.Key, IsArray = isArray });
                         break;
                     case FieldType.@bool:
                         accessors.Add(new Accessor { Name = fieldPair.Key, Type = "global::GameDBLibrary.BoolAccessor", ReturnType = "bool", FieldName = fieldPair.Key, IsArray = isArray });
@@ -421,9 +427,17 @@ namespace GameDBEditorLibrary
                     valueType = "int";
                     valueAccessorType = "typeof(global::GameDBLibrary.IntAccessor)";
                     break;
+                case FieldType.@long:
+                    valueType = "long";
+                    valueAccessorType = "typeof(global::GameDBLibrary.LongAccessor)";
+                    break;
                 case FieldType.@float:
                     valueType = "float";
                     valueAccessorType = "typeof(global::GameDBLibrary.FloatAccessor)";
+                    break;
+                case FieldType.@double:
+                    valueType = "double";
+                    valueAccessorType = "typeof(global::GameDBLibrary.DoubleAccessor)";
                     break;
                 case FieldType.@bool:
                     valueType = "bool";

@@ -4,8 +4,10 @@ using GameDBLibrary;
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using UnityEditor;
 using UnityEngine;
 
@@ -97,11 +99,94 @@ namespace GameDBLibrary.Tests
         }
 
         [Test]
+        public void Csv_LongAndDoubleRoundTripInvariantlyAndRejectInvalidCellsTransactionally()
+        {
+            CreateScalarDatabase();
+            AssertSuccess(GameDBAutomationService.ApplyBatch(new GameDBBatchRequest
+            {
+                DatabasePath = m_databasePath,
+                Operations = new List<GameDBBatchOperation>
+                {
+                    AddField("Items", "LongValue", FieldType.@long),
+                    AddField("Items", "DoubleValue", FieldType.@double)
+                }
+            }));
+            AddRow("Items", "Numeric", new Dictionary<string, object>
+            {
+                { "LongValue", long.MinValue },
+                { "DoubleValue", 1.0000000000000002d }
+            });
+
+            var originalCulture = Thread.CurrentThread.CurrentCulture;
+            try
+            {
+                Thread.CurrentThread.CurrentCulture = CultureInfo.GetCultureInfo("fr-FR");
+                var exported = GameDBAutomationService.ExportCsv(new GameDBCsvExportRequest
+                {
+                    DatabasePath = m_databasePath,
+                    TableName = "Items"
+                });
+
+                Assert.That(exported.Success, Is.True, exported.Message);
+                var parsed = GameDBCsvCodec.Parse(exported.CsvText);
+                Assert.That(parsed.Success, Is.True, parsed.Error?.Message);
+                var headers = parsed.Records[0].Cells.Select(cell => cell.Text).ToList();
+                var numeric = parsed.Records.Single(record => record.Cells[0].Text == "Numeric");
+                Assert.That(numeric.Cells[headers.IndexOf("LongValue")].Text,
+                    Is.EqualTo("'-9223372036854775808"));
+                Assert.That(numeric.Cells[headers.IndexOf("DoubleValue")].Text,
+                    Is.EqualTo("1.0000000000000002"));
+
+                var imported = GameDBAutomationService.ImportCsv(new GameDBCsvImportRequest
+                {
+                    DatabasePath = m_databasePath,
+                    TableName = "Items",
+                    CsvText = GameDBCsvCodec.Write(new IReadOnlyList<string>[]
+                    {
+                        new[] { "__key", "LongValue", "DoubleValue" },
+                        new[] { "Numeric", long.MaxValue.ToString(CultureInfo.InvariantCulture),
+                            double.Epsilon.ToString("G17", CultureInfo.InvariantCulture) }
+                    }),
+                    Mode = GameDBCsvImportMode.Upsert
+                });
+
+                Assert.That(imported.Success, Is.True, imported.Message);
+                var values = Row(InspectTable("Items"), "Numeric").Values;
+                Assert.That(values["LongValue"], Is.TypeOf<long>().And.EqualTo(long.MaxValue));
+                Assert.That(values["DoubleValue"], Is.TypeOf<double>());
+                Assert.That(BitConverter.DoubleToInt64Bits((double)values["DoubleValue"]),
+                    Is.EqualTo(BitConverter.DoubleToInt64Bits(double.Epsilon)));
+
+                var dataBefore = File.ReadAllBytes(m_databaseAbsolutePath);
+                var schemaBefore = File.ReadAllBytes(m_schemaAbsolutePath);
+                var invalid = GameDBAutomationService.ImportCsv(new GameDBCsvImportRequest
+                {
+                    DatabasePath = m_databasePath,
+                    TableName = "Items",
+                    CsvText = "__key,LongValue,DoubleValue\r\nNumeric,1.5,NaN",
+                    Mode = GameDBCsvImportMode.Upsert
+                });
+
+                AssertCsvFailure(invalid, GameDBCsvFailureKind.InvalidCsv, "csv.valueInvalid");
+                Assert.That(invalid.Errors, Has.Count.EqualTo(2));
+                Assert.That(invalid.Errors.Select(error => error.ColumnName),
+                    Is.EquivalentTo(new[] { "LongValue", "DoubleValue" }));
+                Assert.That(invalid.Errors, Has.All.Property("RecordNumber").EqualTo(2));
+                Assert.That(File.ReadAllBytes(m_databaseAbsolutePath), Is.EqualTo(dataBefore));
+                Assert.That(File.ReadAllBytes(m_schemaAbsolutePath), Is.EqualTo(schemaBefore));
+            }
+            finally
+            {
+                Thread.CurrentThread.CurrentCulture = originalCulture;
+            }
+        }
+
+        [Test]
         public void Csv_MapsUnsupportedSchemaFormatToLoadFailedBeforeCsvValidation()
         {
             CreateScalarDatabase();
             File.WriteAllText(m_schemaAbsolutePath,
-                File.ReadAllText(m_schemaAbsolutePath).Replace("\"formatVersion\": 3", "\"formatVersion\": 4"));
+                File.ReadAllText(m_schemaAbsolutePath).Replace("\"formatVersion\": 4", "\"formatVersion\": 5"));
             var dataBefore = File.ReadAllBytes(m_databaseAbsolutePath);
             var schemaBefore = File.ReadAllBytes(m_schemaAbsolutePath);
 
@@ -121,9 +206,9 @@ namespace GameDBLibrary.Tests
             Assert.That(exported.Success, Is.False);
             Assert.That(exported.FailureKind, Is.EqualTo(GameDBCsvFailureKind.LoadFailed));
             Assert.That(exported.Errors.Select(error => error.Code), Does.Contain("csv.loadFailed"));
-            Assert.That(exported.Message, Does.Contain("format version 4"));
+            Assert.That(exported.Message, Does.Contain("format version 5"));
             AssertCsvFailure(imported, GameDBCsvFailureKind.LoadFailed, "csv.loadFailed");
-            Assert.That(imported.Message, Does.Contain("format version 4"));
+            Assert.That(imported.Message, Does.Contain("format version 5"));
             Assert.That(File.ReadAllBytes(m_databaseAbsolutePath), Is.EqualTo(dataBefore));
             Assert.That(File.ReadAllBytes(m_schemaAbsolutePath), Is.EqualTo(schemaBefore));
         }

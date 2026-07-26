@@ -1,6 +1,6 @@
 # GameDB documentation
 
-GameDB is a schema-driven game-data editor, runtime library, C# generator, and editor automation API for Unity 6.5.
+GameDB is a schema-driven game-data editor, runtime library, C# generator, and editor automation API for Unity 6.5. Schema format 4 includes exact signed Int64 and finite Double fields across scalar, array, dictionary, Query, CSV, and generated-code workflows.
 
 ## Start here
 

@@ -4,7 +4,7 @@ This sample provides a dependency-free database with:
 
 - a `Categories` table;
 - an `Items` table;
-- string, integer, string-array, and table-reference fields;
+- string, Int32, exact signed Int64, finite Double, string-array, and table-reference fields;
 - two example items.
 
 ## Open and edit
@@ -48,9 +48,11 @@ public sealed class BasicGameDBExample : MonoBehaviour
         var category = sword.CategoryVal;
 
         Debug.Log($"{sword.DisplayNameVal} deals {sword.DamageVal} damage.");
+        Debug.Log($"Stable ID: {sword.StableIdVal}");
+        Debug.Log($"Precision scale: {sword.PrecisionScaleVal:G17}");
         Debug.Log($"Category: {category.DisplayNameVal}");
     }
 }
 ```
 
-Generated code is intentionally not included in the package sample. Generate it into your project so it matches any schema edits you make.
+`StableId` is encoded as a JSON integer token and demonstrates exact Int64 values outside JavaScript's safe range `[-9007199254740991, 9007199254740991]`; JavaScript consumers need lossless integer parsing for those values. `PrecisionScale` demonstrates finite Double precision and range beyond Single, and `G17` displays canonical round-trip text. Negative Double zero is normalized to zero. Generated code is intentionally not included in the package sample. Generate it into your project so it matches any schema edits you make.

@@ -1,5 +1,5 @@
 {
-  "formatVersion": 3,
+  "formatVersion": 4,
   "tables": {
     "Categories": {
       "fields": {
@@ -28,6 +28,16 @@
         },
         "DisplayName": {
           "type": "string",
+          "isArray": false,
+          "typeArg": null
+        },
+        "PrecisionScale": {
+          "type": "double",
+          "isArray": false,
+          "typeArg": null
+        },
+        "StableId": {
+          "type": "long",
           "isArray": false,
           "typeArg": null
         },

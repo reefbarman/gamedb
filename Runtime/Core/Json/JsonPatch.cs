@@ -477,9 +477,9 @@ namespace GameDBLibrary
                 return true;
             }
 
-            if (IsNumber(a) && IsNumber(b))
+            if (NumericValue.IsNumber(a) && NumericValue.IsNumber(b))
             {
-                return Convert.ToDecimal(a) == Convert.ToDecimal(b);
+                return NumericValue.JsonNumbersEqual(a, b);
             }
 
             if (a is IComparable && b is IComparable && a.GetType() == b.GetType())
@@ -543,12 +543,6 @@ namespace GameDBLibrary
             return false;
         }
 
-        private static bool IsNumber(object value)
-        {
-            return value is byte || value is sbyte || value is short || value is ushort
-                || value is int || value is uint || value is long || value is ulong
-                || value is float || value is double || value is decimal;
-        }
 
         private static bool IsDigitsOnly(string str)
         {

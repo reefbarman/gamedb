@@ -99,36 +99,25 @@ namespace GameDBLibrary
 
             if (Type == FieldType.@int)
             {
-                if (!IsNumber(value))
-                {
-                    return false;
-                }
-
-                try
-                {
-                    var number = Convert.ToInt64(value);
-                    return number >= int.MinValue && number <= int.MaxValue
-                        && Convert.ToDecimal(value) == number;
-                }
-                catch (Exception)
-                {
-                    return false;
-                }
+                return NumericValue.TryNormalizeInt32(value, out _);
             }
 
             if (Type == FieldType.@float)
             {
-                return IsNumber(value);
+                return NumericValue.TryNormalizeSingle(value, out _);
+            }
+
+            if (Type == FieldType.@long)
+            {
+                return NumericValue.TryNormalizeInt64(value, out _);
+            }
+
+            if (Type == FieldType.@double)
+            {
+                return NumericValue.TryNormalizeDouble(value, out _);
             }
 
             return value.GetType() == expectedType;
-        }
-
-        private static bool IsNumber(object value)
-        {
-            return value is byte || value is sbyte || value is short || value is ushort
-                || value is int || value is uint || value is long || value is ulong
-                || value is float || value is double || value is decimal;
         }
     }
 }

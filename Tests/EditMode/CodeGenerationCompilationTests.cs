@@ -88,6 +88,14 @@ namespace GameDBLibrary.Tests
             Assert.That(gameDB.AddTable("Items", KeyType.@string), Is.True);
             var items = (TableModel)gameDB.Tables["Items"];
             Assert.That(items.AddField("Power", FieldType.@int, false), Is.True);
+            Assert.That(items.AddField("LongValue", FieldType.@long, false), Is.True);
+            Assert.That(items.AddField("LongValues", FieldType.@long, true), Is.True);
+            Assert.That(items.AddField("LongByKey", FieldType.dictionary, false,
+                new DictionaryType(KeyType.@string, null, FieldType.@long, null)), Is.True);
+            Assert.That(items.AddField("DoubleValue", FieldType.@double, false), Is.True);
+            Assert.That(items.AddField("DoubleValues", FieldType.@double, true), Is.True);
+            Assert.That(items.AddField("DoubleByKey", FieldType.dictionary, false,
+                new DictionaryType(KeyType.@string, null, FieldType.@double, null)), Is.True);
             Assert.That(items.AddField("Attributes", FieldType.dictionary, false,
                 new DictionaryType(KeyType.@string, null, FieldType.@int, null)), Is.True);
             Assert.That(items.AddField("Category", FieldType.tableRef, false, "Categories"), Is.True);
@@ -141,6 +149,16 @@ namespace GameDBLibrary.Tests
             Assert.That(gameDBType.GetProperty("ItemsTable", BindingFlags.Instance | BindingFlags.Public), Is.Not.Null);
             Assert.That(itemsTableType, Is.Not.Null);
             Assert.That(itemsType.GetProperty("PowerVal", BindingFlags.Instance | BindingFlags.Public), Is.Not.Null);
+            AssertPropertyType(itemsType, "LongValueVal", typeof(long));
+            AssertPropertyType(itemsType, "LongValuesVal",
+                typeof(System.Collections.Generic.List<long>));
+            AssertPropertyType(itemsType, "LongByKeyVal",
+                typeof(System.Collections.Generic.Dictionary<string, long>));
+            AssertPropertyType(itemsType, "DoubleValueVal", typeof(double));
+            AssertPropertyType(itemsType, "DoubleValuesVal",
+                typeof(System.Collections.Generic.List<double>));
+            AssertPropertyType(itemsType, "DoubleByKeyVal",
+                typeof(System.Collections.Generic.Dictionary<string, double>));
             Assert.That(itemsType.GetProperty("AttributesVal", BindingFlags.Instance | BindingFlags.Public), Is.Not.Null);
             Assert.That(itemsType.GetProperty("CategoryVal", BindingFlags.Instance | BindingFlags.Public), Is.Not.Null);
             AssertPropertyType(itemsType, "IconVal", typeof(UnityObjectReference));

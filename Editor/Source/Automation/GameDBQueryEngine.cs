@@ -566,11 +566,27 @@ namespace GameDBEditorLibrary.Automation
                         return true;
                     }
                     break;
+                case FieldType.@long:
+                    long longInteger;
+                    if (TryInt64(value, out longInteger))
+                    {
+                        normalized = longInteger;
+                        return true;
+                    }
+                    break;
                 case FieldType.@float:
                     double number;
                     if (TryFiniteSingle(value, out number))
                     {
                         normalized = number;
+                        return true;
+                    }
+                    break;
+                case FieldType.@double:
+                    double doubleNumber;
+                    if (TryFiniteDouble(value, out doubleNumber))
+                    {
+                        normalized = doubleNumber;
                         return true;
                     }
                     break;
@@ -685,51 +701,64 @@ namespace GameDBEditorLibrary.Automation
             code = "predicate.incompatible";
             error = null;
             if (field.IsArray || field.FieldType == FieldType.dictionary
-                || field.FieldType != FieldType.@int && field.FieldType != FieldType.@float)
+                || field.FieldType != FieldType.@int && field.FieldType != FieldType.@long
+                && field.FieldType != FieldType.@float && field.FieldType != FieldType.@double)
             {
                 error = $"NumericRange is not supported for {field.FieldType}{(field.IsArray ? "[]" : string.Empty)}.";
                 return false;
             }
 
             code = "predicate.valueInvalid";
-            if (field.FieldType == FieldType.@int)
+            if (field.FieldType == FieldType.@int || field.FieldType == FieldType.@long)
             {
+                var isInt32 = field.FieldType == FieldType.@int;
                 long parsedMinimum = 0;
-                if (minimum != null && !TryInt32(minimum, out parsedMinimum))
+                if (minimum != null && !(isInt32
+                        ? TryInt32(minimum, out parsedMinimum)
+                        : TryInt64(minimum, out parsedMinimum)))
                 {
-                    error = "Minimum is not an Int32 value.";
+                    error = $"Minimum is not an {(isInt32 ? "Int32" : "Int64")} value.";
                     return false;
                 }
                 normalizedMinimum = minimum == null ? null : (object)parsedMinimum;
                 long parsedMaximum = 0;
-                if (maximum != null && !TryInt32(maximum, out parsedMaximum))
+                if (maximum != null && !(isInt32
+                        ? TryInt32(maximum, out parsedMaximum)
+                        : TryInt64(maximum, out parsedMaximum)))
                 {
-                    error = "Maximum is not an Int32 value.";
+                    error = $"Maximum is not an {(isInt32 ? "Int32" : "Int64")} value.";
                     return false;
                 }
                 normalizedMaximum = maximum == null ? null : (object)parsedMaximum;
             }
             else
             {
+                var isSingle = field.FieldType == FieldType.@float;
                 double parsedMinimum = 0;
-                if (minimum != null && !TryFiniteSingle(minimum, out parsedMinimum))
+                if (minimum != null && !(isSingle
+                        ? TryFiniteSingle(minimum, out parsedMinimum)
+                        : TryFiniteDouble(minimum, out parsedMinimum)))
                 {
-                    error = "Minimum is not a finite Single value.";
+                    error = $"Minimum is not a finite {(isSingle ? "Single" : "Double")} value.";
                     return false;
                 }
                 normalizedMinimum = minimum == null ? null : (object)parsedMinimum;
                 double parsedMaximum = 0;
-                if (maximum != null && !TryFiniteSingle(maximum, out parsedMaximum))
+                if (maximum != null && !(isSingle
+                        ? TryFiniteSingle(maximum, out parsedMaximum)
+                        : TryFiniteDouble(maximum, out parsedMaximum)))
                 {
-                    error = "Maximum is not a finite Single value.";
+                    error = $"Maximum is not a finite {(isSingle ? "Single" : "Double")} value.";
                     return false;
                 }
                 normalizedMaximum = maximum == null ? null : (object)parsedMaximum;
             }
 
-            if (normalizedMinimum != null && normalizedMaximum != null
-                && Convert.ToDouble(normalizedMinimum, CultureInfo.InvariantCulture)
-                    > Convert.ToDouble(normalizedMaximum, CultureInfo.InvariantCulture))
+            var orderInvalid = normalizedMinimum != null && normalizedMaximum != null
+                && (field.FieldType == FieldType.@int || field.FieldType == FieldType.@long
+                    ? (long)normalizedMinimum > (long)normalizedMaximum
+                    : (double)normalizedMinimum > (double)normalizedMaximum);
+            if (orderInvalid)
             {
                 code = "range.orderInvalid";
                 error = "Minimum cannot be greater than Maximum.";
@@ -885,12 +914,18 @@ namespace GameDBEditorLibrary.Automation
                 case GameDBQueryPredicateKind.Contains:
                     return Contains(predicate.Field, stored, predicate.Value);
                 case GameDBQueryPredicateKind.NumericRange:
-                    var number = Convert.ToDouble(
-                        NormalizeScalar(predicate.Field.FieldType, stored), CultureInfo.InvariantCulture);
-                    return (predicate.Minimum == null
-                            || number >= Convert.ToDouble(predicate.Minimum, CultureInfo.InvariantCulture))
-                        && (predicate.Maximum == null
-                            || number <= Convert.ToDouble(predicate.Maximum, CultureInfo.InvariantCulture));
+                    var number = NormalizeScalar(predicate.Field.FieldType, stored);
+                    if (predicate.Field.FieldType == FieldType.@int
+                        || predicate.Field.FieldType == FieldType.@long)
+                    {
+                        var integer = (long)number;
+                        return (predicate.Minimum == null || integer >= (long)predicate.Minimum)
+                            && (predicate.Maximum == null || integer <= (long)predicate.Maximum);
+                    }
+
+                    var floatingPoint = (double)number;
+                    return (predicate.Minimum == null || floatingPoint >= (double)predicate.Minimum)
+                        && (predicate.Maximum == null || floatingPoint <= (double)predicate.Maximum);
                 case GameDBQueryPredicateKind.ReferencesRow:
                     return ReferencesRow(predicate.Field, stored, (string)predicate.Value);
                 default:
@@ -916,16 +951,14 @@ namespace GameDBEditorLibrary.Automation
                 return actual == null && expected == null;
             }
 
-            if (field.FieldType == FieldType.@int)
+            if (field.FieldType == FieldType.@int || field.FieldType == FieldType.@long)
             {
-                return Convert.ToInt64(actual, CultureInfo.InvariantCulture)
-                    == Convert.ToInt64(expected, CultureInfo.InvariantCulture);
+                return (long)actual == (long)expected;
             }
 
-            if (field.FieldType == FieldType.@float)
+            if (field.FieldType == FieldType.@float || field.FieldType == FieldType.@double)
             {
-                return Convert.ToDouble(actual, CultureInfo.InvariantCulture)
-                    .Equals(Convert.ToDouble(expected, CultureInfo.InvariantCulture));
+                return ((double)actual).Equals((double)expected);
             }
 
             return Equals(actual, expected);
@@ -1061,7 +1094,19 @@ namespace GameDBEditorLibrary.Automation
                 case FieldType.unityObject:
                     return UnityObjectReferenceWire.Serialize((UnityObjectReference)value);
                 case FieldType.@int:
-                    return Convert.ToInt64(value, CultureInfo.InvariantCulture);
+                    long normalizedInt;
+                    if (!TryInt32(value, out normalizedInt))
+                    {
+                        throw new InvalidOperationException("Stored int value is not an Int32.");
+                    }
+                    return normalizedInt;
+                case FieldType.@long:
+                    long normalizedLong;
+                    if (!TryInt64(value, out normalizedLong))
+                    {
+                        throw new InvalidOperationException("Stored long value is not an Int64.");
+                    }
+                    return normalizedLong;
                 case FieldType.@float:
                     double normalizedFloat;
                     if (!TryFiniteSingle(value, out normalizedFloat))
@@ -1069,6 +1114,13 @@ namespace GameDBEditorLibrary.Automation
                         throw new InvalidOperationException("Stored float value is not a finite Single.");
                     }
                     return normalizedFloat;
+                case FieldType.@double:
+                    double normalizedDouble;
+                    if (!TryFiniteDouble(value, out normalizedDouble))
+                    {
+                        throw new InvalidOperationException("Stored double value is not a finite Double.");
+                    }
+                    return normalizedDouble;
                 default:
                     return value;
             }
@@ -1126,18 +1178,27 @@ namespace GameDBEditorLibrary.Automation
             var builder = new StringBuilder();
             Append(builder, predicate.Kind.ToString());
             Append(builder, predicate.Field.Name);
-            Append(builder, CanonicalValue(predicate.Value));
-            Append(builder, CanonicalValue(predicate.Minimum));
-            Append(builder, CanonicalValue(predicate.Maximum));
+            Append(builder, CanonicalValue(predicate.Field.FieldType, predicate.Value));
+            Append(builder, CanonicalValue(predicate.Field.FieldType, predicate.Minimum));
+            Append(builder, CanonicalValue(predicate.Field.FieldType, predicate.Maximum));
             return builder.ToString();
         }
 
-        private static string CanonicalValue(object value)
+        private static string CanonicalValue(FieldType type, object value)
         {
             if (value == null) return "null";
             if (value is bool boolean) return boolean ? "bool:true" : "bool:false";
-            if (value is long integer) return "int:" + integer.ToString(CultureInfo.InvariantCulture);
-            if (value is double number) return "float:" + number.ToString("R", CultureInfo.InvariantCulture);
+            if (value is long integer)
+            {
+                return (type == FieldType.@long ? "long:" : "int:")
+                    + integer.ToString(CultureInfo.InvariantCulture);
+            }
+            if (value is double number)
+            {
+                return (type == FieldType.@double ? "double:" : "float:")
+                    + number.ToString(type == FieldType.@double ? "G17" : "R",
+                        CultureInfo.InvariantCulture);
+            }
             if (value is UnityObjectReference reference)
             {
                 return "unityObject:" + reference.Guid + ":" + reference.Path;
@@ -1176,46 +1237,35 @@ namespace GameDBEditorLibrary.Automation
         private static bool TryInt32(object value, out long result)
         {
             result = 0;
-            if (!IsNumber(value)) return false;
-            try
-            {
-                result = Convert.ToInt64(value, CultureInfo.InvariantCulture);
-                return result >= int.MinValue && result <= int.MaxValue
-                    && Convert.ToDecimal(value, CultureInfo.InvariantCulture) == result;
-            }
-            catch (Exception)
+            if (!NumericValue.TryNormalizeInt32(value, out var normalized))
             {
                 return false;
             }
+
+            result = normalized;
+            return true;
+        }
+
+        private static bool TryInt64(object value, out long result)
+        {
+            return NumericValue.TryNormalizeInt64(value, out result);
         }
 
         private static bool TryFiniteSingle(object value, out double result)
         {
             result = 0;
-            if (!IsNumber(value)) return false;
-            try
-            {
-                var converted = Convert.ToDouble(value, CultureInfo.InvariantCulture);
-                var single = Convert.ToSingle(value, CultureInfo.InvariantCulture);
-                if (double.IsNaN(converted) || double.IsInfinity(converted)
-                    || float.IsNaN(single) || float.IsInfinity(single))
-                {
-                    return false;
-                }
-                result = single;
-                return true;
-            }
-            catch (Exception)
+            if (!NumericValue.TryNormalizeSingle(value, out var normalized))
             {
                 return false;
             }
+
+            result = normalized;
+            return true;
         }
 
-        private static bool IsNumber(object value)
+        private static bool TryFiniteDouble(object value, out double result)
         {
-            return value is byte || value is sbyte || value is short || value is ushort
-                || value is int || value is uint || value is long || value is ulong
-                || value is float || value is double || value is decimal;
+            return NumericValue.TryNormalizeDouble(value, out result);
         }
 
         private static bool IsEnumName(string typeName, string value)

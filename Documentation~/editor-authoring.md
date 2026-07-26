@@ -12,7 +12,7 @@ Open **Window → GameDB → Open Editor**.
 
 Keep both files under `Assets`. A `Resources` folder is recommended when generated runtime code will load the data with `Resources.Load`.
 
-Every schema requires the root-level integer `"formatVersion": 3`. The editor checks the marker before loading tables or data. Missing, malformed, older, or newer versions are refused without rewriting either file.
+Every schema requires the root-level integer `"formatVersion": 4`. The editor checks the marker before loading tables or data. Missing, malformed, older, or newer versions are refused without rewriting either file.
 
 Registered database paths and other editor preferences are project-scoped; they are not stored in the package installation.
 
@@ -46,14 +46,15 @@ Supported field types are:
 
 | Type                                     | Editor and runtime behavior                                                                                                      |
 | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `String`, `Int`, `Float`, `Bool`         | Ordinary scalar values.                                                                                                          |
+| `String`, `Int`, `Float`, `Bool`         | Ordinary scalar values; `Int` is signed 32-bit and `Float` is finite Single precision.                                           |
+| `Long`, `Double`                         | Signed 64-bit integers and finite Double-precision values.                                                                       |
 | `Color`, `Vector2`, `Vector3`, `Vector4` | Edited with Unity controls and exposed as Unity value types by generated accessors.                                              |
 | `Enum`                                   | Uses a public enum imported from compiled project code.                                                                          |
 | `Table Reference`                        | Selects a row in another table and generates both key and typed-row accessors.                                                   |
 | `Unity Object`                           | Stores a canonical asset GUID and path for a main project asset beneath `Assets`.                                                |
 | `Dictionary`                             | Uses string or enum keys and a supported scalar, enum, table-reference, or Unity value type. Dictionaries cannot also be arrays. |
 
-All non-dictionary field types can be arrays. Click the small **E** button beside an array or dictionary value to open its editor. Change the size or add/remove entries, edit the values, then click **Save & Close**. **Close** discards edits made in that popup.
+All non-dictionary field types can be arrays. `Long` accepts the complete signed Int64 range without floating-point coercion. `Double` rejects NaN and infinities and normalizes negative zero to positive zero. Arrays and dictionary values use the same rules as scalar fields. Click the small **E** button beside an array or dictionary value to open its editor. Change the size or add/remove entries, edit the values, then click **Save & Close**. **Close** discards edits made in that popup.
 
 Schema edits initialize existing rows with the new field's default value. Deleting or renaming schema elements can invalidate generated code and dependent data; save and regenerate after the change. GameDB blocks deletion of a table while a direct table-reference field still targets it. The automation API performs broader reference validation and is recommended for complex or agent-driven refactors.
 

@@ -99,6 +99,56 @@ namespace GameDBLibrary.Tests
         }
 
         [Test]
+        public void Export_GeneratesLongAndDoubleScalarArrayAndDictionaryAccessors()
+        {
+            var gameDB = CreateInMemoryDatabase("NumericOutput");
+            Assert.That(gameDB.AddTable("Items", KeyType.@string), Is.True);
+            var items = (TableModel)gameDB.Tables["Items"];
+            Assert.That(items.AddField("LongValue", FieldType.@long, false), Is.True);
+            Assert.That(items.AddField("LongValues", FieldType.@long, true), Is.True);
+            Assert.That(items.AddField("LongByKey", FieldType.dictionary, false,
+                new DictionaryType(KeyType.@string, null, FieldType.@long, null)), Is.True);
+            Assert.That(items.AddField("DoubleValue", FieldType.@double, false), Is.True);
+            Assert.That(items.AddField("DoubleValues", FieldType.@double, true), Is.True);
+            Assert.That(items.AddField("DoubleByKey", FieldType.dictionary, false,
+                new DictionaryType(KeyType.@string, null, FieldType.@double, null)), Is.True);
+
+            var outputPath = CreateOutputPath();
+            try
+            {
+                new CSharpExporter().Export(outputPath, gameDB, true);
+                var scopePath = Path.Combine(outputPath, gameDB.ScopeName);
+                var rowCode = File.ReadAllText(Path.Combine(scopePath, "Items.cs"));
+                var tableCode = File.ReadAllText(Path.Combine(scopePath, "ItemsTable.cs"));
+
+                Assert.That(rowCode, Does.Contain("public long LongValueVal"));
+                Assert.That(rowCode, Does.Contain(
+                    "public global::System.Collections.Generic.List<long> LongValuesVal"));
+                Assert.That(rowCode, Does.Contain(
+                    "public global::System.Collections.Generic.Dictionary<string, long> LongByKeyVal"));
+                Assert.That(rowCode, Does.Contain("public double DoubleValueVal"));
+                Assert.That(rowCode, Does.Contain(
+                    "public global::System.Collections.Generic.List<double> DoubleValuesVal"));
+                Assert.That(rowCode, Does.Contain(
+                    "public global::System.Collections.Generic.Dictionary<string, double> DoubleByKeyVal"));
+                Assert.That(rowCode, Does.Contain("global::GameDBLibrary.LongAccessor"));
+                Assert.That(rowCode, Does.Contain("global::GameDBLibrary.DoubleAccessor"));
+                Assert.That(rowCode, Does.Contain(
+                    "global::GameDBLibrary.DictionaryAccessor<string, long>"));
+                Assert.That(rowCode, Does.Contain(
+                    "global::GameDBLibrary.DictionaryAccessor<string, double>"));
+                Assert.That(rowCode, Does.Contain("typeof(global::GameDBLibrary.LongAccessor)"));
+                Assert.That(rowCode, Does.Contain("typeof(global::GameDBLibrary.DoubleAccessor)"));
+                Assert.That(tableCode, Does.Contain("global::GameDBLibrary.FieldType.@long"));
+                Assert.That(tableCode, Does.Contain("global::GameDBLibrary.FieldType.@double"));
+            }
+            finally
+            {
+                DeleteDirectory(outputPath);
+            }
+        }
+
+        [Test]
         public void Validate_AggregatesGeneratedNameCollisionsAndWritesNothing()
         {
             var gameDB = CreateInMemoryDatabase("class");

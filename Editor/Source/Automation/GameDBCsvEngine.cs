@@ -358,11 +358,23 @@ namespace GameDBEditorLibrary.Automation
                             text = integer.ToString(CultureInfo.InvariantCulture);
                         }
                         break;
+                    case FieldType.@long:
+                        if (NumericValue.TryNormalizeInt64(value, out var longInteger))
+                        {
+                            text = longInteger.ToString(CultureInfo.InvariantCulture);
+                        }
+                        break;
                     case FieldType.@float:
                         var single = Convert.ToSingle(value, CultureInfo.InvariantCulture);
                         if (!float.IsNaN(single) && !float.IsInfinity(single))
                         {
                             text = single.ToString("R", CultureInfo.InvariantCulture);
+                        }
+                        break;
+                    case FieldType.@double:
+                        if (NumericValue.TryNormalizeDouble(value, out var doubleNumber))
+                        {
+                            text = doubleNumber.ToString("G17", CultureInfo.InvariantCulture);
                         }
                         break;
                     case FieldType.@enum:
@@ -454,6 +466,14 @@ namespace GameDBEditorLibrary.Automation
                         return true;
                     }
                     break;
+                case FieldType.@long:
+                    if (long.TryParse(text, NumberStyles.AllowLeadingSign,
+                        CultureInfo.InvariantCulture, out var longInteger))
+                    {
+                        value = longInteger;
+                        return true;
+                    }
+                    break;
                 case FieldType.@float:
                     var floatStyles = NumberStyles.AllowLeadingSign
                         | NumberStyles.AllowDecimalPoint | NumberStyles.AllowExponent;
@@ -461,6 +481,17 @@ namespace GameDBEditorLibrary.Automation
                         out var single) && !float.IsNaN(single) && !float.IsInfinity(single))
                     {
                         value = single;
+                        return true;
+                    }
+                    break;
+                case FieldType.@double:
+                    var doubleStyles = NumberStyles.AllowLeadingSign
+                        | NumberStyles.AllowDecimalPoint | NumberStyles.AllowExponent;
+                    if (double.TryParse(text, doubleStyles, CultureInfo.InvariantCulture,
+                            out var doubleNumber)
+                        && NumericValue.TryNormalizeDouble(doubleNumber, out doubleNumber))
+                    {
+                        value = doubleNumber;
                         return true;
                     }
                     break;

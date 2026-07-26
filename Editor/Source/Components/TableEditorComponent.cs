@@ -52,7 +52,8 @@ namespace GameDBEditorLibrary
 
             if (m_expaned)
             {
-                UIHelpers.RenderBox(delegate {
+                UIHelpers.RenderBox(delegate
+                {
                     RenderKeyCreator();
 
                     EditorGUILayout.Separator();
@@ -61,24 +62,29 @@ namespace GameDBEditorLibrary
 
                     if (!Application.isPlaying && m_editTable && m_editable)
                     {
-                        UIHelpers.RenderBox(delegate {
+                        UIHelpers.RenderBox(delegate
+                        {
                             EditorGUILayout.LabelField("Modify Schema:", GUILayout.Width(120));
                             EditorGUILayout.Separator();
 
-                            UIHelpers.RenderHorizontalGroup(delegate {
+                            UIHelpers.RenderHorizontalGroup(delegate
+                            {
                                 m_addFieldName = UIHelpers.RenderTextField("Field Name:", m_addFieldName, new UIHelpers.FieldLayout(80, 240));
 
                                 object typeArg = null;
 
-                                if (GameDB.Instance.LocalizationDB) {
+                                if (GameDB.Instance.LocalizationDB)
+                                {
                                     m_selectedType = (int)FieldType.@string;
                                 }
-                                else {
+                                else
+                                {
                                     m_selectedType = UIHelpers.RenderDropDown("Type:", m_selectedType, TypeUtils.GetTypeNames(), new UIHelpers.FieldLayout(40, 200));
 
                                     var renderArrayToggle = true;
 
-                                    switch ((FieldType) m_selectedType) {
+                                    switch ((FieldType)m_selectedType)
+                                    {
                                         case FieldType.@enum:
                                             typeArg = RenderEnum(ref m_selectedEnum);
                                             break;
@@ -102,7 +108,7 @@ namespace GameDBEditorLibrary
                                 {
                                     if (m_addFieldName.Length > 0 && !Char.IsNumber(m_addFieldName[0]))
                                     {
-                                        if (AddField(m_addFieldName, (FieldType) m_selectedType, m_array, typeArg))
+                                        if (AddField(m_addFieldName, (FieldType)m_selectedType, m_array, typeArg))
                                         {
                                             m_addFieldName = null;
                                             m_array = false;
@@ -121,7 +127,8 @@ namespace GameDBEditorLibrary
                             });
                         }, GUI.backgroundColor, 100);
 
-                        UIHelpers.RenderHorizontalGroup(delegate {
+                        UIHelpers.RenderHorizontalGroup(delegate
+                        {
                             if (GUILayout.Button("Remove Table", GUILayout.Width(100)))
                             {
                                 string errorString = null;
@@ -171,7 +178,7 @@ namespace GameDBEditorLibrary
                             }
                         });
                     }
-                    else  if (!Application.isPlaying && m_editable && GUILayout.Button("Edit Table", GUILayout.Width(100)))
+                    else if (!Application.isPlaying && m_editable && GUILayout.Button("Edit Table", GUILayout.Width(100)))
                     {
                         m_editTable = true;
                         EventSystem.Instance.TriggerEvent(Events.EDIT_TABLE, m_tableName, m_editTable);
@@ -225,9 +232,11 @@ namespace GameDBEditorLibrary
                         break;
                 }
 
+                var supportedFieldTypes = DictionaryType.GetSupportedFieldTypes();
                 m_selectedDictionaryFieldType = UIHelpers.RenderDropDown("Field Type:", m_selectedDictionaryFieldType, DictionaryType.GetSupportedTypes(), new UIHelpers.FieldLayout(70, 200));
+                var selectedFieldType = supportedFieldTypes[m_selectedDictionaryFieldType];
 
-                switch ((FieldType)m_selectedDictionaryFieldType)
+                switch (selectedFieldType)
                 {
                     case FieldType.@enum:
                         valueTypeArg = RenderEnum(ref m_selectedDictionaryFieldEnum);
@@ -237,7 +246,7 @@ namespace GameDBEditorLibrary
                         break;
                 }
 
-                typeArg = new DictionaryType((KeyType)m_selectedDictionaryKeyType, keyTypeArg,(FieldType)m_selectedDictionaryFieldType, valueTypeArg);
+                typeArg = new DictionaryType((KeyType)m_selectedDictionaryKeyType, keyTypeArg, selectedFieldType, valueTypeArg);
             });
 
             return typeArg;
@@ -261,7 +270,7 @@ namespace GameDBEditorLibrary
                         break;
                     case KeyType.@enum:
 
-                        var names = Enum.GetNames((Type) tableKey.TypeArg);
+                        var names = Enum.GetNames((Type)tableKey.TypeArg);
                         m_enumKey = UIHelpers.RenderDropDown("Key:", m_enumKey, names, new UIHelpers.FieldLayout(40, 240));
 
                         m_stringKey = null;

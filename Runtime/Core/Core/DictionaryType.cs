@@ -12,15 +12,16 @@ namespace GameDBLibrary
         public FieldType ValueType { get; }
         public object ValueTypeArg { get; }
 
+        public static FieldType[] GetSupportedFieldTypes()
+        {
+            return Enum.GetValues(typeof(FieldType)).Cast<FieldType>()
+                .Where(type => type != FieldType.dictionary).ToArray();
+        }
+
         public static string[] GetSupportedTypes()
         {
-            var typeNames = Enum.GetNames(typeof(FieldType)).ToList();
-
-            typeNames[(int)FieldType.tableRef] = "Table Reference";
-
-            typeNames.Remove(FieldType.dictionary.ToString());
-
-            return typeNames.ToArray();
+            return GetSupportedFieldTypes().Select(type =>
+                type == FieldType.tableRef ? "Table Reference" : type.ToString()).ToArray();
         }
 
         public DictionaryType(KeyType keyType, object keyTypeArg, FieldType valueType, object valueTypeArg)

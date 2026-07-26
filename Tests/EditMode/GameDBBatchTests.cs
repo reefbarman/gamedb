@@ -314,7 +314,7 @@ namespace GameDBLibrary.Tests
         {
             CreateDatabase();
             File.WriteAllText(m_schemaAbsolutePath,
-                File.ReadAllText(m_schemaAbsolutePath).Replace("\"formatVersion\": 3", "\"formatVersion\": 4"));
+                File.ReadAllText(m_schemaAbsolutePath).Replace("\"formatVersion\": 4", "\"formatVersion\": 5"));
             var dataBefore = File.ReadAllBytes(m_databaseAbsolutePath);
             var schemaBefore = File.ReadAllBytes(m_schemaAbsolutePath);
 
@@ -329,7 +329,7 @@ namespace GameDBLibrary.Tests
             Assert.That(result.CommitStatus, Is.EqualTo(GameDBBatchCommitStatus.NotAttempted));
             Assert.That(result.FilesCommitted, Is.False);
             Assert.That(result.Snapshot, Is.Null);
-            Assert.That(result.Message, Does.Contain("format version 4").And.Contain("supported version 3"));
+            Assert.That(result.Message, Does.Contain("format version 5").And.Contain("supported version 4"));
             Assert.That(File.ReadAllBytes(m_databaseAbsolutePath), Is.EqualTo(dataBefore));
             Assert.That(File.ReadAllBytes(m_schemaAbsolutePath), Is.EqualTo(schemaBefore));
         }

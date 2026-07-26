@@ -54,7 +54,7 @@ namespace GameDBLibrary.Tests
 
             Assert.That(result.Success, Is.True, result.Message);
             Assert.That(result.Content, Does.Contain("## Schema format contract"));
-            Assert.That(result.Content, Does.Contain("\"formatVersion\": 3"));
+            Assert.That(result.Content, Does.Contain("\"formatVersion\": 4"));
             Assert.That(result.Content, Does.Contain("GameDBSaveRequest.SchemaJson"));
         }
 

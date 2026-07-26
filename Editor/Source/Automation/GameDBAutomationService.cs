@@ -462,6 +462,10 @@ namespace GameDBEditorLibrary.Automation
                         : GameDBDocument.CreateNewReplacement(
                             path.AssetPath, request.DataJson, request.SchemaJson);
                 }
+                catch (GameDBSchemaFormatException exception)
+                {
+                    return Failure("save", path.AssetPath, exception.Message);
+                }
                 catch (FormatException)
                 {
                     return Failure("save", path.AssetPath, "DataJson or SchemaJson could not be imported.");

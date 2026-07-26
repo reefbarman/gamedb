@@ -69,6 +69,12 @@ public sealed class LoadGameData : MonoBehaviour
 
 The generated load path is relative to a `Resources` folder and omits the `.json` extension.
 
+## Schema format version
+
+Every `.schema.json` file requires a root-level integer `"formatVersion": 1`. GameDB writes this marker when it creates or saves a database and validates it before loading any schema, data, editor state, or automation operation.
+
+Unversioned, malformed, and newer schema formats are refused without rewriting either database file. A newer format means the project must be opened with a newer GameDB package. All schemas authored for this release must use format version `1`.
+
 ## Supported data
 
 GameDB supports:

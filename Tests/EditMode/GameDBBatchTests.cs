@@ -310,6 +310,31 @@ namespace GameDBLibrary.Tests
         }
 
         [Test]
+        public void ApplyBatch_MapsUnsupportedSchemaFormatToLoadFailedWithoutWriting()
+        {
+            CreateDatabase();
+            File.WriteAllText(m_schemaAbsolutePath,
+                File.ReadAllText(m_schemaAbsolutePath).Replace("\"formatVersion\": 1", "\"formatVersion\": 2"));
+            var dataBefore = File.ReadAllBytes(m_databaseAbsolutePath);
+            var schemaBefore = File.ReadAllBytes(m_schemaAbsolutePath);
+
+            var result = GameDBAutomationService.ApplyBatch(new GameDBBatchRequest
+            {
+                DatabasePath = m_databasePath,
+                Operations = new List<GameDBBatchOperation> { AddTable("Items") }
+            });
+
+            Assert.That(result.Success, Is.False);
+            Assert.That(result.FailureKind, Is.EqualTo(GameDBBatchFailureKind.LoadFailed));
+            Assert.That(result.CommitStatus, Is.EqualTo(GameDBBatchCommitStatus.NotAttempted));
+            Assert.That(result.FilesCommitted, Is.False);
+            Assert.That(result.Snapshot, Is.Null);
+            Assert.That(result.Message, Does.Contain("format version 2").And.Contain("supported version 1"));
+            Assert.That(File.ReadAllBytes(m_databaseAbsolutePath), Is.EqualTo(dataBefore));
+            Assert.That(File.ReadAllBytes(m_schemaAbsolutePath), Is.EqualTo(schemaBefore));
+        }
+
+        [Test]
         public void ApplyBatch_RecoveryRequiredReturnsArtifactPathsWithoutLoading()
         {
             CreateDatabase();

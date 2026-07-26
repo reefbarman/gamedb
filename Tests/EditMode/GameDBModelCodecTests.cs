@@ -26,6 +26,57 @@ namespace GameDBLibrary.Tests
         }
 
         [Test]
+        public void Serialize_WritesCurrentSchemaFormatVersion()
+        {
+            var serialized = GameDBModelCodec.Serialize(CreateRepresentativeDatabase());
+            var schema = (IDictionary<string, object>)JsonSerialization.Deserialize(serialized.SchemaJson);
+
+            Assert.That(schema["formatVersion"], Is.EqualTo((long)GameDBSchemaFormat.CurrentVersion));
+        }
+
+        [TestCase("{\"tables\":{},\"scope\":\"Test\",\"localizationDB\":false}")]
+        [TestCase("{\"formatVersion\":null,\"tables\":{},\"scope\":\"Test\",\"localizationDB\":false}")]
+        [TestCase("{\"formatVersion\":\"1\",\"tables\":{},\"scope\":\"Test\",\"localizationDB\":false}")]
+        [TestCase("{\"formatVersion\":1.5,\"tables\":{},\"scope\":\"Test\",\"localizationDB\":false}")]
+        [TestCase("{\"formatVersion\":0,\"tables\":{},\"scope\":\"Test\",\"localizationDB\":false}")]
+        [TestCase("{\"formatVersion\":-1,\"tables\":{},\"scope\":\"Test\",\"localizationDB\":false}")]
+        [TestCase("{\"formatVersion\":2147483648,\"tables\":{},\"scope\":\"Test\",\"localizationDB\":false}")]
+        public void Import_RejectsMissingOrMalformedSchemaFormatVersion(string schemaJson)
+        {
+            var exception = Assert.Throws<GameDBSchemaFormatException>(() =>
+                GameDBModelCodec.Import("{\"tables\":{}}", schemaJson));
+
+            Assert.That(exception.SupportedVersion, Is.EqualTo(GameDBSchemaFormat.CurrentVersion));
+            Assert.That(exception.Message, Does.Contain("formatVersion"));
+        }
+
+        [Test]
+        public void Import_RejectsNewerFormatBeforeHydratingSchema()
+        {
+            const string schemaJson = "{\"formatVersion\":2,\"tables\":\"invalid\",\"scope\":\"Test\",\"localizationDB\":false}";
+
+            var exception = Assert.Throws<GameDBSchemaFormatException>(() =>
+                GameDBModelCodec.Import("{\"tables\":{}}", schemaJson));
+
+            Assert.That(exception.FoundVersion, Is.EqualTo(2));
+            Assert.That(exception.SupportedVersion, Is.EqualTo(1));
+            Assert.That(exception.Message, Does.Contain("newer").And.Contain("version 2").And.Contain("version 1"));
+            Assert.That(exception.Message, Does.Contain("newer GameDB package"));
+        }
+
+        [Test]
+        public void Import_CurrentFormatVersionRoundTripsCanonically()
+        {
+            var serialized = GameDBModelCodec.Serialize(CreateRepresentativeDatabase());
+            var imported = GameDBModelCodec.Import(serialized.DataJson, serialized.SchemaJson);
+            var roundTripped = GameDBModelCodec.Serialize(imported);
+
+            Assert.That(roundTripped.SchemaJson, Is.EqualTo(serialized.SchemaJson));
+            Assert.That(roundTripped.DataJson, Is.EqualTo(serialized.DataJson));
+            Assert.That(roundTripped.Revision, Is.EqualTo(serialized.Revision));
+        }
+
+        [Test]
         public void CreateDetachedModel_ReturnsIndependentMutableGraph()
         {
             var source = CreateRepresentativeDatabase();

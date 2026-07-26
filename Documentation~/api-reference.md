@@ -101,6 +101,12 @@ public enum KeyType { @enum, @string }
 
 Enum member names are part of the serialized schema/code-generation contract. Use the enum members rather than relying on their current numeric ordinals.
 
+### Schema file format
+
+Editor-authored `.schema.json` files require a root-level positive JSON integer `formatVersion`. The current and only supported value is `1`; it is independent of the package's SemVer version. GameDB validates it before hydrating schema tables or data. Missing, malformed, and newer values fail the editor/document load without rewriting either file. A greater value reports that a newer GameDB package is required.
+
+`GameDBAutomationService.Save` applies the same rule to `GameDBSaveRequest.SchemaJson`, including new-file and dry-run requests. Expected format failures are returned through the operation's normal failure result: general operations expose the actionable `Message`, while Batch, Query, and CSV classify load failures through their existing failure kinds and error codes.
+
 ### Table references
 
 Generated table-reference properties expose the accessor rather than only the referenced row:
@@ -259,7 +265,7 @@ public static class GameDBAutomationService
 
 `Load` is an alias for `Inspect` and reports `Operation == "inspect"`. Expected bad input, invalid paths, conflicts, validation failures, and caught implementation exceptions are represented by `Success == false` and `Message`; general automation operations expose structured validation details through `Issues`, while Query uses `GameDBQueryResult.FailureKind` and `Errors`. Callers should not rely on exceptions for normal failure handling.
 
-`Inspect` can return `Success == true` with non-empty validation issues; use `Validate` when validity must determine success. `ExportJson` can return `Success == false` while still supplying serialized data/schema JSON and issues. Early failures generally have no snapshot/issues, while validation-blocked operations can return a prospective snapshot and populated issues.
+`Inspect` can return `Success == true` with non-empty validation issues; use `Validate` when validity must determine success. `ExportJson` can return `Success == false` while still supplying serialized data/schema JSON and issues. Exported schema JSON includes the required current `formatVersion` and can be supplied to a later guarded `Save`. Early failures generally have no snapshot/issues, while validation-blocked operations can return a prospective snapshot and populated issues.
 
 #### Query API
 

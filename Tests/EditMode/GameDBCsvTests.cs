@@ -89,6 +89,38 @@ namespace GameDBLibrary.Tests
         }
 
         [Test]
+        public void Csv_MapsUnsupportedSchemaFormatToLoadFailedBeforeCsvValidation()
+        {
+            CreateScalarDatabase();
+            File.WriteAllText(m_schemaAbsolutePath,
+                File.ReadAllText(m_schemaAbsolutePath).Replace("\"formatVersion\": 1", "\"formatVersion\": 2"));
+            var dataBefore = File.ReadAllBytes(m_databaseAbsolutePath);
+            var schemaBefore = File.ReadAllBytes(m_schemaAbsolutePath);
+
+            var exported = GameDBAutomationService.ExportCsv(new GameDBCsvExportRequest
+            {
+                DatabasePath = m_databasePath,
+                TableName = "Items"
+            });
+            var imported = GameDBAutomationService.ImportCsv(new GameDBCsvImportRequest
+            {
+                DatabasePath = m_databasePath,
+                TableName = "Items",
+                CsvText = "__key,Name\r\nSword,Sword",
+                Mode = GameDBCsvImportMode.Upsert
+            });
+
+            Assert.That(exported.Success, Is.False);
+            Assert.That(exported.FailureKind, Is.EqualTo(GameDBCsvFailureKind.LoadFailed));
+            Assert.That(exported.Errors.Select(error => error.Code), Does.Contain("csv.loadFailed"));
+            Assert.That(exported.Message, Does.Contain("format version 2"));
+            AssertCsvFailure(imported, GameDBCsvFailureKind.LoadFailed, "csv.loadFailed");
+            Assert.That(imported.Message, Does.Contain("format version 2"));
+            Assert.That(File.ReadAllBytes(m_databaseAbsolutePath), Is.EqualTo(dataBefore));
+            Assert.That(File.ReadAllBytes(m_schemaAbsolutePath), Is.EqualTo(schemaBefore));
+        }
+
+        [Test]
         public void ImportCsv_UpsertAcceptsQuotedMultilineValuesAndPreservesOmittedData()
         {
             CreateScalarDatabase();

@@ -21,6 +21,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Hardened C# generation: generated database, table, and row types are now `partial`; schema strings are `const`; enum keys are `static readonly`; generated names are validated before writing; and complete scope output is staged and replaced so removed tables cannot leave stale source files.
 - Made runtime vector strings invariant-culture and reject non-finite components so editor automation and persisted data use deterministic wire values.
 - Made CSV the supported spreadsheet interchange path; retained the legacy Google Sheets script and networking path only as optional interoperability.
+- Established schema format version `1`: every `.schema.json` now carries a required `formatVersion`, and editor/automation loads refuse missing, malformed, or newer formats before hydrating or rewriting database files.
 
 Regenerate all GameDB C# classes after updating to `1.0.0-preview.2`; generated schema members and output replacement behavior are intentionally breaking changes from `1.0.0-preview.1`.
 

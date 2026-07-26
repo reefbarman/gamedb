@@ -26,6 +26,23 @@ Database and output paths must:
 
 Attempts to use rooted paths or `..` traversal outside `Assets` fail without writing.
 
+## Schema format contract
+
+Every schema root requires a positive JSON integer `formatVersion`. The current and only supported value is `1`:
+
+```json
+{
+  "formatVersion": 1,
+  "tables": {},
+  "scope": "Main",
+  "localizationDB": false
+}
+```
+
+GameDB validates this value before hydrating tables or data. Missing, null, string, fractional, non-positive, and out-of-range values are malformed. A value greater than `1` requires a newer GameDB package. These failures leave both database files unchanged and produce actionable load messages through Inspect/Validate/general mutations, `LoadFailed` through Batch/Query/CSV, or a failed raw Save result.
+
+`GameDBSaveRequest.SchemaJson` must include `"formatVersion": 1`, including for new files and dry runs. Supplying unversioned schema JSON is an error. `ExportJson` returns canonical versioned schema JSON suitable for a later guarded Save.
+
 ## Read operations
 
 ```csharp

@@ -47,6 +47,17 @@ namespace GameDBLibrary.Tests
         }
 
         [Test]
+        public void ReadDocument_AutomationDescribesSchemaFormatContract()
+        {
+            var result = GameDBDocumentationService.ReadDocument("automation");
+
+            Assert.That(result.Success, Is.True, result.Message);
+            Assert.That(result.Content, Does.Contain("## Schema format contract"));
+            Assert.That(result.Content, Does.Contain("\"formatVersion\": 1"));
+            Assert.That(result.Content, Does.Contain("GameDBSaveRequest.SchemaJson"));
+        }
+
+        [Test]
         public void ReadDocument_AutomationDescribesBatchContract()
         {
             var result = GameDBDocumentationService.ReadDocument("automation");

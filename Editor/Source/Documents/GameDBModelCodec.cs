@@ -70,11 +70,7 @@ namespace GameDBEditorLibrary.Documents
             {
                 AssemblyExplorer.Instance.Load();
                 var gameDB = new GameDB();
-                if (!gameDB.Import(dataJson, schemaJson))
-                {
-                    throw new FormatException("Database data or schema could not be imported.");
-                }
-
+                gameDB.ImportOrThrow(dataJson, schemaJson);
                 gameDB.LoadedPath = loadedPath;
                 return gameDB;
             }

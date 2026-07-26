@@ -7,6 +7,61 @@ using UnityEngine;
 
 namespace GameDBEditorLibrary
 {
+    internal sealed class GameDBSchemaFormatException : FormatException
+    {
+        internal int? FoundVersion { get; }
+        internal int SupportedVersion { get; }
+
+        internal GameDBSchemaFormatException(string message, int? foundVersion = null)
+            : base(message)
+        {
+            FoundVersion = foundVersion;
+            SupportedVersion = GameDBSchemaFormat.CurrentVersion;
+        }
+    }
+
+    internal static class GameDBSchemaFormat
+    {
+        internal const int CurrentVersion = 1;
+
+        internal static IDictionary<string, object> ParseAndValidate(string schemaJson)
+        {
+            if (!(JsonSerialization.Deserialize(schemaJson) is IDictionary<string, object> schema))
+            {
+                throw new FormatException("top level object not a dictionary");
+            }
+
+            if (!schema.TryGetValue("formatVersion", out var value))
+            {
+                throw new GameDBSchemaFormatException(
+                    $"Schema is missing required 'formatVersion'. Regenerate or recreate it with this GameDB package (supported format version: {CurrentVersion}).");
+            }
+
+            if (!(value is long versionValue) || versionValue <= 0 || versionValue > int.MaxValue)
+            {
+                throw new GameDBSchemaFormatException(
+                    $"Schema 'formatVersion' must be a positive 32-bit JSON integer (supported format version: {CurrentVersion}).");
+            }
+
+            var version = (int)versionValue;
+            if (version > CurrentVersion)
+            {
+                throw new GameDBSchemaFormatException(
+                    $"Schema format version {version} is newer than the supported version {CurrentVersion}. Open this project with a newer GameDB package.",
+                    version);
+            }
+
+            if (version < CurrentVersion)
+            {
+                throw new GameDBSchemaFormatException(
+                    $"Schema format version {version} is older than the supported version {CurrentVersion}. Recreate it with this GameDB package.",
+                    version);
+            }
+
+            return schema;
+        }
+    }
+
     internal class GameDB : Singleton<GameDB>, IGameDB
     {
         internal static List<GameDBInternal> RuntimeDBs = new List<GameDBInternal>();
@@ -24,86 +79,66 @@ namespace GameDBEditorLibrary
 
         public bool Load(string gameDBPath)
         {
-            var loaded = false;
             m_persistenceDocument = null;
-
             try
             {
                 var document = GameDBDocument.Load(ToAssetPath(gameDBPath));
                 var state = document.SerializeCurrent();
-                loaded = Import(state.DataJson, state.SchemaJson);
-                if (loaded)
-                {
-                    LoadedPath = gameDBPath;
-                    m_persistenceDocument = document;
-                }
+                ImportOrThrow(state.DataJson, state.SchemaJson);
+                LoadedPath = gameDBPath;
+                m_persistenceDocument = document;
+                return true;
             }
             catch (Exception e)
             {
                 Debug.LogError("failed to load gameDB: " + Path.Combine(Application.dataPath, gameDBPath));
                 Debug.LogException(e);
+                return false;
             }
-
-            return loaded;
         }
 
         public bool LoadRuntimeDB(int selectedInGameDBIndex, string gameDBPath)
         {
-            var loaded = false;
-
-            ScopeName = string.Empty;
-            LocalizationDB = false;
-            m_tables = null;
-
-            LoadedPath = string.Empty;
-            m_loadedInGameDB = -1;
-            m_persistenceDocument = null;
-
             try
             {
                 var schemaJSON = File.ReadAllText(Path.Combine(Application.dataPath, GetSchemaPath(gameDBPath)));
-
-                DeserializeSchema(schemaJSON);
-
-                ImportFromRuntimeDB(RuntimeDBs[selectedInGameDBIndex]);
-
+                var imported = DeserializeSchema(schemaJSON);
+                ImportFromRuntimeDB(imported.Tables, RuntimeDBs[selectedInGameDBIndex]);
+                ApplyImportedState(imported);
                 LoadedPath = gameDBPath;
                 m_loadedInGameDB = selectedInGameDBIndex;
-                loaded = true;
+                m_persistenceDocument = null;
+                return true;
             }
             catch (Exception e)
             {
                 Debug.LogError("failed to load gameDB: " + gameDBPath);
                 Debug.LogException(e);
+                return false;
             }
-
-            return loaded;
         }
 
         public bool Import(string jsonData, string jsonSchema)
         {
-            var loaded = false;
-
-            ScopeName = string.Empty;
-            LocalizationDB = false;
-            m_tables = null;
-
-            m_loadedInGameDB = -1;
-
             try
             {
-                DeserializeSchema(jsonSchema);
-                GameDBSerializer.DeserializeData(m_tables, jsonData);
-
-                loaded = true;
+                ImportOrThrow(jsonData, jsonSchema);
+                return true;
             }
             catch (Exception e)
             {
                 Debug.LogError("failed to load imported gameDB");
                 Debug.LogException(e);
+                return false;
             }
+        }
 
-            return loaded;
+        internal void ImportOrThrow(string jsonData, string jsonSchema)
+        {
+            var imported = DeserializeSchema(jsonSchema);
+            GameDBSerializer.DeserializeData(imported.Tables, jsonData);
+            ApplyImportedState(imported);
+            m_loadedInGameDB = -1;
         }
 
         public bool AddTable(string tableName, KeyType type, object typeArg = null)
@@ -360,40 +395,41 @@ namespace GameDBEditorLibrary
             }
         }
 
-        private void DeserializeSchema(string schemaJSON)
+        private static ImportedState DeserializeSchema(string schemaJSON)
         {
-            var tables = new Dictionary<string, TableBase>();
+            var schema = GameDBSchemaFormat.ParseAndValidate(schemaJSON);
+            var imported = new ImportedState();
 
-            if (!(JsonSerialization.Deserialize(schemaJSON) is IDictionary<string, object> gameDBSchemaDic))
+            if (schema.ContainsKey("scope"))
             {
-                throw new FormatException("top level object not a dictionary");
+                imported.ScopeName = schema["scope"] as string;
             }
 
-            if (gameDBSchemaDic.ContainsKey("scope"))
+            if (schema.ContainsKey("localizationDB"))
             {
-                ScopeName = gameDBSchemaDic["scope"] as string;
+                imported.LocalizationDB = (bool)schema["localizationDB"];
             }
 
-            if (gameDBSchemaDic.ContainsKey("localizationDB"))
-            {
-                LocalizationDB = (bool)gameDBSchemaDic["localizationDB"];
-            }
-
-            //TODO: test how this handles no tables key
-            if (!(gameDBSchemaDic["tables"] is IDictionary<string, object> tablesObjDic))
+            if (!(schema["tables"] is IDictionary<string, object> tablesObjDic))
             {
                 throw new FormatException("gamedb tables object not a dictionary");
             }
 
             foreach (var tablePair in tablesObjDic)
             {
-                TableModel tableModel = new TableModel(tablePair.Key);
+                var tableModel = new TableModel(tablePair.Key);
                 tableModel.DeserializeSchema(tablePair.Value);
-
-                tables.Add(tablePair.Key, tableModel);
+                imported.Tables.Add(tablePair.Key, tableModel);
             }
 
-            m_tables = tables;
+            return imported;
+        }
+
+        private void ApplyImportedState(ImportedState imported)
+        {
+            ScopeName = imported.ScopeName;
+            LocalizationDB = imported.LocalizationDB;
+            m_tables = imported.Tables;
         }
 
         internal string SerializeSchema()
@@ -406,7 +442,12 @@ namespace GameDBEditorLibrary
                 tableSchemas.Add(tablePair.Key, table.SerializeSchema());
             }
 
-            var json = JsonSerialization.Serialize(new Dictionary<string, object> { { "tables", tableSchemas }, { "scope", ScopeName }, { "localizationDB", LocalizationDB } });
+            var json = JsonSerialization.Serialize(new Dictionary<string, object> {
+                { "formatVersion", GameDBSchemaFormat.CurrentVersion },
+                { "tables", tableSchemas },
+                { "scope", ScopeName },
+                { "localizationDB", LocalizationDB }
+            });
             json = JsonHelper.FormatJson(json);
 
             return json;
@@ -428,9 +469,9 @@ namespace GameDBEditorLibrary
             return json;
         }
 
-        private void ImportFromRuntimeDB(IGameDB runtimeDB)
+        private static void ImportFromRuntimeDB(Dictionary<string, TableBase> tables, IGameDB runtimeDB)
         {
-            foreach (var tablePair in m_tables)
+            foreach (var tablePair in tables)
             {
                 if (!runtimeDB.Tables.ContainsKey(tablePair.Key))
                 {
@@ -441,6 +482,13 @@ namespace GameDBEditorLibrary
             }
         }
 
+        private sealed class ImportedState
+        {
+            internal string ScopeName { get; set; } = string.Empty;
+            internal bool LocalizationDB { get; set; }
+            internal Dictionary<string, TableBase> Tables { get; }
+                = new Dictionary<string, TableBase>();
+        }
 
         private static string GetSchemaPath(string gameDBPath)
         {

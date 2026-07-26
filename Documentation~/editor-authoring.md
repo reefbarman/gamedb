@@ -12,6 +12,8 @@ Open **Window → GameDB → Open Editor**.
 
 Keep both files under `Assets`. A `Resources` folder is recommended when generated runtime code will load the data with `Resources.Load`.
 
+Every schema authored for this release requires a root-level integer `"formatVersion": 1`. The editor checks the marker before loading tables or data. Missing, malformed, or newer versions are refused without rewriting either file; a newer version requires a newer GameDB package.
+
 Registered database paths and other editor preferences are project-scoped; they are not stored in the package installation.
 
 ## Scope and generated namespace

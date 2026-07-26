@@ -657,6 +657,25 @@ namespace GameDBLibrary.Tests
         }
 
         [Test]
+        public void Query_MapsUnsupportedSchemaFormatToLoadFailed()
+        {
+            CreateRepresentativeDatabase();
+            File.WriteAllText(m_schemaAbsolutePath,
+                File.ReadAllText(m_schemaAbsolutePath).Replace("\"formatVersion\": 1", "\"formatVersion\": 2"));
+
+            var result = GameDBAutomationService.Query(new GameDBQueryRequest
+            {
+                DatabasePath = m_databasePath,
+                Tables = OneTable("Items")
+            });
+
+            AssertFailure(result, GameDBQueryFailureKind.LoadFailed, "database.loadFailed");
+            Assert.That(result.Errors.Single().Message,
+                Does.Contain("format version 2").And.Contain("supported version 1"));
+            Assert.That(result.Tables, Is.Empty);
+        }
+
+        [Test]
         public void Query_MapsPathLoadAndRecoveryFailures()
         {
             var invalidPath = GameDBAutomationService.Query(new GameDBQueryRequest

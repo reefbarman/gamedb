@@ -71,6 +71,63 @@ namespace GameDBLibrary.Tests
         }
 
         [Test]
+        public void UnsupportedSchemaFormatFailsAutomationLoadsWithoutWritingFiles()
+        {
+            CreateDatabase();
+            File.WriteAllText(m_schemaAbsolutePath,
+                File.ReadAllText(m_schemaAbsolutePath).Replace("\"formatVersion\": 1", "\"formatVersion\": 2"));
+            var dataBefore = File.ReadAllBytes(m_databaseAbsolutePath);
+            var schemaBefore = File.ReadAllBytes(m_schemaAbsolutePath);
+
+            var inspected = GameDBAutomationService.Inspect(m_databasePath);
+            var validated = GameDBAutomationService.Validate(m_databasePath);
+            var mutated = GameDBAutomationService.AddTable(new GameDBTableRequest
+            {
+                DatabasePath = m_databasePath,
+                TableName = "Items"
+            });
+
+            foreach (var result in new[] { inspected, validated, mutated })
+            {
+                Assert.That(result.Success, Is.False);
+                Assert.That(result.Message,
+                    Does.Contain("format version 2").And.Contain("supported version 1")
+                        .And.Contain("newer GameDB package"));
+                AssertGenericFailure(result);
+            }
+            Assert.That(File.ReadAllBytes(m_databaseAbsolutePath), Is.EqualTo(dataBefore));
+            Assert.That(File.ReadAllBytes(m_schemaAbsolutePath), Is.EqualTo(schemaBefore));
+        }
+
+        [Test]
+        public void Save_RequiresSchemaFormatVersionAndPreservesOtherGenericImportFailures()
+        {
+            const string dataJson = "{\"tables\":{}}";
+            var missingVersion = GameDBAutomationService.Save(new GameDBSaveRequest
+            {
+                DatabasePath = m_databasePath,
+                DataJson = dataJson,
+                SchemaJson = "{\"tables\":{},\"scope\":\"Replacement\",\"localizationDB\":false}"
+            });
+            var malformedSchema = GameDBAutomationService.Save(new GameDBSaveRequest
+            {
+                DatabasePath = m_databasePath,
+                DataJson = dataJson,
+                SchemaJson = "{\"formatVersion\":1,\"tables\":\"invalid\"}"
+            });
+
+            Assert.That(missingVersion.Success, Is.False);
+            Assert.That(missingVersion.Message, Does.Contain("missing required 'formatVersion'"));
+            AssertGenericFailure(missingVersion);
+            Assert.That(malformedSchema.Success, Is.False);
+            Assert.That(malformedSchema.Message,
+                Is.EqualTo("DataJson or SchemaJson could not be imported."));
+            AssertGenericFailure(malformedSchema);
+            Assert.That(File.Exists(m_databaseAbsolutePath), Is.False);
+            Assert.That(File.Exists(m_schemaAbsolutePath), Is.False);
+        }
+
+        [Test]
         public void Create_ReturnsProspectiveMetadataAndChangedPaths()
         {
             var result = GameDBAutomationService.Create(new GameDBCreateRequest
@@ -269,7 +326,7 @@ namespace GameDBLibrary.Tests
         {
             WriteDatabasePair(
                 "{\n  \"tables\": {}\n}",
-                "{\n  \"tables\": {},\n  \"scope\": \"\",\n  \"localizationDB\": false\n}");
+                "{\n  \"formatVersion\": 1,\n  \"tables\": {},\n  \"scope\": \"\",\n  \"localizationDB\": false\n}");
             var dataBefore = File.ReadAllBytes(m_databaseAbsolutePath);
             var schemaBefore = File.ReadAllBytes(m_schemaAbsolutePath);
             var revisionBefore = InspectRevision();
@@ -315,6 +372,42 @@ namespace GameDBLibrary.Tests
             AssertGenericFailure(result);
             Assert.That(persisted.Success, Is.True, persisted.Message);
             Assert.That(persisted.Snapshot.Tables.Select(table => table.Name), Does.Contain("Items"));
+        }
+
+        [Test]
+        public void SaveAndCreateOverwrite_RefuseUnsupportedExistingSchemaWithoutWriting()
+        {
+            CreateDatabase();
+            var exported = GameDBAutomationService.ExportJson(m_databasePath);
+            File.WriteAllText(m_schemaAbsolutePath,
+                File.ReadAllText(m_schemaAbsolutePath).Replace("\"formatVersion\": 1", "\"formatVersion\": 2"));
+            var dataBefore = File.ReadAllBytes(m_databaseAbsolutePath);
+            var schemaBefore = File.ReadAllBytes(m_schemaAbsolutePath);
+
+            var saved = GameDBAutomationService.Save(new GameDBSaveRequest
+            {
+                DatabasePath = m_databasePath,
+                DataJson = exported.DataJson,
+                SchemaJson = exported.SchemaJson,
+                Options = new GameDBOperationOptions { AllowDestructive = true }
+            });
+            var created = GameDBAutomationService.Create(new GameDBCreateRequest
+            {
+                DatabasePath = m_databasePath,
+                ScopeName = "Replacement",
+                Overwrite = true,
+                Options = new GameDBOperationOptions { AllowDestructive = true }
+            });
+
+            foreach (var result in new[] { saved, created })
+            {
+                Assert.That(result.Success, Is.False);
+                Assert.That(result.Message,
+                    Does.Contain("format version 2").And.Contain("supported version 1"));
+                AssertGenericFailure(result);
+            }
+            Assert.That(File.ReadAllBytes(m_databaseAbsolutePath), Is.EqualTo(dataBefore));
+            Assert.That(File.ReadAllBytes(m_schemaAbsolutePath), Is.EqualTo(schemaBefore));
         }
 
         [Test]

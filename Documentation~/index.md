@@ -18,9 +18,9 @@ GameDB is a schema-driven game-data editor, runtime library, C# generator, and e
 1. Open **Window → GameDB → Open Editor**.
 2. Create a database or add an existing `.json` file with its adjacent `.schema.json` file.
 3. Set a valid C# scope name.
-4. Create tables, fields, and rows, then save.
+4. Create tables, fields, and rows, then save. Unity-object values use GUID-backed references and are path-normalized on real saves.
 5. Generate C# classes under `Assets`.
-6. Put database data under a `Resources` folder when using the generated `Resources.Load` helper.
+6. Put database data and referenced Unity assets under `Resources` folders when using the generated `Resources.Load` helpers.
 
 Import **Basic GameDB** from the Package Manager's **Samples** tab for a small working database.
 

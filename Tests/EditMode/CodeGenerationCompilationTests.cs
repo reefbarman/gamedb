@@ -92,6 +92,9 @@ namespace GameDBLibrary.Tests
                 new DictionaryType(KeyType.@string, null, FieldType.@int, null)), Is.True);
             Assert.That(items.AddField("Category", FieldType.tableRef, false, "Categories"), Is.True);
             Assert.That(items.AddField("Icon", FieldType.unityObject, false), Is.True);
+            Assert.That(items.AddField("Icons", FieldType.unityObject, true), Is.True);
+            Assert.That(items.AddField("IconsBySlot", FieldType.dictionary, false,
+                new DictionaryType(KeyType.@string, null, FieldType.unityObject, null)), Is.True);
             Assert.That(items.AddKey("Sword"), Is.True);
 
             if (includeObsoleteTable)
@@ -140,11 +143,28 @@ namespace GameDBLibrary.Tests
             Assert.That(itemsType.GetProperty("PowerVal", BindingFlags.Instance | BindingFlags.Public), Is.Not.Null);
             Assert.That(itemsType.GetProperty("AttributesVal", BindingFlags.Instance | BindingFlags.Public), Is.Not.Null);
             Assert.That(itemsType.GetProperty("CategoryVal", BindingFlags.Instance | BindingFlags.Public), Is.Not.Null);
-            Assert.That(itemsType.GetProperty("IconPathVal", BindingFlags.Instance | BindingFlags.Public), Is.Not.Null);
-            Assert.That(itemsType.GetProperty("IconObjectVal", BindingFlags.Instance | BindingFlags.Public), Is.Not.Null);
+            AssertPropertyType(itemsType, "IconVal", typeof(UnityObjectReference));
+            AssertPropertyType(itemsType, "IconGuidVal", typeof(string));
+            AssertPropertyType(itemsType, "IconPathVal", typeof(string));
+            AssertPropertyType(itemsType, "IconObjectVal", typeof(UnityEngine.Object));
+            AssertPropertyType(itemsType, "IconsVal", typeof(System.Collections.Generic.List<UnityObjectReference>));
+            AssertPropertyType(itemsType, "IconsGuidVal", typeof(System.Collections.Generic.List<string>));
+            AssertPropertyType(itemsType, "IconsPathVal", typeof(System.Collections.Generic.List<string>));
+            AssertPropertyType(itemsType, "IconsObjectVal", typeof(System.Collections.Generic.List<UnityEngine.Object>));
+            AssertPropertyType(itemsType, "IconsBySlotVal",
+                typeof(System.Collections.Generic.Dictionary<string, GameDBLibraryUnity.UnityObjectAccessor>));
             Assert.That(localizationGameDBType.GetProperty("LocalizationLanguage", BindingFlags.Instance | BindingFlags.Public), Is.Not.Null);
             Assert.That(translationsType.GetProperty("TranslatedVal", BindingFlags.Instance | BindingFlags.Public), Is.Not.Null);
             Assert.That(translationsType.GetProperty("LanguageVal", BindingFlags.Instance | BindingFlags.Public), Is.Not.Null);
+        }
+
+        private static void AssertPropertyType(Type type, string propertyName,
+            Type expectedType)
+        {
+            var property = type.GetProperty(propertyName,
+                BindingFlags.Instance | BindingFlags.Public);
+            Assert.That(property, Is.Not.Null, $"Expected property '{type.FullName}.{propertyName}'.");
+            Assert.That(property.PropertyType, Is.EqualTo(expectedType));
         }
 
         private static Type RequireType(Assembly assembly, string typeName)

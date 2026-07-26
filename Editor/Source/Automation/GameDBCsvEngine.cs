@@ -334,8 +334,12 @@ namespace GameDBEditorLibrary.Automation
                 switch (field.FieldType)
                 {
                     case FieldType.@string:
-                    case FieldType.unityObject:
                         text = value as string;
+                        break;
+                    case FieldType.unityObject:
+                        text = value is UnityObjectReference reference
+                            ? JsonSerialization.Serialize(UnityObjectReferenceWire.Serialize(reference))
+                            : null;
                         break;
                     case FieldType.tableRef:
                         text = value == null || Equals(value, FieldBase.NullRefToken)
@@ -404,9 +408,24 @@ namespace GameDBEditorLibrary.Automation
             switch (field.FieldType)
             {
                 case FieldType.@string:
-                case FieldType.unityObject:
                     value = text;
                     return true;
+                case FieldType.unityObject:
+                    try
+                    {
+                        var wireValue = JsonSerialization.Deserialize(text);
+                        if (UnityObjectReferenceWire.TryParse(wireValue, out _))
+                        {
+                            value = wireValue;
+                            return true;
+                        }
+                    }
+                    catch (Exception)
+                    {
+                        error = $"Cell value is invalid for {field.FieldType}.";
+                        return false;
+                    }
+                    break;
                 case FieldType.tableRef:
                     if (text == FieldBase.NullRefToken)
                     {

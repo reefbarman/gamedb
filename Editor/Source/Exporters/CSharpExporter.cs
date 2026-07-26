@@ -307,7 +307,25 @@ namespace GameDBEditorLibrary
 
                             var typeName = $"{@namespace}{typeof(UnityObjectAccessor).Name}";
 
-                            accessors.Add(new Accessor { Name = fieldPair.Key, Type = typeName, ReturnType = "string", FieldName = $"{fieldPair.Key}Path", IsArray = isArray, NameSuffix = "Path" });
+                            accessors.Add(new Accessor
+                            {
+                                Name = fieldPair.Key,
+                                Type = typeName,
+                                ReturnType = "global::GameDBLibrary.UnityObjectReference",
+                                FieldName = fieldPair.Key,
+                                IsArray = isArray
+                            });
+                            accessors.Add(new Accessor
+                            {
+                                Name = fieldPair.Key,
+                                Type = typeName,
+                                ReturnType = "string",
+                                FieldName = $"{fieldPair.Key}Guid",
+                                Getter = "GetGuid",
+                                IsArray = isArray,
+                                NameSuffix = "Guid"
+                            });
+                            accessors.Add(new Accessor { Name = fieldPair.Key, Type = typeName, ReturnType = "string", FieldName = $"{fieldPair.Key}Path", Getter = "GetPath", IsArray = isArray, NameSuffix = "Path" });
 
                             if (unity)
                             {
@@ -549,6 +567,10 @@ namespace GameDBEditorLibrary
 
                     if (fieldPair.Value.Type == FieldType.unityObject)
                     {
+                        RegisterGeneratedName(rowMembers, fieldName + "Val", $"field '{fieldName}' value accessor",
+                            "member.name.collision", issues, tableName, fieldName);
+                        RegisterGeneratedName(rowMembers, fieldName + "GuidVal", $"field '{fieldName}' GUID accessor",
+                            "member.name.collision", issues, tableName, fieldName);
                         RegisterGeneratedName(rowMembers, fieldName + "PathVal", $"field '{fieldName}' path accessor",
                             "member.name.collision", issues, tableName, fieldName);
                         if (unity)

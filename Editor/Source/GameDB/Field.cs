@@ -30,15 +30,7 @@ namespace GameDBEditorLibrary
 
             var type = schemaDic["type"] as string;
 
-            // Backwards compatibility for original prefab type to unityObject type
-            if (type == "prefab")
-            {
-                m_type = FieldType.unityObject;
-            }
-            else
-            {
-                m_type = (FieldType)Enum.Parse(typeof(FieldType), type);
-            }
+            m_type = (FieldType)Enum.Parse(typeof(FieldType), type);
 
             m_array = (bool)schemaDic["isArray"];
 

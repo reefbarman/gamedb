@@ -166,6 +166,11 @@ namespace GameDBEditorLibrary.Documents
                 return value;
             }
 
+            if (value is UnityObjectReference unityObjectReference)
+            {
+                return unityObjectReference;
+            }
+
             if (value is Color color)
             {
                 return new Color(color.r, color.g, color.b, color.a);

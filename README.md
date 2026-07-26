@@ -71,9 +71,9 @@ The generated load path is relative to a `Resources` folder and omits the `.json
 
 ## Schema format version
 
-Every `.schema.json` file requires a root-level integer `"formatVersion": 1`. GameDB writes this marker when it creates or saves a database and validates it before loading any schema, data, editor state, or automation operation.
+Every `.schema.json` file requires the root-level integer `"formatVersion": 2`. GameDB writes this marker when it creates or saves a database and validates it before loading any schema, data, editor state, or automation operation.
 
-Unversioned, malformed, and newer schema formats are refused without rewriting either database file. A newer format means the project must be opened with a newer GameDB package. All schemas authored for this release must use format version `1`.
+Unversioned, malformed, older, and newer schema formats are refused without rewriting either database file. Format version `2` is the only supported schema contract.
 
 ## Supported data
 
@@ -81,7 +81,7 @@ GameDB supports:
 
 - strings, 32-bit integers, floats, and booleans
 - colors and 2D/3D/4D vectors
-- Unity object resource paths
+- Unity object references stored as exact `{ "guid": "...", "path": "Assets/.../Resources/..." }` objects; both strings are empty when unassigned
 - project enums
 - references to rows in another table
 - arrays of non-dictionary field types
@@ -162,7 +162,7 @@ Use `DryRun` to validate a prospective change without writing. Renames, deletes,
 
 ## CSV and Google Sheets
 
-Use `GameDBAutomationService.ExportCsv` and `ImportCsv` for supported one-table spreadsheet interchange. The RFC 4180 dialect uses a reserved `__key` column, invariant scalar and enum values, reversible formula-injection protection, explicit `Replace`/`Upsert` modes, revision guards, and transactional validation. Arrays and dictionaries are intentionally deferred. See the [CSV contract](Documentation~/automation.md#csv-import-and-export).
+Use `GameDBAutomationService.ExportCsv` and `ImportCsv` for supported one-table spreadsheet interchange. The RFC 4180 dialect uses a reserved `__key` column, invariant scalar and enum values, compact canonical JSON for Unity-object cells, reversible formula-injection protection, explicit `Replace`/`Upsert` modes, revision guards, and transactional validation. Arrays and dictionaries are intentionally deferred. See the [CSV contract](Documentation~/automation.md#csv-import-and-export).
 
 A legacy-compatible Google Apps Script remains as an **optional** interoperability tool. It requires deployment as a web app and its original protocol has no authentication. Do not expose it publicly without adding your own authorization checks. See [`Documentation~/google-sheets.md`](Documentation~/google-sheets.md).
 

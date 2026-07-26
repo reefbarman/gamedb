@@ -12,7 +12,7 @@ For scope `Main`, generated types use the `GameDBMain` namespace:
 - Generated `GameDB`, row, and table classes are `partial`, so game code can extend them in separate files without editing generated output.
 - `ItemsSchema.TableName`, `ItemsSchema.Field<FieldName>`, and string-key `ItemsSchema.Key<RowKey>` members are `const string`; enum-key members are `static readonly` values of the configured enum type.
 
-Generated files are derived output and must not be edited by hand. Generation validates scope, table, field, row-key, member, type, and case-insensitive filename collisions before writing. It stages a complete scope and replaces the existing scope directory, preserving `.cs.meta` files for unchanged generated filenames while deleting stale files for removed tables. Regenerate all classes after updating from `1.0.0-preview.1`.
+Generated files are derived output and must not be edited by hand. Generation validates scope, table, field, row-key, member, type, and case-insensitive filename collisions before writing. It stages a complete scope and replaces the existing scope directory, preserving `.cs.meta` files for unchanged generated filenames while deleting stale files for removed tables.
 
 ## Construct and load a database
 
@@ -143,6 +143,8 @@ List<string> tags = sword.TagsVal;
 
 All non-dictionary field types may be arrays and are exposed as `List<T>`. Dictionaries cannot be arrays. A dictionary is exposed as `Dictionary<TKey,TValue>`; keys are `string` or a configured enum, and values may be any supported non-dictionary field type. Returned lists and dictionaries are cached mutable objects owned by that row; treat them as read-only game data unless temporary local mutation is intentional.
 
+Unity-object scalar and array fields have parallel generated projections: `<Field>Val` returns `UnityObjectReference` values, `<Field>GuidVal` returns GUID strings, and `<Field>PathVal` returns paths. Unity-enabled generation additionally emits `<Field>ObjectVal`; core-only generation contains no `UnityEngine.Object` member.
+
 ## Table references
 
 A table-reference property exposes the accessor, not the referenced row directly:
@@ -164,24 +166,26 @@ Arrays of references are `List<TableReferenceAccessor<TKey,TRow>>`. Dictionary t
 
 ## Unity object fields
 
-The editor stores the selected asset's project path, for example:
+A persisted Unity-object value is the exact JSON object:
 
-```text
-Assets/Game/Resources/Items/Sword.prefab
+```json
+{"guid":"0123456789abcdef0123456789abcdef","path":"Assets/Game/Resources/Items/Sword.prefab"}
 ```
+
+The unassigned value is `{"guid":"","path":""}`. Plain strings, `null`, half-empty references, missing or extra keys, malformed GUIDs, and paths outside a single actual `Resources` directory are rejected during import.
 
 For a scalar field named `Icon`, Unity generation produces:
 
 ```csharp
+UnityObjectReference value = row.IconVal;
+string guid = row.IconGuidVal;
 string path = row.IconPathVal;
 UnityEngine.Object asset = row.IconObjectVal;
 ```
 
-`IconObjectVal` strips everything through `Resources/` and the final file extension, then calls `Resources.Load`, equivalent to `Resources.Load("Items/Sword")` for the example above. Cast the result to the expected Unity type.
+`IconObjectVal` is emitted only for Unity-enabled generation. It extracts the extensionless path after the validated `Resources` segment and calls `Resources.Load`, equivalent to `Resources.Load("Items/Sword")` for the example above. An empty reference returns `null`; cast a loaded result to the expected Unity type.
 
-The editor's current validation accepts paths containing the case-sensitive text `Resources`; place assets in an actual `Resources` directory so Unity can load them. Moving or renaming an asset does not update stored paths. A valid path whose resource cannot be found returns `null`. The runtime accessor assumes the stored string contains `Resources` and a file extension; malformed or empty paths can throw while deriving the Resources path.
-
-Unity-object arrays generate `List<string>` `<Field>PathVal` and `List<UnityEngine.Object>` `<Field>ObjectVal`. Unity-object dictionary values are `GameDBLibraryUnity.UnityObjectAccessor`; use `GetValue()` for the stored path and `GetObject()` for the asset.
+Unity-object arrays expose corresponding `List<UnityObjectReference>`, `List<string>` GUID/path, and Unity-only `List<UnityEngine.Object>` projections. Each projection has its own row-cache entry. Unity-object dictionary values remain `UnityObjectAccessor` objects: use `GetValue()` for the canonical reference, `GetGuid()`, `GetPath()`, and—on `GameDBLibraryUnity.UnityObjectAccessor`—`GetObject()`.
 
 ## Play Mode editing and hot reload
 
@@ -228,4 +232,4 @@ The supported generated Unity runtime path is JSON text loaded from `Resources` 
 
 - Binary, compressed, and encrypted GameDB build/load output was removed. Current generation emits no `BinaryGameDB` API.
 - This package does not provide, host, or validate the old remote deployment server. The editor deployment UI was removed. Residual runtime remote-update client APIs remain only as warning-only obsolete source-compatibility shims and will be removed in GameDB 1.0.0; they are not a supported publishing/runtime workflow for new projects.
-- GameDB does not provide automatic Addressables loading. Unity-object fields use `Resources.Load` only.
+- GameDB does not provide automatic Addressables loading. Only Unity-enabled `ObjectVal`/`GetObject()` projections load through `Resources.Load`; core-only output exposes value, GUID, and path data without a `UnityEngine.Object` API.

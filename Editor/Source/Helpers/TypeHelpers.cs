@@ -85,6 +85,20 @@ namespace GameDBEditorLibrary
                     {
                         return value.ToString();
                     }
+                case FieldType.unityObject:
+                    if (isArray)
+                    {
+                        var serializedList = new List<object>();
+                        foreach (var reference in (IList)value)
+                        {
+                            serializedList.Add(UnityObjectReferenceWire.Serialize(
+                                (UnityObjectReference)reference));
+                        }
+
+                        return serializedList;
+                    }
+
+                    return UnityObjectReferenceWire.Serialize((UnityObjectReference)value);
                 case FieldType.tableRef:
                     if (isArray)
                     {

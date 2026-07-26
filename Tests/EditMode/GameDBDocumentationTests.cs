@@ -53,8 +53,27 @@ namespace GameDBLibrary.Tests
 
             Assert.That(result.Success, Is.True, result.Message);
             Assert.That(result.Content, Does.Contain("## Schema format contract"));
-            Assert.That(result.Content, Does.Contain("\"formatVersion\": 1"));
+            Assert.That(result.Content, Does.Contain("\"formatVersion\": 2"));
             Assert.That(result.Content, Does.Contain("GameDBSaveRequest.SchemaJson"));
+        }
+
+        [Test]
+        public void ReadDocuments_DescribeGuidBackedUnityObjectContract()
+        {
+            var automation = GameDBDocumentationService.ReadDocument("automation");
+            var runtime = GameDBDocumentationService.ReadDocument("runtime");
+            var googleSheets = GameDBDocumentationService.ReadDocument("google-sheets");
+
+            Assert.That(automation.Success, Is.True, automation.Message);
+            Assert.That(runtime.Success, Is.True, runtime.Message);
+            Assert.That(googleSheets.Success, Is.True, googleSheets.Message);
+            Assert.That(automation.Content, Does.Contain("Compact canonical JSON"));
+            Assert.That(automation.Content, Does.Contain("string `guid` and `path` entries"));
+            Assert.That(runtime.Content, Does.Contain("IconGuidVal"));
+            Assert.That(runtime.Content, Does.Contain("UnityObjectReference"));
+            Assert.That(googleSheets.Content,
+                Does.Contain("rejects databases containing direct Unity-object fields"));
+            Assert.That(googleSheets.Content, Does.Contain("use CSV"));
         }
 
         [Test]

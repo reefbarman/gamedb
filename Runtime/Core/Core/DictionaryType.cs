@@ -56,22 +56,42 @@ namespace GameDBLibrary
 
         public bool IsValueValid(object value)
         {
-            return value is System.Collections.IDictionary;
+            if (!(value is IDictionary<string, object> dictionary))
+            {
+                return false;
+            }
+
+            var keyField = new FieldBase(string.Empty, TypeUtils.KeyTypeToFieldType(KeyType), false,
+                KeyType == KeyType.@enum ? KeyTypeArg : null);
+            var valueField = new FieldBase(string.Empty, ValueType, false,
+                ValueType == FieldType.@enum ? ValueTypeArg : null);
+            foreach (var entry in dictionary)
+            {
+                if (!keyField.IsValueValid(entry.Key) || !valueField.IsValueValid(entry.Value))
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         public object DeserializeValue(object val)
         {
-            var deserializedDict = new Dictionary<object, object>();
-
-            if (val is IDictionary<string, object> dict)
+            if (!(val is IDictionary<string, object> dict))
             {
-                foreach (var entry in dict)
-                {
-                    var key = TypeUtils.DeserializeValue(TypeUtils.KeyTypeToFieldType(KeyType), false, KeyType == KeyType.@enum ? (Type)KeyTypeArg : null, entry.Key);
-                    var value = TypeUtils.DeserializeValue(ValueType, false, ValueType == FieldType.@enum ? (Type)ValueTypeArg : null, entry.Value);
+                throw new FormatException("dictionary field value not a dictionary");
+            }
 
-                    deserializedDict.Add(key, value);
-                }
+            var deserializedDict = new Dictionary<object, object>();
+            foreach (var entry in dict)
+            {
+                var key = TypeUtils.DeserializeValue(TypeUtils.KeyTypeToFieldType(KeyType), false,
+                    KeyType == KeyType.@enum ? (Type)KeyTypeArg : null, entry.Key);
+                var value = TypeUtils.DeserializeValue(ValueType, false,
+                    ValueType == FieldType.@enum ? (Type)ValueTypeArg : null, entry.Value);
+
+                deserializedDict.Add(key, value);
             }
 
             return deserializedDict;

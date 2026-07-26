@@ -31,7 +31,8 @@ namespace GameDBLibrary.Tests
             var serialized = GameDBModelCodec.Serialize(CreateRepresentativeDatabase());
             var schema = (IDictionary<string, object>)JsonSerialization.Deserialize(serialized.SchemaJson);
 
-            Assert.That(schema["formatVersion"], Is.EqualTo((long)GameDBSchemaFormat.CurrentVersion));
+            Assert.That(GameDBSchemaFormat.CurrentVersion, Is.EqualTo(2));
+            Assert.That(schema["formatVersion"], Is.EqualTo(2L));
         }
 
         [TestCase("{\"tables\":{},\"scope\":\"Test\",\"localizationDB\":false}")]
@@ -53,15 +54,29 @@ namespace GameDBLibrary.Tests
         [Test]
         public void Import_RejectsNewerFormatBeforeHydratingSchema()
         {
-            const string schemaJson = "{\"formatVersion\":2,\"tables\":\"invalid\",\"scope\":\"Test\",\"localizationDB\":false}";
+            const string schemaJson = "{\"formatVersion\":3,\"tables\":\"invalid\",\"scope\":\"Test\",\"localizationDB\":false}";
 
             var exception = Assert.Throws<GameDBSchemaFormatException>(() =>
                 GameDBModelCodec.Import("{\"tables\":{}}", schemaJson));
 
-            Assert.That(exception.FoundVersion, Is.EqualTo(2));
-            Assert.That(exception.SupportedVersion, Is.EqualTo(1));
-            Assert.That(exception.Message, Does.Contain("newer").And.Contain("version 2").And.Contain("version 1"));
+            Assert.That(exception.FoundVersion, Is.EqualTo(3));
+            Assert.That(exception.SupportedVersion, Is.EqualTo(2));
+            Assert.That(exception.Message, Does.Contain("newer").And.Contain("version 3").And.Contain("version 2"));
             Assert.That(exception.Message, Does.Contain("newer GameDB package"));
+        }
+
+        [Test]
+        public void Import_RejectsOlderFormatBeforeHydratingSchema()
+        {
+            const string schemaJson = "{\"formatVersion\":1,\"tables\":\"invalid\",\"scope\":\"Test\",\"localizationDB\":false}";
+
+            var exception = Assert.Throws<GameDBSchemaFormatException>(() =>
+                GameDBModelCodec.Import("{\"tables\":{}}", schemaJson));
+
+            Assert.That(exception.FoundVersion, Is.EqualTo(1));
+            Assert.That(exception.SupportedVersion, Is.EqualTo(2));
+            Assert.That(exception.Message,
+                Does.Contain("older").And.Contain("version 1").And.Contain("version 2"));
         }
 
         [Test]
@@ -126,11 +141,132 @@ namespace GameDBLibrary.Tests
         }
 
         [Test]
+        public void Serialize_UnityObjectValuesUseExactLowercaseWireShape()
+        {
+            var serialized = GameDBModelCodec.Serialize(CreateUnityObjectDatabase());
+            var root = (IDictionary<string, object>)JsonSerialization.Deserialize(serialized.DataJson);
+            var tables = (IDictionary<string, object>)root["tables"];
+            var items = (IDictionary<string, object>)tables["Items"];
+            var sword = (IDictionary<string, object>)items["Sword"];
+
+            AssertReferenceWire(sword["Icon"], CanonicalGuid, CanonicalPath);
+            var icons = (List<object>)sword["Icons"];
+            AssertReferenceWire(icons[0], CanonicalGuid, CanonicalPath);
+            AssertReferenceWire(icons[1], string.Empty, string.Empty);
+            var iconsBySlot = (IDictionary<string, object>)sword["IconsBySlot"];
+            AssertReferenceWire(iconsBySlot["primary"], CanonicalGuid, CanonicalPath);
+        }
+
+        [Test]
+        public void Import_DeserializesUnityObjectScalarArrayAndDictionaryValues()
+        {
+            var serialized = GameDBModelCodec.Serialize(CreateUnityObjectDatabase());
+            var imported = GameDBModelCodec.Import(serialized.DataJson, serialized.SchemaJson);
+            var row = imported.Tables["Items"].Data["Sword"].Data;
+            var expected = new UnityObjectReference(CanonicalGuid, CanonicalPath);
+
+            Assert.That(row["Icon"], Is.EqualTo(expected));
+            var icons = (List<object>)row["Icons"];
+            Assert.That(icons, Has.Count.EqualTo(2));
+            Assert.That(icons[0], Is.EqualTo(expected));
+            Assert.That(icons[1], Is.SameAs(UnityObjectReference.Empty));
+            var iconsBySlot = (Dictionary<object, object>)row["IconsBySlot"];
+            Assert.That(iconsBySlot["primary"], Is.EqualTo(expected));
+            Assert.That(GameDBModelCodec.Serialize(imported).Revision,
+                Is.EqualTo(serialized.Revision));
+        }
+
+        [Test]
+        public void Import_RejectsMalformedUnityObjectInEveryContext()
+        {
+            var serialized = GameDBModelCodec.Serialize(CreateUnityObjectDatabase());
+            var root = (IDictionary<string, object>)JsonSerialization.Deserialize(serialized.DataJson);
+            var tables = (IDictionary<string, object>)root["tables"];
+            var items = (IDictionary<string, object>)tables["Items"];
+            var sword = (IDictionary<string, object>)items["Sword"];
+
+            sword["Icon"] = CanonicalPath;
+            Assert.Throws<FormatException>(() => GameDBModelCodec.Import(
+                JsonSerialization.Serialize(root), serialized.SchemaJson));
+
+            sword["Icon"] = ReferenceWire(CanonicalGuid, CanonicalPath);
+            sword["Icons"] = new List<object>
+            {
+                ReferenceWire(CanonicalGuid, CanonicalPath),
+                CanonicalPath
+            };
+            Assert.Throws<FormatException>(() => GameDBModelCodec.Import(
+                JsonSerialization.Serialize(root), serialized.SchemaJson));
+
+            sword["Icons"] = new List<object>
+            {
+                ReferenceWire(CanonicalGuid, CanonicalPath),
+                ReferenceWire(string.Empty, string.Empty)
+            };
+            sword["IconsBySlot"] = new Dictionary<string, object>
+            {
+                { "primary", ReferenceWire(CanonicalGuid, CanonicalPath) },
+                { "secondary", CanonicalPath }
+            };
+            Assert.Throws<FormatException>(() => GameDBModelCodec.Import(
+                JsonSerialization.Serialize(root), serialized.SchemaJson));
+        }
+
+        [Test]
         public void DetachValue_RejectsUnknownMutableTypes()
         {
             var exception = Assert.Throws<InvalidOperationException>(() => GameDBModelCodec.DetachValue(new UnknownMutableValue()));
 
             Assert.That(exception.Message, Does.Contain(typeof(UnknownMutableValue).FullName));
+        }
+
+        private const string CanonicalGuid = "0123456789abcdef0123456789abcdef";
+        private const string CanonicalPath = "Assets/Game/Resources/Items/Sword.asset";
+
+        private static GameDB CreateUnityObjectDatabase()
+        {
+            var gameDB = new GameDB();
+            gameDB.CreateInMemory("CodecTests/unity-objects.json");
+            gameDB.ScopeName = "UnityObjects";
+            Assert.That(gameDB.AddTable("Items", KeyType.@string), Is.True);
+            var items = (TableModel)gameDB.Tables["Items"];
+            Assert.That(items.AddField("Icon", FieldType.unityObject, false), Is.True);
+            Assert.That(items.AddField("Icons", FieldType.unityObject, true), Is.True);
+            Assert.That(items.AddField("IconsBySlot", FieldType.dictionary, false,
+                new DictionaryType(KeyType.@string, null, FieldType.unityObject, null)), Is.True);
+            Assert.That(items.AddKey("Sword"), Is.True);
+            Assert.That(items.SetValue("Sword", "Icon",
+                ReferenceWire(CanonicalGuid, CanonicalPath)), Is.True);
+            Assert.That(items.SetValue("Sword", "Icons", new List<object>
+            {
+                ReferenceWire(CanonicalGuid, CanonicalPath),
+                ReferenceWire(string.Empty, string.Empty)
+            }), Is.True);
+            Assert.That(items.SetValue("Sword", "IconsBySlot", new Dictionary<string, object>
+            {
+                { "primary", ReferenceWire(CanonicalGuid, CanonicalPath) }
+            }), Is.True);
+            return gameDB;
+        }
+
+        private static Dictionary<string, object> ReferenceWire(string guid, string path)
+        {
+            return new Dictionary<string, object>
+            {
+                { "guid", guid },
+                { "path", path }
+            };
+        }
+
+        private static void AssertReferenceWire(object value, string guid, string path)
+        {
+            var reference = (IDictionary<string, object>)value;
+            Assert.That(reference.Keys, Is.EquivalentTo(new[] { "guid", "path" }));
+            Assert.That(reference, Has.Count.EqualTo(2));
+            Assert.That(reference["guid"], Is.EqualTo(guid));
+            Assert.That(reference["path"], Is.EqualTo(path));
+            Assert.That(reference.ContainsKey("Guid"), Is.False);
+            Assert.That(reference.ContainsKey("Path"), Is.False);
         }
 
         private static GameDB CreateRepresentativeDatabase()

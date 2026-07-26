@@ -65,6 +65,24 @@ namespace GameDBLibrary
                         val = Enum.Parse(systemType, val as string);
                     }
                     break;
+                case FieldType.unityObject:
+                    if (isArray)
+                    {
+                        var listVal = val as List<object>;
+                        var referenceList = new List<object>();
+
+                        foreach (var referenceVal in listVal)
+                        {
+                            referenceList.Add(UnityObjectReferenceWire.Parse(referenceVal));
+                        }
+
+                        val = referenceList;
+                    }
+                    else
+                    {
+                        val = UnityObjectReferenceWire.Parse(val);
+                    }
+                    break;
                 case FieldType.color:
                     if (isArray)
                     {
@@ -255,11 +273,11 @@ namespace GameDBLibrary
                 case FieldType.unityObject:
                     if (isArray)
                     {
-                        defaultValue = new List<string>();
+                        defaultValue = new List<UnityObjectReference>();
                     }
                     else
                     {
-                        defaultValue = string.Empty;
+                        defaultValue = UnityObjectReference.Empty;
                     }
                     break;
                 case FieldType.dictionary:
@@ -312,7 +330,7 @@ namespace GameDBLibrary
                     type = typeof(Vector4);
                     break;
                 case FieldType.unityObject:
-                    type = typeof(String);
+                    type = typeof(UnityObjectReference);
                     break;
                 case FieldType.dictionary:
                     type = overrideType;

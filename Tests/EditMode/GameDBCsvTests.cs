@@ -31,7 +31,7 @@ namespace GameDBLibrary.Tests
             m_databaseAbsolutePath = Path.Combine(m_assetFolderAbsolutePath, "database.json");
             m_schemaPath = $"{m_assetFolderPath}/database.schema.json";
             m_schemaAbsolutePath = Path.Combine(m_assetFolderAbsolutePath, "database.schema.json");
-            Directory.CreateDirectory(m_assetFolderAbsolutePath);
+            AssetDatabase.CreateFolder("Assets", m_assetFolderName);
             GameDBEditor.OnGameDBSaved = null;
         }
 
@@ -50,6 +50,7 @@ namespace GameDBLibrary.Tests
         public void ExportCsv_IsDeterministicRfc4180AndFormulaSafe()
         {
             CreateScalarDatabase();
+            var icon = CreateUnityObjectReference();
             AddRow("Items", "=FormulaKey", new Dictionary<string, object>
             {
                 { "Name", "line 1, \"quoted\"\nline 2" },
@@ -58,7 +59,7 @@ namespace GameDBLibrary.Tests
                 { "Enabled", true },
                 { "Tint", "#FF8000" },
                 { "Offset", "1.5,2.5" },
-                { "Icon", "Assets/Resources/Icons/Sword.prefab" }
+                { "Icon", icon }
             });
             AddRow("Items", "'LiteralKey", new Dictionary<string, object>
             {
@@ -68,7 +69,7 @@ namespace GameDBLibrary.Tests
                 { "Enabled", false },
                 { "Tint", "#000000" },
                 { "Offset", "0,0" },
-                { "Icon", string.Empty }
+                { "Icon", ReferenceWire(string.Empty, string.Empty) }
             });
 
             var result = GameDBAutomationService.ExportCsv(new GameDBCsvExportRequest
@@ -81,8 +82,15 @@ namespace GameDBLibrary.Tests
             Assert.That(result.FailureKind, Is.EqualTo(GameDBCsvFailureKind.None));
             Assert.That(result.RowCount, Is.EqualTo(2));
             Assert.That(result.CsvText, Does.StartWith("__key,Enabled,Icon,Name,Offset,Power,Tint,Weight\r\n"));
-            Assert.That(result.CsvText, Does.Contain("''LiteralKey,false,,''=literal,\"0,0\",0,#000000,0"));
-            Assert.That(result.CsvText, Does.Contain("'=FormulaKey,true,Assets/Resources/Icons/Sword.prefab,"));
+            var parsed = GameDBCsvCodec.Parse(result.CsvText);
+            Assert.That(parsed.Success, Is.True, parsed.Error?.Message);
+            var header = parsed.Records[0].Cells.Select(cell => cell.Text).ToList();
+            var iconColumn = header.IndexOf("Icon");
+            var assigned = parsed.Records.Single(record => record.Cells[0].Text == "'=FormulaKey");
+            var empty = parsed.Records.Single(record => record.Cells[0].Text == "''LiteralKey");
+            AssertReferenceJson(assigned.Cells[iconColumn].Text,
+                (string)icon["guid"], (string)icon["path"]);
+            AssertReferenceJson(empty.Cells[iconColumn].Text, string.Empty, string.Empty);
             Assert.That(result.CsvText, Does.Contain("\"line 1, \"\"quoted\"\"\nline 2\""));
             Assert.That(result.CsvText, Does.Contain("'-12"));
             Assert.That(result.CsvText.Replace("\r\n", string.Empty), Does.Not.Contain("\r"));
@@ -93,7 +101,7 @@ namespace GameDBLibrary.Tests
         {
             CreateScalarDatabase();
             File.WriteAllText(m_schemaAbsolutePath,
-                File.ReadAllText(m_schemaAbsolutePath).Replace("\"formatVersion\": 1", "\"formatVersion\": 2"));
+                File.ReadAllText(m_schemaAbsolutePath).Replace("\"formatVersion\": 2", "\"formatVersion\": 3"));
             var dataBefore = File.ReadAllBytes(m_databaseAbsolutePath);
             var schemaBefore = File.ReadAllBytes(m_schemaAbsolutePath);
 
@@ -113,9 +121,9 @@ namespace GameDBLibrary.Tests
             Assert.That(exported.Success, Is.False);
             Assert.That(exported.FailureKind, Is.EqualTo(GameDBCsvFailureKind.LoadFailed));
             Assert.That(exported.Errors.Select(error => error.Code), Does.Contain("csv.loadFailed"));
-            Assert.That(exported.Message, Does.Contain("format version 2"));
+            Assert.That(exported.Message, Does.Contain("format version 3"));
             AssertCsvFailure(imported, GameDBCsvFailureKind.LoadFailed, "csv.loadFailed");
-            Assert.That(imported.Message, Does.Contain("format version 2"));
+            Assert.That(imported.Message, Does.Contain("format version 3"));
             Assert.That(File.ReadAllBytes(m_databaseAbsolutePath), Is.EqualTo(dataBefore));
             Assert.That(File.ReadAllBytes(m_schemaAbsolutePath), Is.EqualTo(schemaBefore));
         }
@@ -155,6 +163,44 @@ namespace GameDBLibrary.Tests
             Assert.That(Row(table, "Axe").Values["Name"], Is.EqualTo("Axe"));
             Assert.That(Row(table, "Spear").Values["Name"], Is.EqualTo("=Formula"));
             Assert.That(Row(table, "Spear").Values["Power"], Is.EqualTo(0L));
+        }
+
+        [Test]
+        public void ImportCsv_UnityObjectRequiresCanonicalJsonCell()
+        {
+            CreateScalarDatabase();
+            var icon = CreateUnityObjectReference();
+            var iconJson = JsonSerialization.Serialize(icon);
+            var validCsv = GameDBCsvCodec.Write(new IReadOnlyList<string>[]
+            {
+                new[] { "__key", "Icon" },
+                new[] { "Sword", iconJson }
+            });
+
+            var imported = GameDBAutomationService.ImportCsv(new GameDBCsvImportRequest
+            {
+                DatabasePath = m_databasePath,
+                TableName = "Items",
+                CsvText = validCsv,
+                Mode = GameDBCsvImportMode.Upsert
+            });
+            var stored = (UnityObjectReference)Row(InspectTable("Items"), "Sword").Values["Icon"];
+            var invalid = GameDBAutomationService.ImportCsv(new GameDBCsvImportRequest
+            {
+                DatabasePath = m_databasePath,
+                TableName = "Items",
+                CsvText = "__key,Icon\r\nAxe,Assets/Game/Resources/Icons/Axe.asset",
+                Mode = GameDBCsvImportMode.Upsert
+            });
+
+            Assert.That(imported.Success, Is.True, imported.Message);
+            Assert.That(stored.Guid, Is.EqualTo(icon["guid"]));
+            Assert.That(stored.Path, Is.EqualTo(icon["path"]));
+            AssertCsvFailure(invalid, GameDBCsvFailureKind.InvalidCsv, "csv.valueInvalid");
+            Assert.That(invalid.Errors.Single().Message,
+                Is.EqualTo("Cell value is invalid for unityObject."));
+            Assert.That(InspectTable("Items").Rows.Select(row => row.Key),
+                Is.EqualTo(new[] { "Sword" }));
         }
 
         [Test]
@@ -425,6 +471,36 @@ namespace GameDBLibrary.Tests
                     AddField("Items", "Icon", FieldType.unityObject)
                 }
             }));
+        }
+
+        private Dictionary<string, object> CreateUnityObjectReference()
+        {
+            var resourcesPath = $"{m_assetFolderPath}/Resources";
+            AssetDatabase.CreateFolder(m_assetFolderPath, "Resources");
+            var iconsPath = $"{resourcesPath}/Icons";
+            AssetDatabase.CreateFolder(resourcesPath, "Icons");
+            var assetPath = $"{iconsPath}/Sword.asset";
+            AssetDatabase.CreateAsset(
+                ScriptableObject.CreateInstance<UnityObjectTestAsset>(), assetPath);
+            AssetDatabase.SaveAssets();
+            return ReferenceWire(AssetDatabase.AssetPathToGUID(assetPath), assetPath);
+        }
+
+        private static Dictionary<string, object> ReferenceWire(string guid, string path)
+        {
+            return new Dictionary<string, object>
+            {
+                { "guid", guid },
+                { "path", path }
+            };
+        }
+
+        private static void AssertReferenceJson(string json, string guid, string path)
+        {
+            var reference = (IDictionary<string, object>)JsonSerialization.Deserialize(json);
+            Assert.That(reference.Keys, Is.EquivalentTo(new[] { "guid", "path" }));
+            Assert.That(reference["guid"], Is.EqualTo(guid));
+            Assert.That(reference["path"], Is.EqualTo(path));
         }
 
         private void AddRow(string tableName, string rowKey, Dictionary<string, object> values)

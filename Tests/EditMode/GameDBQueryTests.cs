@@ -32,7 +32,7 @@ namespace GameDBLibrary.Tests
             m_databasePath = $"{m_assetFolderPath}/database.json";
             m_databaseAbsolutePath = Path.Combine(m_assetFolderAbsolutePath, "database.json");
             m_schemaAbsolutePath = Path.Combine(m_assetFolderAbsolutePath, "database.schema.json");
-            Directory.CreateDirectory(m_assetFolderAbsolutePath);
+            AssetDatabase.CreateFolder("Assets", m_assetFolderName);
             GameDBEditor.OnGameDBSaved = null;
         }
 
@@ -104,6 +104,43 @@ namespace GameDBLibrary.Tests
             Assert.That(File.GetLastWriteTimeUtc(m_databaseAbsolutePath), Is.EqualTo(dataWriteTime));
             Assert.That(File.GetLastWriteTimeUtc(m_schemaAbsolutePath), Is.EqualTo(schemaWriteTime));
             Assert.That(savedScopes, Is.Empty);
+        }
+
+        [Test]
+        public void Query_ProjectsUnityObjectAndMatchesGuidIdentity()
+        {
+            CreateRepresentativeDatabase();
+            var icon = GetStoredReference("Sword", "Icon");
+            var stalePathOperand = ReferenceWire(icon.Guid,
+                $"{m_assetFolderPath}/Resources/Icons/PreviousSword.asset");
+
+            var equals = QueryTable("Items", new List<GameDBQueryPredicate>
+            {
+                Predicate(GameDBQueryPredicateKind.Equals, "Icon", stalePathOperand)
+            });
+            var contains = QueryTable("Items", new List<GameDBQueryPredicate>
+            {
+                Predicate(GameDBQueryPredicateKind.Contains, "Icons", stalePathOperand)
+            });
+
+            Assert.That(equals.Success, Is.True, equals.Message);
+            Assert.That(equals.Tables.Single().Rows.Select(row => row.Key),
+                Is.EqualTo(new[] { "Sword" }));
+            var projected = (IDictionary<string, object>)equals.Tables.Single()
+                .Rows.Single().Values["Icon"];
+            Assert.That(projected.Keys, Is.EquivalentTo(new[] { "guid", "path" }));
+            Assert.That(projected["guid"], Is.EqualTo(icon.Guid));
+            Assert.That(projected["path"], Is.EqualTo(icon.Path));
+            Assert.That(contains.Success, Is.True, contains.Message);
+            Assert.That(contains.Tables.Single().Rows.Select(row => row.Key),
+                Is.EqualTo(new[] { "Sword" }));
+
+            var pathString = QueryTable("Items", new List<GameDBQueryPredicate>
+            {
+                Predicate(GameDBQueryPredicateKind.Equals, "Icon", icon.Path)
+            });
+            AssertFailure(pathString, GameDBQueryFailureKind.InvalidRequest,
+                "predicate.valueInvalid");
         }
 
         [Test]
@@ -661,7 +698,7 @@ namespace GameDBLibrary.Tests
         {
             CreateRepresentativeDatabase();
             File.WriteAllText(m_schemaAbsolutePath,
-                File.ReadAllText(m_schemaAbsolutePath).Replace("\"formatVersion\": 1", "\"formatVersion\": 2"));
+                File.ReadAllText(m_schemaAbsolutePath).Replace("\"formatVersion\": 2", "\"formatVersion\": 3"));
 
             var result = GameDBAutomationService.Query(new GameDBQueryRequest
             {
@@ -671,7 +708,7 @@ namespace GameDBLibrary.Tests
 
             AssertFailure(result, GameDBQueryFailureKind.LoadFailed, "database.loadFailed");
             Assert.That(result.Errors.Single().Message,
-                Does.Contain("format version 2").And.Contain("supported version 1"));
+                Does.Contain("format version 3").And.Contain("supported version 2"));
             Assert.That(result.Tables, Is.Empty);
         }
 
@@ -706,6 +743,7 @@ namespace GameDBLibrary.Tests
 
         private void CreateRepresentativeDatabase()
         {
+            var icon = CreateUnityObjectReference();
             AssertSuccess(GameDBAutomationService.Create(new GameDBCreateRequest
             {
                 DatabasePath = m_databasePath,
@@ -725,6 +763,7 @@ namespace GameDBLibrary.Tests
                 Field("Items", "Tint", FieldType.color),
                 Field("Items", "Offset", FieldType.vector2),
                 Field("Items", "Icon", FieldType.unityObject),
+                Field("Items", "Icons", FieldType.unityObject, isArray: true),
                 Field("Items", "Tags", FieldType.@string, isArray: true),
                 DictionaryField("Items", "Attributes", FieldType.@int),
                 Field("Recipes", "Result", FieldType.tableRef, typeArgument: "Items"),
@@ -741,7 +780,8 @@ namespace GameDBLibrary.Tests
 
                     { "Tint", "#FF8000" },
                     { "Offset", "1.5,2.5" },
-                    { "Icon", "Assets/Resources/Icons/Sword.prefab" },
+                    { "Icon", icon },
+                    { "Icons", new List<object> { icon } },
                     { "Tags", new List<object> { "melee", "sharp" } },
                     { "Attributes", new Dictionary<string, object> { { "Power", 12L } } }
                 }),
@@ -769,6 +809,37 @@ namespace GameDBLibrary.Tests
             });
             Assert.That(batch.Success, Is.True, batch.Message);
             GameDBEditor.OnGameDBSaved = null;
+        }
+
+        private Dictionary<string, object> CreateUnityObjectReference()
+        {
+            var resourcesPath = $"{m_assetFolderPath}/Resources";
+            AssetDatabase.CreateFolder(m_assetFolderPath, "Resources");
+            var iconsPath = $"{resourcesPath}/Icons";
+            AssetDatabase.CreateFolder(resourcesPath, "Icons");
+            var assetPath = $"{iconsPath}/Sword.asset";
+            AssetDatabase.CreateAsset(
+                ScriptableObject.CreateInstance<UnityObjectTestAsset>(), assetPath);
+            AssetDatabase.SaveAssets();
+            return ReferenceWire(AssetDatabase.AssetPathToGUID(assetPath), assetPath);
+        }
+
+        private UnityObjectReference GetStoredReference(string rowKey, string fieldName)
+        {
+            var inspected = GameDBAutomationService.Inspect(m_databasePath);
+            Assert.That(inspected.Success, Is.True, inspected.Message);
+            return (UnityObjectReference)inspected.Snapshot.Tables
+                .Single(table => table.Name == "Items").Rows
+                .Single(row => row.Key == rowKey).Values[fieldName];
+        }
+
+        private static Dictionary<string, object> ReferenceWire(string guid, string path)
+        {
+            return new Dictionary<string, object>
+            {
+                { "guid", guid },
+                { "path", path }
+            };
         }
 
         private GameDBQueryResult QueryTable(string tableName, List<GameDBQueryPredicate> predicates)

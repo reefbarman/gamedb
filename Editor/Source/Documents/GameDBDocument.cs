@@ -466,9 +466,11 @@ namespace GameDBEditorLibrary.Documents
                 return pendingOutcome;
             }
 
+            GameDB candidate;
             GameDBSerializedState state;
             List<GameDBValidationIssue> issues;
             string revisionBefore;
+            string candidateSourceRevision;
             string scopeNameToSave;
             GameDBDiskToken baselineToken;
             lock (m_gate)
@@ -482,11 +484,14 @@ namespace GameDBEditorLibrary.Documents
                 }
 
                 revisionBefore = m_baselineRevision;
+                candidateSourceRevision = GetCurrentRevisionLocked();
                 scopeNameToSave = m_model.ScopeName;
                 baselineToken = m_baselineDiskToken;
                 try
                 {
-                    state = GameDBModelCodec.Serialize(m_model);
+                    candidate = GameDBModelCodec.CreateDetachedModel(m_model);
+                    GameDBUnityObjectNormalizer.Normalize(candidate);
+                    state = GameDBModelCodec.Serialize(candidate);
                 }
                 catch (Exception exception)
                 {
@@ -497,7 +502,7 @@ namespace GameDBEditorLibrary.Documents
 
                 try
                 {
-                    issues = GameDBModelOperations.Validate(m_model);
+                    issues = GameDBModelOperations.Validate(candidate);
                 }
                 catch (Exception exception)
                 {
@@ -593,6 +598,13 @@ namespace GameDBEditorLibrary.Documents
 
             lock (m_gate)
             {
+                if (string.Equals(GetCurrentRevisionLocked(), candidateSourceRevision,
+                    StringComparison.OrdinalIgnoreCase))
+                {
+                    m_model = candidate;
+                    m_currentRevision = state.Revision;
+                }
+
                 m_baselineRevision = state.Revision;
                 m_baselineDiskToken = commit.TokenAfter;
                 m_pendingPostSave = new GameDBPostSaveState

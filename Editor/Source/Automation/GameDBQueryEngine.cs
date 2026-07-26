@@ -575,11 +575,17 @@ namespace GameDBEditorLibrary.Automation
                     }
                     break;
                 case FieldType.@string:
-                case FieldType.unityObject:
                 case FieldType.tableRef:
                     if (value is string)
                     {
                         normalized = value;
+                        return true;
+                    }
+                    break;
+                case FieldType.unityObject:
+                    if (UnityObjectReferenceWire.TryParse(value, out var referenceValue))
+                    {
+                        normalized = referenceValue;
                         return true;
                     }
                     break;
@@ -894,6 +900,16 @@ namespace GameDBEditorLibrary.Automation
 
         private static bool WireEquals(GameDBFieldSnapshot field, object stored, object expected)
         {
+            if (field.FieldType == FieldType.unityObject)
+            {
+                var actualReference = (UnityObjectReference)stored;
+                var expectedReference = (UnityObjectReference)expected;
+                return actualReference.IsEmpty || expectedReference.IsEmpty
+                    ? actualReference.IsEmpty && expectedReference.IsEmpty
+                    : string.Equals(actualReference.Guid, expectedReference.Guid,
+                        StringComparison.Ordinal);
+            }
+
             var actual = NormalizeScalar(field.FieldType, stored);
             if (actual == null || expected == null)
             {
@@ -1042,6 +1058,8 @@ namespace GameDBEditorLibrary.Automation
                 case FieldType.vector4:
                     var vector4 = (Vector4)value;
                     return FormatVector(vector4.x, vector4.y, vector4.z, vector4.w);
+                case FieldType.unityObject:
+                    return UnityObjectReferenceWire.Serialize((UnityObjectReference)value);
                 case FieldType.@int:
                     return Convert.ToInt64(value, CultureInfo.InvariantCulture);
                 case FieldType.@float:
@@ -1120,6 +1138,10 @@ namespace GameDBEditorLibrary.Automation
             if (value is bool boolean) return boolean ? "bool:true" : "bool:false";
             if (value is long integer) return "int:" + integer.ToString(CultureInfo.InvariantCulture);
             if (value is double number) return "float:" + number.ToString("R", CultureInfo.InvariantCulture);
+            if (value is UnityObjectReference reference)
+            {
+                return "unityObject:" + reference.Guid + ":" + reference.Path;
+            }
             return "string:" + value;
         }
 

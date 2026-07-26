@@ -521,12 +521,13 @@ namespace GameDBEditorLibrary.Documents
                     return IsFiniteNumber(value);
                 case FieldType.@string:
                 case FieldType.tableRef:
-                case FieldType.unityObject:
                 case FieldType.color:
                 case FieldType.vector2:
                 case FieldType.vector3:
                 case FieldType.vector4:
                     return value is string;
+                case FieldType.unityObject:
+                    return UnityObjectReferenceWire.TryParse(value, out _);
                 case FieldType.@enum:
                     return value is string name && IsWireEnumValueValid((Type)typeArgument, name);
                 default:
@@ -551,8 +552,9 @@ namespace GameDBEditorLibrary.Documents
                     return IsFiniteNumber(value);
                 case FieldType.@string:
                 case FieldType.tableRef:
-                case FieldType.unityObject:
                     return value is string;
+                case FieldType.unityObject:
+                    return value is UnityObjectReference;
                 case FieldType.@enum:
                     return IsStoredEnumValueValid((Type)typeArgument, value);
                 case FieldType.color:

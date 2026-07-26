@@ -43,6 +43,8 @@ It is the coherent monolithic output of the original `Main.gs`, `Import.gs`, and
 - Unity-to-Sheets import recreates each matching GameDB worksheet and can destroy manual formatting or edits in those sheets.
 - Each table is represented by a sheet named `GameDB-<scope>-<table>`.
 - The schema is stored in a hidden column and is required for export back to Unity.
+- The script accepts only schema format version `2`.
+- The protocol cannot represent GUID-backed Unity-object values safely. The script rejects databases containing direct Unity-object fields or dictionaries with Unity-object values; use CSV for those databases.
 - The protocol predates the modern dictionary field support. Treat dictionary interoperability as unsupported unless you extend and test the script.
 - Export a database to a new spreadsheet before attempting spreadsheet-to-Unity import so the expected layout and validation ranges exist.
 - Use a separate spreadsheet per GameDB scope to reduce accidental collisions.

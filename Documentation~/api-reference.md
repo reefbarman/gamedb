@@ -67,14 +67,15 @@ These bases are part of the generated runtime contract.
 
 ### Runtime value types
 
-When C# is generated without Unity-specific accessors, color and vector fields return these types from `GameDBLibrary`.
+When C# is generated without Unity-specific accessors, color and vector fields return these types from `GameDBLibrary`. Unity-object fields use the same core reference type in both generation modes.
 
-| Type      | Public shape                                                                                                                 | Parsing/formatting                                                                                                                                                                      |
-| --------- | ---------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Color`   | `byte r/g/b/a { get; set; }`; `string Hex { get; set; }`; `Color(string hex)`; `Color(byte r, byte g, byte b, byte a = 255)` | Accepts `#RRGGBB`, `RRGGBB`, `0xRRGGBB`, and 8-digit equivalents. Invalid length/digits can throw parsing or range exceptions. `ToString()` returns `Hex`; alpha is omitted when `255`. |
-| `Vector2` | `float x/y { get; set; }`; numeric and `string` constructors                                                                 | String form is invariant-culture comma-separated components. Missing, invalid, or non-finite components can throw. `ToString()` emits invariant round-trip components.                  |
-| `Vector3` | `float x/y/z { get; set; }`; numeric and `string` constructors                                                               | Same semantics with three components.                                                                                                                                                   |
-| `Vector4` | `float x/y/z/w { get; set; }`; numeric and `string` constructors                                                             | Same semantics with four components.                                                                                                                                                    |
+| Type                   | Public shape                                                                                                                 | Parsing/formatting                                                                                                                                                                      |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Color`                | `byte r/g/b/a { get; set; }`; `string Hex { get; set; }`; `Color(string hex)`; `Color(byte r, byte g, byte b, byte a = 255)` | Accepts `#RRGGBB`, `RRGGBB`, `0xRRGGBB`, and 8-digit equivalents. Invalid length/digits can throw parsing or range exceptions. `ToString()` returns `Hex`; alpha is omitted when `255`. |
+| `Vector2`              | `float x/y { get; set; }`; numeric and `string` constructors                                                                 | String form is invariant-culture comma-separated components. Missing, invalid, or non-finite components can throw. `ToString()` emits invariant round-trip components.                  |
+| `Vector3`              | `float x/y/z { get; set; }`; numeric and `string` constructors                                                               | Same semantics with three components.                                                                                                                                                   |
+| `Vector4`              | `float x/y/z/w { get; set; }`; numeric and `string` constructors                                                             | Same semantics with four components.                                                                                                                                                    |
+| `UnityObjectReference` | read-only `Guid`, `Path`, and `IsEmpty`; value equality                                                                      | Contains either two empty strings or a lowercase 32-character asset GUID plus an `Assets/.../Resources/...` asset path. The wire object has exactly lowercase `guid` and `path` keys.   |
 
 Unity conversions are extension methods in `GameDBLibraryUnity.TypeHelpers`:
 
@@ -103,7 +104,7 @@ Enum member names are part of the serialized schema/code-generation contract. Us
 
 ### Schema file format
 
-Editor-authored `.schema.json` files require a root-level positive JSON integer `formatVersion`. The current and only supported value is `1`; it is independent of the package's SemVer version. GameDB validates it before hydrating schema tables or data. Missing, malformed, and newer values fail the editor/document load without rewriting either file. A greater value reports that a newer GameDB package is required.
+Editor-authored `.schema.json` files require the root-level JSON integer `"formatVersion": 2`; it is independent of the package's SemVer version. GameDB validates it before hydrating schema tables or data. Missing, malformed, older, and newer values fail the editor/document load without rewriting either file.
 
 `GameDBAutomationService.Save` applies the same rule to `GameDBSaveRequest.SchemaJson`, including new-file and dry-run requests. Expected format failures are returned through the operation's normal failure result: general operations expose the actionable `Message`, while Batch, Query, and CSV classify load failures through their existing failure kinds and error codes.
 
@@ -197,32 +198,33 @@ public class <TableName> : Row
 
 Generated scalar/array return shapes are:
 
-| Schema field                                   | Generated value                                                                                        |
-| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `string`, `int`, `float`, `bool`, project enum | Scalar type, or `List<T>` for an array                                                                 |
-| `color`, `vector2/3/4` with Unity loading      | `UnityEngine.Color` / `UnityEngine.Vector2/3/4`                                                        |
-| `color`, `vector2/3/4` without Unity loading   | `GameDBLibrary.Color` / `Vector2/3/4`                                                                  |
-| `unityObject` with Unity loading               | `<FieldName>PathVal` (`string`) and `<FieldName>ObjectVal` (`UnityEngine.Object`); arrays become lists |
-| `unityObject` without Unity loading            | `<FieldName>PathVal` (`string`) only                                                                   |
-| `tableRef`                                     | `TableReferenceAccessor<TKey, TRow>`; arrays become lists of accessors                                 |
-| dictionary                                     | `Dictionary<TKey, TValue>`; table-reference and Unity-object values may themselves be accessor objects |
+| Schema field                                   | Generated value                                                                                                              |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `string`, `int`, `float`, `bool`, project enum | Scalar type, or `List<T>` for an array                                                                                       |
+| `color`, `vector2/3/4` with Unity loading      | `UnityEngine.Color` / `UnityEngine.Vector2/3/4`                                                                              |
+| `color`, `vector2/3/4` without Unity loading   | `GameDBLibrary.Color` / `Vector2/3/4`                                                                                        |
+| `unityObject`, all outputs                     | `<FieldName>Val` (`UnityObjectReference`), `<FieldName>GuidVal`, and `<FieldName>PathVal`; arrays become corresponding lists |
+| `unityObject`, Unity-enabled only              | additionally `<FieldName>ObjectVal` (`UnityEngine.Object`), or `List<UnityEngine.Object>` for arrays                         |
+| `tableRef`                                     | `TableReferenceAccessor<TKey, TRow>`; arrays become lists of accessors                                                       |
+| dictionary                                     | `Dictionary<TKey, TValue>`; table-reference and Unity-object values may themselves be accessor objects                       |
 
 Field getters cache their converted accessor/value for the lifetime of the generated row. Generated lists and dictionaries are mutable cached objects owned by that row; treat them as read-only game data. Loading new data replaces rows, so callers should reacquire row, list, dictionary, and table-reference values after import/reload rather than assuming an old object updates in place.
 
-`UnityObjectAccessor.GetObject()` derives a `Resources` path from the stored asset path and calls `Resources.Load`. A malformed path that lacks the expected `Resources` segment or extension can throw; a valid path with no matching object returns `null`.
+The core `UnityObjectAccessor` returns the canonical reference through `GetValue()` and exposes `GetGuid()` and `GetPath()`. `GameDBLibraryUnity.UnityObjectAccessor` additionally exposes `GetObject()`, which loads the validated Resources path. Empty returns `null`; malformed wire values are rejected before accessor construction. Unity-object dictionary values remain accessor objects rather than parallel generated dictionaries.
 
 ### Generated schema constants
 
 ```csharp
 public static class <TableName>Schema
 {
-    public static string TableName;
-    public static string Field<FieldName>;
-    public static <TKey> Key<RowKeyWithoutWhitespace>;
+    public const string TableName = "<TableName>";
+    public const string Field<FieldName> = "<FieldName>";
+    public const string Key<StringRowKey> = "<row key>";
+    public static readonly <TEnum> Key<EnumRowKey> = <TEnum>.<member>;
 }
 ```
 
-These are mutable public static fields in the current generator, not `const` or `readonly`. Treat them as generated constants and do not assign to them. Row-key member names have whitespace removed. Generation validates scope, table, and field identifiers, but it does not separately validate or de-duplicate generated row-key member names after whitespace removal; inspect compiler output for collisions or invalid row-key identifiers.
+Generation validates row-key members, generated accessors/types, and case-insensitive filename collisions before writing. String schema members are constants; enum-key members are typed `static readonly` values.
 
 ## Editor-only API
 
@@ -269,13 +271,13 @@ public static class GameDBAutomationService
 
 #### Query API
 
-`Query` accepts a `GameDBQueryRequest` containing one or more exact `GameDBQueryTableProjection` values. Each projection selects rows and fields and may contain AND-combined typed `GameDBQueryPredicate` values. Results use deterministic ordinal table/row/field ordering and a global `Limit`; continuation uses an opaque database-, revision-, and query-bound cursor. `GameDBQueryResult` reports structured `GameDBQueryFailureKind` and `GameDBQueryError` values and returns projected rows as normalized JSON-compatible CLR shapes rather than the model CLR values exposed by `GameDBSnapshot`.
+`Query` accepts a `GameDBQueryRequest` containing one or more exact `GameDBQueryTableProjection` values. Each projection selects rows and fields and may contain AND-combined typed `GameDBQueryPredicate` values. Results use deterministic ordinal table/row/field ordering and a global `Limit`; continuation uses an opaque database-, revision-, and query-bound cursor. `GameDBQueryResult` reports structured `GameDBQueryFailureKind` and `GameDBQueryError` values and returns projected rows as normalized JSON-compatible CLR shapes rather than the model CLR values exposed by `GameDBSnapshot`. Unity-object projections contain both `guid` and `path`; equality and array membership match empty-to-empty or non-empty references by ordinal GUID.
 
 Query request types are `GameDBQueryRequest`, `GameDBQueryTableProjection`, `GameDBQueryPredicate`, and `GameDBQueryPredicateKind`. Result types are `GameDBQueryResult`, `GameDBQueryTableResult`, `GameDBQueryRowResult`, `GameDBQueryError`, and `GameDBQueryFailureKind`. See the [Query API contract](automation.md#query-api) for projection, predicate/type compatibility, ordering, global pagination, cursor, failure, and wire-value semantics.
 
 #### CSV API
 
-`ExportCsv` and `ImportCsv` exchange one existing table as in-memory RFC 4180 CSV. The reserved first column is `__key`; fields and rows use ordinal ordering; scalar and enum values use invariant canonical text; and exported headers, keys, and values receive reversible formula-injection escaping. Arrays and dictionaries are deliberately unsupported by the current CSV dialect. `GameDBCsvImportMode.Upsert` permits partial field columns, while `Replace` requires every scalar field plus destructive authorization and replaces the table's complete row set.
+`ExportCsv` and `ImportCsv` exchange one existing table as in-memory RFC 4180 CSV. The reserved first column is `__key`; fields and rows use ordinal ordering; scalar and enum values use invariant canonical text; Unity-object cells use compact canonical JSON; and exported headers, keys, and values receive reversible formula-injection escaping. Raw paths and malformed or partial Unity-object values are rejected. Arrays and dictionaries are deliberately unsupported by the current CSV dialect. `GameDBCsvImportMode.Upsert` permits partial field columns, while `Replace` requires every scalar field plus destructive authorization and replaces the table's complete row set.
 
 Request types are `GameDBCsvExportRequest`, `GameDBCsvImportRequest`, and `GameDBCsvImportMode`. Result types are `GameDBCsvExportResult`, `GameDBCsvImportResult`, `GameDBCsvError`, `GameDBCsvFailureKind`, and `GameDBCsvCommitStatus`. Import uses `GameDBOperationOptions` for dry runs, revision guards, and replace authorization. See the [CSV import and export contract](automation.md#csv-import-and-export) for the dialect, scalar/empty-cell matrix, transaction behavior, formula escaping, and 1-based error coordinates.
 

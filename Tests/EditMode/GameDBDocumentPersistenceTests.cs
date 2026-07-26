@@ -31,7 +31,7 @@ namespace GameDBLibrary.Tests
             m_databasePath = $"{m_assetFolderPath}/database.json";
             m_databaseAbsolutePath = Path.Combine(m_assetFolderAbsolutePath, "database.json");
             m_schemaAbsolutePath = Path.Combine(m_assetFolderAbsolutePath, "database.schema.json");
-            Directory.CreateDirectory(m_assetFolderAbsolutePath);
+            AssetDatabase.CreateFolder("Assets", m_assetFolderName);
             GameDBEditor.OnGameDBSaved = null;
         }
 
@@ -89,14 +89,14 @@ namespace GameDBLibrary.Tests
             CreateSavedDocument();
             var dataBefore = File.ReadAllBytes(m_databaseAbsolutePath);
             File.WriteAllText(m_schemaAbsolutePath,
-                File.ReadAllText(m_schemaAbsolutePath).Replace("\"formatVersion\": 1", "\"formatVersion\": 2"));
+                File.ReadAllText(m_schemaAbsolutePath).Replace("\"formatVersion\": 2", "\"formatVersion\": 3"));
             var schemaBefore = File.ReadAllBytes(m_schemaAbsolutePath);
 
             var exception = Assert.Throws<GameDBSchemaFormatException>(() =>
                 GameDBDocument.Load(m_databasePath,
                     GameDBFilePairStore.Instance, new RecordingPostSaveActions()));
 
-            Assert.That(exception.FoundVersion, Is.EqualTo(2));
+            Assert.That(exception.FoundVersion, Is.EqualTo(3));
             Assert.That(exception.Message, Does.Contain("newer GameDB package"));
             Assert.That(File.ReadAllBytes(m_databaseAbsolutePath), Is.EqualTo(dataBefore));
             Assert.That(File.ReadAllBytes(m_schemaAbsolutePath), Is.EqualTo(schemaBefore));
@@ -109,17 +109,17 @@ namespace GameDBLibrary.Tests
             var legacy = new GameDB();
             Assert.That(legacy.Load($"{m_assetFolderName}/database.json"), Is.True);
             File.WriteAllText(m_schemaAbsolutePath,
-                File.ReadAllText(m_schemaAbsolutePath).Replace("\"formatVersion\": 1", "\"formatVersion\": 2"));
+                File.ReadAllText(m_schemaAbsolutePath).Replace("\"formatVersion\": 2", "\"formatVersion\": 3"));
             var schemaBefore = File.ReadAllBytes(m_schemaAbsolutePath);
             LogAssert.Expect(LogType.Error, new Regex("^failed to load gameDB:"));
             LogAssert.Expect(LogType.Exception, new Regex(
-                "Schema format version 2 is newer than the supported version 1"));
+                "Schema format version 3 is newer than the supported version 2"));
 
             Assert.That(legacy.Load($"{m_assetFolderName}/database.json"), Is.False);
 
             LogAssert.Expect(LogType.Error, new Regex("^failed to save gameDB:"));
             LogAssert.Expect(LogType.Exception, new Regex(
-                "Schema format version 2 is newer than the supported version 1"));
+                "Schema format version 3 is newer than the supported version 2"));
             Assert.That(legacy.Save(), Is.False);
             Assert.That(File.ReadAllBytes(m_schemaAbsolutePath), Is.EqualTo(schemaBefore));
         }
@@ -134,15 +134,81 @@ namespace GameDBLibrary.Tests
             var scopeBefore = legacy.ScopeName;
             var pathBefore = legacy.LoadedPath;
             File.WriteAllText(m_schemaAbsolutePath,
-                File.ReadAllText(m_schemaAbsolutePath).Replace("\"formatVersion\": 1", "\"formatVersion\": 2"));
+                File.ReadAllText(m_schemaAbsolutePath).Replace("\"formatVersion\": 2", "\"formatVersion\": 3"));
             LogAssert.Expect(LogType.Error, new Regex("^failed to load gameDB:"));
             LogAssert.Expect(LogType.Exception, new Regex(
-                "Schema format version 2 is newer than the supported version 1"));
+                "Schema format version 3 is newer than the supported version 2"));
 
             Assert.That(legacy.LoadRuntimeDB(0, $"{m_assetFolderName}/database.json"), Is.False);
             Assert.That(legacy.Tables, Is.SameAs(tablesBefore));
             Assert.That(legacy.ScopeName, Is.EqualTo(scopeBefore));
             Assert.That(legacy.LoadedPath, Is.EqualTo(pathBefore));
+        }
+
+        [Test]
+        public void Save_NormalizesUnityObjectPathsAcrossAllShapesAndConverges()
+        {
+            var originalPath = CreateUnityObjectAsset("Sword");
+            var guid = AssetDatabase.AssetPathToGUID(originalPath);
+            var document = CreateUnityObjectDocument(guid, originalPath);
+            var firstSave = document.Save();
+            Assert.That(firstSave.Success, Is.True, firstSave.Message);
+
+            var movedPath = $"{m_assetFolderPath}/Resources/Items/RenamedSword.asset";
+            Assert.That(AssetDatabase.MoveAsset(originalPath, movedPath), Is.Empty);
+            var normalizedSave = document.Save();
+            var secondSave = document.Save();
+            var snapshot = document.CreateSnapshot();
+            var row = snapshot.Tables.Single(table => table.Name == "Items")
+                .Rows.Single(item => item.Key == "Sword");
+
+            Assert.That(normalizedSave.Success, Is.True, normalizedSave.Message);
+            Assert.That(normalizedSave.Status, Is.EqualTo(GameDBSaveStatus.Saved));
+            Assert.That(normalizedSave.RevisionSaved, Is.Not.EqualTo(firstSave.RevisionSaved));
+            Assert.That(secondSave.Success, Is.True, secondSave.Message);
+            Assert.That(secondSave.Status, Is.EqualTo(GameDBSaveStatus.NoChanges));
+            Assert.That(document.CurrentRevision, Is.EqualTo(normalizedSave.RevisionSaved));
+            Assert.That(document.IsDirty, Is.False);
+            AssertReferencePath(row.Values["Icon"], movedPath);
+            Assert.That(((IEnumerable<object>)row.Values["Icons"])
+                .Cast<UnityObjectReference>().Single().Path, Is.EqualTo(movedPath));
+            Assert.That(((Dictionary<object, object>)row.Values["IconsBySlot"])["primary"],
+                Is.TypeOf<UnityObjectReference>());
+            Assert.That(((UnityObjectReference)((Dictionary<object, object>)
+                row.Values["IconsBySlot"])["primary"]).Path, Is.EqualTo(movedPath));
+
+            var persisted = (IDictionary<string, object>)JsonSerialization.Deserialize(
+                File.ReadAllText(m_databaseAbsolutePath));
+            var tables = (IDictionary<string, object>)persisted["tables"];
+            var items = (IDictionary<string, object>)tables["Items"];
+            var persistedRow = (IDictionary<string, object>)items["Sword"];
+            AssertReferencePath(persistedRow["Icon"], movedPath);
+        }
+
+        [Test]
+        public void Save_MissingUnityObjectGuidLeavesFilesAndLiveModelUnchanged()
+        {
+            var assetPath = CreateUnityObjectAsset("Sword");
+            var guid = AssetDatabase.AssetPathToGUID(assetPath);
+            var document = CreateUnityObjectDocument(guid, assetPath);
+            Assert.That(document.Save().Success, Is.True);
+            var dataBefore = File.ReadAllBytes(m_databaseAbsolutePath);
+            var schemaBefore = File.ReadAllBytes(m_schemaAbsolutePath);
+            var revisionBefore = document.CurrentRevision;
+            var pathBefore = GetSnapshotReference(document, "Icon").Path;
+            Assert.That(AssetDatabase.DeleteAsset(assetPath), Is.True);
+
+            var result = document.Save(new GameDBSaveOptions { ForceWrite = true });
+
+            Assert.That(result.Success, Is.False);
+            Assert.That(result.Status, Is.EqualTo(GameDBSaveStatus.SerializationFailed));
+            Assert.That(result.FilesCommitted, Is.False);
+            Assert.That(result.Message, Does.Contain("Items[Sword].Icon")
+                .And.Contain(guid).And.Contain("missing"));
+            Assert.That(File.ReadAllBytes(m_databaseAbsolutePath), Is.EqualTo(dataBefore));
+            Assert.That(File.ReadAllBytes(m_schemaAbsolutePath), Is.EqualTo(schemaBefore));
+            Assert.That(document.CurrentRevision, Is.EqualTo(revisionBefore));
+            Assert.That(GetSnapshotReference(document, "Icon").Path, Is.EqualTo(pathBefore));
         }
 
         [Test]
@@ -268,12 +334,12 @@ namespace GameDBLibrary.Tests
         {
             var state = CreateSavedDocument().CaptureState();
             state.SchemaJson = state.SchemaJson.Replace(
-                "\"formatVersion\": 1", "\"formatVersion\": 2");
+                "\"formatVersion\": 2", "\"formatVersion\": 3");
 
             var exception = Assert.Throws<GameDBSchemaFormatException>(() =>
                 GameDBDocument.RestoreState(state));
 
-            Assert.That(exception.FoundVersion, Is.EqualTo(2));
+            Assert.That(exception.FoundVersion, Is.EqualTo(3));
         }
 
         [Test]
@@ -429,6 +495,84 @@ namespace GameDBLibrary.Tests
             Assert.That(saved.RevisionCurrent, Is.Not.EqualTo(revisionWritten));
             Assert.That(document.BaselineRevision, Is.EqualTo(revisionWritten));
             Assert.That(document.IsDirty, Is.True);
+        }
+
+        private GameDBDocument CreateUnityObjectDocument(string guid, string path)
+        {
+            var reference = new Dictionary<string, object>
+            {
+                { "guid", guid },
+                { "path", path }
+            };
+            var document = GameDBDocument.CreateNew(m_databasePath,
+                "UnityObjectPersistenceTests", false,
+                GameDBFilePairStore.Instance, new RecordingPostSaveActions());
+            var result = document.ApplyTransaction(new GameDBCommand[]
+            {
+                new AddTableCommand("Items", KeyType.@string, null),
+                new AddFieldCommand("Items", "Icon",
+                    new GameDBFieldTypeSpec(FieldType.unityObject, false, null)),
+                new AddFieldCommand("Items", "Icons",
+                    new GameDBFieldTypeSpec(FieldType.unityObject, true, null)),
+                new AddFieldCommand("Items", "IconsBySlot",
+                    new GameDBFieldTypeSpec(FieldType.dictionary, false, null,
+                        new GameDBDictionaryTypeSpec(KeyType.@string, null,
+                            FieldType.unityObject, null))),
+                new AddRowCommand("Items", "Sword", new Dictionary<string, object>
+                {
+                    { "Icon", reference },
+                    { "Icons", new List<object> { reference } },
+                    { "IconsBySlot", new Dictionary<string, object>
+                        {
+                            { "primary", reference }
+                        }
+                    }
+                })
+            });
+            Assert.That(result.Success, Is.True, result.Message);
+            return document;
+        }
+
+        private string CreateUnityObjectAsset(string name)
+        {
+            var resourcesPath = $"{m_assetFolderPath}/Resources";
+            if (!AssetDatabase.IsValidFolder(resourcesPath))
+            {
+                AssetDatabase.CreateFolder(m_assetFolderPath, "Resources");
+            }
+
+            var itemsPath = $"{resourcesPath}/Items";
+            if (!AssetDatabase.IsValidFolder(itemsPath))
+            {
+                AssetDatabase.CreateFolder(resourcesPath, "Items");
+            }
+
+            var path = $"{itemsPath}/{name}.asset";
+            var asset = ScriptableObject.CreateInstance<UnityObjectTestAsset>();
+            AssetDatabase.CreateAsset(asset, path);
+            AssetDatabase.SaveAssets();
+            return path;
+        }
+
+        private static UnityObjectReference GetSnapshotReference(
+            GameDBDocument document, string fieldName)
+        {
+            var row = document.CreateSnapshot().Tables
+                .Single(table => table.Name == "Items").Rows
+                .Single(item => item.Key == "Sword");
+            return (UnityObjectReference)row.Values[fieldName];
+        }
+
+        private static void AssertReferencePath(object value, string expectedPath)
+        {
+            if (value is UnityObjectReference reference)
+            {
+                Assert.That(reference.Path, Is.EqualTo(expectedPath));
+                return;
+            }
+
+            var wire = (IDictionary<string, object>)value;
+            Assert.That(wire["path"], Is.EqualTo(expectedPath));
         }
 
         private GameDBDocument CreateSavedDocument()

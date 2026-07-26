@@ -136,26 +136,77 @@ namespace GameDBLibrary.Tests
         }
 
         [Test]
+        public void Export_GeneratesUnityObjectValueGuidPathAndObjectAccessors()
+        {
+            var gameDB = CreateInMemoryDatabase("UnityObjectOutput");
+            Assert.That(gameDB.AddTable("Items", KeyType.@string), Is.True);
+            var items = (TableModel)gameDB.Tables["Items"];
+            Assert.That(items.AddField("Icon", FieldType.unityObject, false), Is.True);
+            Assert.That(items.AddField("Icons", FieldType.unityObject, true), Is.True);
+            Assert.That(items.AddField("IconsBySlot", FieldType.dictionary, false,
+                new DictionaryType(KeyType.@string, null, FieldType.unityObject, null)), Is.True);
+
+            var outputPath = CreateOutputPath();
+            try
+            {
+                new CSharpExporter().Export(outputPath, gameDB, true);
+                var unityCode = File.ReadAllText(Path.Combine(
+                    outputPath, gameDB.ScopeName, "Items.cs"));
+                Assert.That(unityCode, Does.Contain(
+                    "public global::GameDBLibrary.UnityObjectReference IconVal"));
+                Assert.That(unityCode, Does.Contain("public string IconGuidVal"));
+                Assert.That(unityCode, Does.Contain("public string IconPathVal"));
+                Assert.That(unityCode, Does.Contain(
+                    "public global::UnityEngine.Object IconObjectVal"));
+                Assert.That(unityCode, Does.Contain(".GetGuid()"));
+                Assert.That(unityCode, Does.Contain(".GetPath()"));
+                Assert.That(unityCode, Does.Contain(".GetObject()"));
+                Assert.That(unityCode, Does.Contain(
+                    "global::System.Collections.Generic.List<global::GameDBLibrary.UnityObjectReference> IconsVal"));
+                Assert.That(unityCode, Does.Contain(
+                    "global::GameDBLibrary.DictionaryAccessor<string, global::GameDBLibraryUnity.UnityObjectAccessor>"));
+
+                new CSharpExporter().Export(outputPath, gameDB, false);
+                var coreCode = File.ReadAllText(Path.Combine(
+                    outputPath, gameDB.ScopeName, "Items.cs"));
+                Assert.That(coreCode, Does.Contain(
+                    "public global::GameDBLibrary.UnityObjectReference IconVal"));
+                Assert.That(coreCode, Does.Contain("public string IconGuidVal"));
+                Assert.That(coreCode, Does.Contain("public string IconPathVal"));
+                Assert.That(coreCode, Does.Not.Contain("IconObjectVal"));
+                Assert.That(coreCode, Does.Not.Contain("global::UnityEngine.Object"));
+                Assert.That(coreCode, Does.Contain(
+                    "global::GameDBLibrary.DictionaryAccessor<string, global::GameDBLibrary.UnityObjectAccessor>"));
+            }
+            finally
+            {
+                DeleteDirectory(outputPath);
+            }
+        }
+
+        [Test]
         public void Validate_RejectsAccessorAndContainingTypeCollisions()
         {
             var gameDB = CreateInMemoryDatabase("AccessorCollisions");
             Assert.That(gameDB.AddTable("Items", KeyType.@string), Is.True);
-            Assert.That(gameDB.AddTable("IconPathVal", KeyType.@string), Is.True);
+            Assert.That(gameDB.AddTable("IconVal", KeyType.@string), Is.True);
 
             var items = (TableModel)gameDB.Tables["Items"];
             Assert.That(items.AddField("Icon", FieldType.unityObject, false), Is.True);
+            Assert.That(items.AddField("IconGuid", FieldType.@string, false), Is.True);
             Assert.That(items.AddField("IconPath", FieldType.@string, false), Is.True);
             Assert.That(items.AddField("IconObject", FieldType.@string, false), Is.True);
 
-            var containingType = (TableModel)gameDB.Tables["IconPathVal"];
+            var containingType = (TableModel)gameDB.Tables["IconVal"];
             Assert.That(containingType.AddField("Icon", FieldType.unityObject, false), Is.True);
 
             var issues = CSharpExporter.Validate(gameDB, true);
 
-            Assert.That(issues.Count(issue => issue.Code == "member.name.collision"), Is.GreaterThanOrEqualTo(3));
+            Assert.That(issues.Count(issue => issue.Code == "member.name.collision"), Is.GreaterThanOrEqualTo(4));
+            Assert.That(issues.Any(issue => issue.Message.Contains("IconGuidVal") && issue.TableName == "Items"), Is.True);
             Assert.That(issues.Any(issue => issue.Message.Contains("IconPathVal") && issue.TableName == "Items"), Is.True);
             Assert.That(issues.Any(issue => issue.Message.Contains("IconObjectVal") && issue.TableName == "Items"), Is.True);
-            Assert.That(issues.Any(issue => issue.Message.Contains("containing row type") && issue.TableName == "IconPathVal"), Is.True);
+            Assert.That(issues.Any(issue => issue.Message.Contains("containing row type") && issue.TableName == "IconVal"), Is.True);
         }
 
         [Test]

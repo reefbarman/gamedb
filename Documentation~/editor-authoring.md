@@ -12,7 +12,7 @@ Open **Window → GameDB → Open Editor**.
 
 Keep both files under `Assets`. A `Resources` folder is recommended when generated runtime code will load the data with `Resources.Load`.
 
-Every schema authored for this release requires a root-level integer `"formatVersion": 1`. The editor checks the marker before loading tables or data. Missing, malformed, or newer versions are refused without rewriting either file; a newer version requires a newer GameDB package.
+Every schema requires the root-level integer `"formatVersion": 2`. The editor checks the marker before loading tables or data. Missing, malformed, older, or newer versions are refused without rewriting either file.
 
 Registered database paths and other editor preferences are project-scoped; they are not stored in the package installation.
 
@@ -50,7 +50,7 @@ Supported field types are:
 | `Color`, `Vector2`, `Vector3`, `Vector4` | Edited with Unity controls and exposed as Unity value types by generated accessors.                                              |
 | `Enum`                                   | Uses a public enum imported from compiled project code.                                                                          |
 | `Table Reference`                        | Selects a row in another table and generates both key and typed-row accessors.                                                   |
-| `Unity Object`                           | Stores an asset path. Only assets inside a `Resources` folder are accepted.                                                      |
+| `Unity Object`                           | Stores a canonical asset GUID and path. Only main project assets beneath exactly one `Resources` directory are accepted.         |
 | `Dictionary`                             | Uses string or enum keys and a supported scalar, enum, table-reference, or Unity value type. Dictionaries cannot also be arrays. |
 
 All non-dictionary field types can be arrays. Click the small **E** button beside an array or dictionary value to open its editor. Change the size or add/remove entries, edit the values, then click **Save & Close**. **Close** discards edits made in that popup.
@@ -71,9 +71,9 @@ Removing an enum from this list does not rewrite existing schemas. Keep referenc
 
 ## Unity object fields
 
-Unity object fields can reference textures, audio clips, prefabs, and other Unity assets. The editor stores the project asset path, but generated runtime accessors load the asset through `Resources.Load`. The selected asset must therefore be inside a directory named `Resources`.
+Unity object fields can reference textures, audio clips, prefabs, and other main Unity assets. The persisted value contains both the asset GUID and its project path. The selected asset must be beneath exactly one case-sensitive `Resources` directory because Unity-enabled generated accessors load it through `Resources.Load`.
 
-Moving or renaming the asset does not automatically rewrite the GameDB value. Update the database and test the generated accessor after asset moves.
+A real **Save GameDB** operation resolves every non-empty scalar, array element, and dictionary value from its GUID and refreshes the stored path before writing. Moves and renames within `Resources` are therefore normalized automatically. Missing GUIDs, subassets, scene objects, unloadable assets, and assets moved outside `Resources` block the save without changing the live database or either file. Dry runs and read-only operations do not refresh paths.
 
 ## Localization databases
 
@@ -81,10 +81,10 @@ Enable **Localization DB** before defining a localization schema. Localization t
 
 ## Save and generate classes
 
-- **Save GameDB** writes both the data and schema documents.
+- **Save GameDB** normalizes Unity-object references, validates the complete database, and writes both data and schema documents only when those steps succeed.
 - **Generate Classes** writes strongly typed C# files under the selected `Assets` folder.
 
-Generated files are derived output: do not hand-edit them. Generated database, table, and row classes are `partial`, so add game-specific members in separate files. Regenerate after changing the scope, tables, keys, fields, field types, enum definitions, or localization mode, and regenerate all classes after updating from package `1.0.0-preview.1`.
+Generated files are derived output: do not hand-edit them. Generated database, table, and row classes are `partial`, so add game-specific members in separate files. Regenerate after changing the scope, tables, keys, fields, field types, enum definitions, or localization mode.
 
 Generation validates the complete symbol and filename set before touching the destination. It writes a complete scope to staging and replaces the existing scope folder, preserving `.cs.meta` files for unchanged generated filenames and removing stale source and metadata for deleted tables. Any other hand-authored file inside the generated scope folder is also removed; keep extensions outside that folder. If generation targets an existing non-empty scope folder through `GameDBAutomationService`, it requires explicit destructive authorization.
 

@@ -22,7 +22,7 @@ namespace GameDBEditorLibrary
 
     internal static class GameDBSchemaFormat
     {
-        internal const int CurrentVersion = 1;
+        internal const int CurrentVersion = 2;
 
         internal static IDictionary<string, object> ParseAndValidate(string schemaJson)
         {
@@ -238,6 +238,11 @@ namespace GameDBEditorLibrary
                     || result.Status == GameDBSaveStatus.PersistenceStateUnknown)
                 {
                     m_persistenceDocument = document;
+                }
+
+                if (result.FilesCommitted)
+                {
+                    AdoptDocumentState(document);
                 }
 
                 if (!result.Success)
@@ -467,6 +472,14 @@ namespace GameDBEditorLibrary
             json = JsonHelper.FormatJson(json);
 
             return json;
+        }
+
+        private void AdoptDocumentState(GameDBDocument document)
+        {
+            var state = document.SerializeCurrent();
+            var imported = DeserializeSchema(state.SchemaJson);
+            GameDBSerializer.DeserializeData(imported.Tables, state.DataJson);
+            ApplyImportedState(imported);
         }
 
         private static void ImportFromRuntimeDB(Dictionary<string, TableBase> tables, IGameDB runtimeDB)

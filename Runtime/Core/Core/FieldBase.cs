@@ -52,36 +52,49 @@ namespace GameDBLibrary
 
         public bool IsValueValid(object value)
         {
-            if (value == null)
-            {
-                return Type == FieldType.tableRef;
-            }
-
-            var expectedType = GetSystemType();
-
             if (Type == FieldType.dictionary)
             {
                 return GetTypeArg<DictionaryType>().IsValueValid(value);
             }
 
-            if (expectedType.IsEnum || Type == FieldType.color || Type == FieldType.vector2 || Type == FieldType.vector3 || Type == FieldType.vector4)
+            if (!IsArray)
             {
-                expectedType = typeof(string);
+                return IsScalarValueValid(value);
             }
 
-            if (IsArray)
+            if (!(value is List<object> valueList))
             {
-                if (value.GetType() != typeof(List<object>)) return false;
+                return false;
+            }
 
-                var valueList = value as List<object>;
-
-                if (valueList.Count == 0) return true;
-
-                value = valueList[0];
-                if (value == null)
+            foreach (var item in valueList)
+            {
+                if (!IsScalarValueValid(item))
                 {
-                    return Type == FieldType.tableRef;
+                    return false;
                 }
+            }
+
+            return true;
+        }
+
+        private bool IsScalarValueValid(object value)
+        {
+            if (value == null)
+            {
+                return Type == FieldType.tableRef;
+            }
+
+            if (Type == FieldType.unityObject)
+            {
+                return UnityObjectReferenceWire.TryParse(value, out _);
+            }
+
+            var expectedType = GetSystemType();
+            if (expectedType.IsEnum || Type == FieldType.color || Type == FieldType.vector2
+                || Type == FieldType.vector3 || Type == FieldType.vector4)
+            {
+                expectedType = typeof(string);
             }
 
             if (Type == FieldType.@int)
@@ -94,7 +107,8 @@ namespace GameDBLibrary
                 try
                 {
                     var number = Convert.ToInt64(value);
-                    return number >= int.MinValue && number <= int.MaxValue && Convert.ToDecimal(value) == number;
+                    return number >= int.MinValue && number <= int.MaxValue
+                        && Convert.ToDecimal(value) == number;
                 }
                 catch (Exception)
                 {

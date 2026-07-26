@@ -28,20 +28,20 @@ Attempts to use rooted paths or `..` traversal outside `Assets` fail without wri
 
 ## Schema format contract
 
-Every schema root requires a positive JSON integer `formatVersion`. The current and only supported value is `1`:
+Every schema root requires a positive JSON integer `formatVersion`. The current and only supported value is `2`:
 
 ```json
 {
-  "formatVersion": 1,
+  "formatVersion": 2,
   "tables": {},
   "scope": "Main",
   "localizationDB": false
 }
 ```
 
-GameDB validates this value before hydrating tables or data. Missing, null, string, fractional, non-positive, and out-of-range values are malformed. A value greater than `1` requires a newer GameDB package. These failures leave both database files unchanged and produce actionable load messages through Inspect/Validate/general mutations, `LoadFailed` through Batch/Query/CSV, or a failed raw Save result.
+GameDB validates this value before hydrating tables or data. Missing, null, string, fractional, non-positive, out-of-range, older, and newer values are rejected. These failures leave both database files unchanged and produce actionable load messages through Inspect/Validate/general mutations, `LoadFailed` through Batch/Query/CSV, or a failed raw Save result.
 
-`GameDBSaveRequest.SchemaJson` must include `"formatVersion": 1`, including for new files and dry runs. Supplying unversioned schema JSON is an error. `ExportJson` returns canonical versioned schema JSON suitable for a later guarded Save.
+`GameDBSaveRequest.SchemaJson` must include `"formatVersion": 2`, including for new files and dry runs. Supplying unversioned schema JSON is an error. `ExportJson` returns canonical versioned schema JSON suitable for a later guarded Save.
 
 ## Read operations
 
@@ -92,12 +92,12 @@ var page = GameDBAutomationService.Query(new GameDBQueryRequest
 
 Predicates in one table projection are **AND-combined**. Query does not support OR, NOT, nested expressions, joins, arbitrary sorting, total counts, or per-table limits.
 
-| Predicate       | Compatible field shape                                               | Payload and behavior                                                                                                                                |
-| --------------- | -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Equals`        | Non-collection scalar fields                                         | Uses `Value` and compares normalized wire values. `null` is accepted only for scalar `tableRef` and matches an unset reference.                     |
-| `Contains`      | Scalar `string`, non-reference arrays, or dictionary keys            | Uses `Value`. Strings use case-sensitive ordinal substring matching; arrays use exact element equality; dictionaries test key presence, not values. |
-| `NumericRange`  | Scalar `int` or `float`                                              | Uses inclusive `Minimum`/`Maximum`; at least one bound is required. `int` bounds must fit `Int32`; `float` bounds must be finite `Single` values.   |
-| `ReferencesRow` | Scalar/array `tableRef`, or a dictionary whose values are `tableRef` | Uses a non-empty row-key `Value`; the target row must exist. It matches any referenced value in the scalar, array, or dictionary-value field.       |
+| Predicate       | Compatible field shape                                                         | Payload and behavior                                                                                                                                                                                  |
+| --------------- | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Equals`        | Non-collection scalar fields                                                   | Uses `Value` and compares normalized wire values. `null` is accepted only for scalar `tableRef`. A `unityObject` operand must be canonical; empty matches empty and non-empty values compare by GUID. |
+| `Contains`      | Scalar `string`, non-reference arrays, Unity-object arrays, or dictionary keys | Uses `Value`. Strings use case-sensitive ordinal substring matching; ordinary arrays use exact element equality; Unity-object arrays use canonical GUID identity; dictionaries test key presence.     |
+| `NumericRange`  | Scalar `int` or `float`                                                        | Uses inclusive `Minimum`/`Maximum`; at least one bound is required. `int` bounds must fit `Int32`; `float` bounds must be finite `Single` values.                                                     |
+| `ReferencesRow` | Scalar/array `tableRef`, or a dictionary whose values are `tableRef`           | Uses a non-empty row-key `Value`; the target row must exist. It matches any referenced value in the scalar, array, or dictionary-value field.                                                         |
 
 `Equals` does not accept arrays or dictionaries. `Contains` validates array values against the element type; table-reference arrays use `ReferencesRow` instead. Enum values and enum dictionary keys must be declared member names. Color and vector values use their documented strings; Query parses and emits vector components with invariant culture. `Equals`, `Contains`, and `ReferencesRow` accept only `Value`; `NumericRange` accepts only `Minimum` and/or `Maximum`, and rejects a minimum greater than its maximum.
 
@@ -111,15 +111,16 @@ Tables and rows are evaluated in ordinal `(table name, row key)` order. Result t
 
 `GameDBQueryRowResult.Values` contains JSON-compatible CLR shapes suitable for transport; it is not serialized JSON.
 
-| Field shape             | Query value                                                         |
-| ----------------------- | ------------------------------------------------------------------- |
-| `int` / `float`         | boxed `long` / boxed `double`                                       |
-| `bool`                  | boxed `bool`                                                        |
-| `string`, `unityObject` | `string`                                                            |
-| `tableRef`              | row-key `string`, or `null` when unset                              |
-| enum, color, vector     | normalized `string`; vector formatting is invariant                 |
-| array                   | `List<object>` preserving stored element order                      |
-| dictionary              | `Dictionary<string, object>` with normalized keys and scalar values |
+| Field shape         | Query value                                                              |
+| ------------------- | ------------------------------------------------------------------------ |
+| `int` / `float`     | boxed `long` / boxed `double`                                            |
+| `bool`              | boxed `bool`                                                             |
+| `string`            | `string`                                                                 |
+| `unityObject`       | `Dictionary<string, object>` with exact string `guid` and `path` entries |
+| `tableRef`          | row-key `string`, or `null` when unset                                   |
+| enum, color, vector | normalized `string`; vector formatting is invariant                      |
+| array               | `List<object>` preserving stored element order                           |
+| dictionary          | `Dictionary<string, object>` with normalized keys and scalar values      |
 
 This differs from `GameDBSnapshot`, returned by `Inspect`/`Load`: snapshot row dictionaries are detached model values and may contain runtime CLR objects such as `GameDBLibrary.Color` or vector instances. Query normalizes the projected values into the transport-oriented shapes above.
 
@@ -172,7 +173,8 @@ Export protects every header, row key, and value cell before RFC quoting. If the
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | string key                      | Exact non-empty, non-whitespace-only text except reserved `~not-set~`                                                     |
 | enum key                        | Exact declared enum member name                                                                                           |
-| `string`, `unityObject`         | Exact text; empty is valid                                                                                                |
+| `string`                        | Exact text; empty is valid                                                                                                |
+| `unityObject`                   | Compact canonical JSON; unassigned is `{"guid":"","path":""}` and raw paths or malformed objects are rejected             |
 | `bool`                          | `true` or `false`; import is case-insensitive                                                                             |
 | `int`                           | Invariant signed decimal in `Int32` range; fractions, thousands separators, and overflow are rejected                     |
 | `float`                         | Invariant round-trip finite `Single`; decimal and scientific input are accepted, while NaN/infinity/overflow are rejected |
@@ -218,7 +220,7 @@ GameDBAutomationResult DeleteRow(GameDBDeleteRequest request);
 GameDBAutomationResult GenerateCSharp(GameDBGenerateRequest request);
 ```
 
-Every operation is path-addressed and loads an isolated model. It does not depend on whichever database is selected in the GameDB editor window.
+Every operation is path-addressed and loads an isolated model. It does not depend on whichever database is selected in the GameDB editor window. A real editor save normalizes scalar, array, and dictionary Unity-object paths from their GUIDs before persistence; read operations and dry runs remain pure and do not resolve assets or refresh paths.
 
 ## Operation options
 
@@ -321,21 +323,22 @@ Authorization does not bypass path containment, type validation, revision checks
 
 Request values use JSON-compatible CLR shapes:
 
-| GameDB type                         | Request value                                                                  |
-| ----------------------------------- | ------------------------------------------------------------------------------ |
-| `string`, `unityObject`, `tableRef` | `string` (`null` is accepted only for table references)                        |
-| `int`                               | any integral numeric value within `Int32` range; JSON normally supplies `long` |
-| `float`                             | a finite numeric value within `Single` range                                   |
-| `bool`                              | `bool`                                                                         |
-| `enum`                              | declared member name as `string`                                               |
-| `color`                             | hex string such as `"#FF8000"`                                                 |
-| `vector2`                           | comma-separated string such as `"1.5,2.5"`                                     |
-| `vector3`                           | comma-separated string such as `"1,2,3"`                                       |
-| `vector4`                           | comma-separated string such as `"1,2,3,4"`                                     |
-| array                               | `List<object>` containing values of the scalar wire type                       |
-| dictionary                          | `Dictionary<string, object>`                                                   |
+| GameDB type          | Request value                                                                  |
+| -------------------- | ------------------------------------------------------------------------------ |
+| `string`, `tableRef` | `string` (`null` is accepted only for table references)                        |
+| `unityObject`        | exact `Dictionary<string, object>` with string `guid` and `path` entries       |
+| `int`                | any integral numeric value within `Int32` range; JSON normally supplies `long` |
+| `float`              | a finite numeric value within `Single` range                                   |
+| `bool`               | `bool`                                                                         |
+| `enum`               | declared member name as `string`                                               |
+| `color`              | hex string such as `"#FF8000"`                                                 |
+| `vector2`            | comma-separated string such as `"1.5,2.5"`                                     |
+| `vector3`            | comma-separated string such as `"1,2,3"`                                       |
+| `vector4`            | comma-separated string such as `"1,2,3,4"`                                     |
+| array                | `List<object>` containing values of the scalar wire type                       |
+| dictionary           | `Dictionary<string, object>`                                                   |
 
-All array elements and dictionary entries are validated. Dictionary fields cannot be arrays or contain nested dictionary values.
+All array elements and dictionary entries are validated. Unity-object values use the same exact canonical object in scalar, array, and dictionary positions. Dictionary fields cannot be arrays or contain nested dictionary values.
 
 - Enum type arguments use a public project's reflection full type name.
 - Table-reference type arguments use the target table name.

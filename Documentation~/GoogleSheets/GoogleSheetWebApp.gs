@@ -61,6 +61,8 @@ function ImportJSON(sheetID, schemaJSON, dataJSON)
     var schema = JSON.parse(schemaJSON);
     var data = JSON.parse(dataJSON);
 
+    validateLegacySchema(schema);
+
     var sheets = {};
 
     for (var tableName in schema.tables)
@@ -85,6 +87,28 @@ function ImportJSON(sheetID, schemaJSON, dataJSON)
   catch (e)
   {
     return { error: { message: e.message } }
+  }
+}
+
+function validateLegacySchema(schema)
+{
+  if (schema.formatVersion !== 2)
+  {
+    throw new Error("Only GameDB schema format version 2 is supported");
+  }
+
+  for (var tableName in schema.tables)
+  {
+    var fields = schema.tables[tableName].fields;
+    for (var fieldName in fields)
+    {
+      var field = fields[fieldName];
+      if (field.type == "unityObject" ||
+          (field.type == "dictionary" && field.typeArg != null && field.typeArg.value == "unityObject"))
+      {
+        throw new Error("Unity object fields are not supported by the legacy Google Sheets script; use GameDB CSV import/export instead");
+      }
+    }
   }
 }
 
@@ -318,6 +342,8 @@ function exportSheet(sheet, tableName)
 
   var schemaJSON = sheet.getRange(1, sheet.getLastColumn(), 1).getValue();
   var schema = JSON.parse(schemaJSON);
+
+  validateLegacySchema(schema);
 
   if (!(tableName in schema.tables))
   {

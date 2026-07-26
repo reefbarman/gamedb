@@ -4,11 +4,12 @@ This is a curated reference for the supported public C# surface in the current G
 
 ## Assemblies and namespaces
 
-| Assembly                   | Availability                                                               | Consumer namespaces                                                     |
-| -------------------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `GameDBLibrary`            | Runtime and Editor; auto-referenced                                        | `GameDBLibrary`, `GameDBLibraryUnity`, plus the global `Row` base class |
-| `GameDBEditorLibrary`      | Unity Editor only (`includePlatforms: Editor`); references `GameDBLibrary` | `GameDBEditorLibrary`, `GameDBEditorLibrary.Automation`                 |
-| Generated project assembly | Wherever the generated `.cs` files are placed under `Assets/`              | `GameDB{ScopeName}`                                                     |
+| Assembly                     | Availability                                                                              | Consumer namespaces                                                     |
+| ---------------------------- | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `GameDBLibrary`              | Runtime and Editor; auto-referenced                                                       | `GameDBLibrary`, `GameDBLibraryUnity`, plus the global `Row` base class |
+| `GameDBLibrary.Addressables` | Optional runtime assembly; compiled only with supported separately installed Addressables | `GameDBLibraryAddressables`                                             |
+| `GameDBEditorLibrary`        | Unity Editor only (`includePlatforms: Editor`); references `GameDBLibrary`                | `GameDBEditorLibrary`, `GameDBEditorLibrary.Automation`                 |
+| Generated project assembly   | Wherever the generated `.cs` files are placed under `Assets/`                             | `GameDB{ScopeName}`                                                     |
 
 Do not reference `GameDBEditorLibrary` from a player/runtime assembly. Generated code references `GameDBLibrary`; generation with the Unity loader enabled also emits Unity-specific value access and a `Resources.Load` helper.
 
@@ -75,7 +76,18 @@ When C# is generated without Unity-specific accessors, color and vector fields r
 | `Vector2`              | `float x/y { get; set; }`; numeric and `string` constructors                                                                 | String form is invariant-culture comma-separated components. Missing, invalid, or non-finite components can throw. `ToString()` emits invariant round-trip components.                  |
 | `Vector3`              | `float x/y/z { get; set; }`; numeric and `string` constructors                                                               | Same semantics with three components.                                                                                                                                                   |
 | `Vector4`              | `float x/y/z/w { get; set; }`; numeric and `string` constructors                                                             | Same semantics with four components.                                                                                                                                                    |
-| `UnityObjectReference` | read-only `Guid`, `Path`, and `IsEmpty`; value equality                                                                      | Contains either two empty strings or a lowercase 32-character asset GUID plus an `Assets/.../Resources/...` asset path. The wire object has exactly lowercase `guid` and `path` keys.   |
+| `UnityObjectReference` | read-only `Guid`, `Path`, and `IsEmpty`; value equality                                                                      | Contains either two empty strings or a lowercase 32-character asset GUID plus a main-asset path beneath `Assets/`. The wire object has exactly lowercase `guid` and `path` keys.        |
+
+When Addressables is installed separately, `GameDBLibraryAddressables` exposes:
+
+```csharp
+Awaitable<AddressableAssetLease<T>> LoadAddressableAsync<T>(
+    this UnityObjectReference reference,
+    CancellationToken cancellationToken = default)
+    where T : UnityEngine.Object;
+```
+
+`AddressableAssetLease<T>` has read-only `Asset` and `IsDisposed` properties and an idempotent `Dispose()`. Every successful call owns one load reference until its lease is disposed; accessing `Asset` after disposal throws `ObjectDisposedException`. Expected Addressables failures throw `AddressableAssetLoadException` with `AssetGuid`, `AssetPath`, `RequestedType`, and an underlying `InnerException` when available. See the [optional Addressables contract](addressables.md).
 
 Unity conversions are extension methods in `GameDBLibraryUnity.TypeHelpers`:
 
@@ -104,7 +116,7 @@ Enum member names are part of the serialized schema/code-generation contract. Us
 
 ### Schema file format
 
-Editor-authored `.schema.json` files require the root-level JSON integer `"formatVersion": 2`; it is independent of the package's SemVer version. GameDB validates it before hydrating schema tables or data. Missing, malformed, older, and newer values fail the editor/document load without rewriting either file.
+Editor-authored `.schema.json` files require the root-level JSON integer `"formatVersion": 3`; it is independent of the package's SemVer version. GameDB validates it before hydrating schema tables or data. Missing, malformed, older, and newer values fail the editor/document load without rewriting either file.
 
 `GameDBAutomationService.Save` applies the same rule to `GameDBSaveRequest.SchemaJson`, including new-file and dry-run requests. Expected format failures are returned through the operation's normal failure result: general operations expose the actionable `Message`, while Batch, Query, and CSV classify load failures through their existing failure kinds and error codes.
 
@@ -210,7 +222,7 @@ Generated scalar/array return shapes are:
 
 Field getters cache their converted accessor/value for the lifetime of the generated row. Generated lists and dictionaries are mutable cached objects owned by that row; treat them as read-only game data. Loading new data replaces rows, so callers should reacquire row, list, dictionary, and table-reference values after import/reload rather than assuming an old object updates in place.
 
-The core `UnityObjectAccessor` returns the canonical reference through `GetValue()` and exposes `GetGuid()` and `GetPath()`. `GameDBLibraryUnity.UnityObjectAccessor` additionally exposes `GetObject()`, which loads the validated Resources path. Empty returns `null`; malformed wire values are rejected before accessor construction. Unity-object dictionary values remain accessor objects rather than parallel generated dictionaries.
+The core `UnityObjectAccessor` returns the canonical reference through `GetValue()` and exposes `GetGuid()` and `GetPath()`. `GameDBLibraryUnity.UnityObjectAccessor` additionally exposes `GetObject()`, which loads references beneath exactly one case-sensitive `Resources` directory. Empty returns `null`; a valid non-Resources reference throws `InvalidOperationException`, and malformed wire values are rejected before accessor construction. Unity-object dictionary values remain accessor objects rather than parallel generated dictionaries.
 
 ### Generated schema constants
 

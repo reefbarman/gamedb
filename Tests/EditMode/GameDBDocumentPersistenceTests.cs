@@ -89,14 +89,14 @@ namespace GameDBLibrary.Tests
             CreateSavedDocument();
             var dataBefore = File.ReadAllBytes(m_databaseAbsolutePath);
             File.WriteAllText(m_schemaAbsolutePath,
-                File.ReadAllText(m_schemaAbsolutePath).Replace("\"formatVersion\": 2", "\"formatVersion\": 3"));
+                File.ReadAllText(m_schemaAbsolutePath).Replace("\"formatVersion\": 3", "\"formatVersion\": 4"));
             var schemaBefore = File.ReadAllBytes(m_schemaAbsolutePath);
 
             var exception = Assert.Throws<GameDBSchemaFormatException>(() =>
                 GameDBDocument.Load(m_databasePath,
                     GameDBFilePairStore.Instance, new RecordingPostSaveActions()));
 
-            Assert.That(exception.FoundVersion, Is.EqualTo(3));
+            Assert.That(exception.FoundVersion, Is.EqualTo(4));
             Assert.That(exception.Message, Does.Contain("newer GameDB package"));
             Assert.That(File.ReadAllBytes(m_databaseAbsolutePath), Is.EqualTo(dataBefore));
             Assert.That(File.ReadAllBytes(m_schemaAbsolutePath), Is.EqualTo(schemaBefore));
@@ -109,17 +109,17 @@ namespace GameDBLibrary.Tests
             var legacy = new GameDB();
             Assert.That(legacy.Load($"{m_assetFolderName}/database.json"), Is.True);
             File.WriteAllText(m_schemaAbsolutePath,
-                File.ReadAllText(m_schemaAbsolutePath).Replace("\"formatVersion\": 2", "\"formatVersion\": 3"));
+                File.ReadAllText(m_schemaAbsolutePath).Replace("\"formatVersion\": 3", "\"formatVersion\": 4"));
             var schemaBefore = File.ReadAllBytes(m_schemaAbsolutePath);
             LogAssert.Expect(LogType.Error, new Regex("^failed to load gameDB:"));
             LogAssert.Expect(LogType.Exception, new Regex(
-                "Schema format version 3 is newer than the supported version 2"));
+                "Schema format version 4 is newer than the supported version 3"));
 
             Assert.That(legacy.Load($"{m_assetFolderName}/database.json"), Is.False);
 
             LogAssert.Expect(LogType.Error, new Regex("^failed to save gameDB:"));
             LogAssert.Expect(LogType.Exception, new Regex(
-                "Schema format version 3 is newer than the supported version 2"));
+                "Schema format version 4 is newer than the supported version 3"));
             Assert.That(legacy.Save(), Is.False);
             Assert.That(File.ReadAllBytes(m_schemaAbsolutePath), Is.EqualTo(schemaBefore));
         }
@@ -134,10 +134,10 @@ namespace GameDBLibrary.Tests
             var scopeBefore = legacy.ScopeName;
             var pathBefore = legacy.LoadedPath;
             File.WriteAllText(m_schemaAbsolutePath,
-                File.ReadAllText(m_schemaAbsolutePath).Replace("\"formatVersion\": 2", "\"formatVersion\": 3"));
+                File.ReadAllText(m_schemaAbsolutePath).Replace("\"formatVersion\": 3", "\"formatVersion\": 4"));
             LogAssert.Expect(LogType.Error, new Regex("^failed to load gameDB:"));
             LogAssert.Expect(LogType.Exception, new Regex(
-                "Schema format version 3 is newer than the supported version 2"));
+                "Schema format version 4 is newer than the supported version 3"));
 
             Assert.That(legacy.LoadRuntimeDB(0, $"{m_assetFolderName}/database.json"), Is.False);
             Assert.That(legacy.Tables, Is.SameAs(tablesBefore));
@@ -154,7 +154,10 @@ namespace GameDBLibrary.Tests
             var firstSave = document.Save();
             Assert.That(firstSave.Success, Is.True, firstSave.Message);
 
-            var movedPath = $"{m_assetFolderPath}/Resources/Items/RenamedSword.asset";
+            var addressablesPath = $"{m_assetFolderPath}/Addressables";
+            AssetDatabase.CreateFolder(m_assetFolderPath, "Addressables");
+            AssetDatabase.CreateFolder(addressablesPath, "Items");
+            var movedPath = $"{addressablesPath}/Items/RenamedSword.asset";
             Assert.That(AssetDatabase.MoveAsset(originalPath, movedPath), Is.Empty);
             var normalizedSave = document.Save();
             var secondSave = document.Save();
@@ -207,6 +210,29 @@ namespace GameDBLibrary.Tests
                 .And.Contain(guid).And.Contain("missing"));
             Assert.That(File.ReadAllBytes(m_databaseAbsolutePath), Is.EqualTo(dataBefore));
             Assert.That(File.ReadAllBytes(m_schemaAbsolutePath), Is.EqualTo(schemaBefore));
+            Assert.That(document.CurrentRevision, Is.EqualTo(revisionBefore));
+            Assert.That(GetSnapshotReference(document, "Icon").Path, Is.EqualTo(pathBefore));
+        }
+
+        [Test]
+        public void Save_UnityObjectFolderReferenceLeavesFilesAndLiveModelUnchanged()
+        {
+            var folderPath = $"{m_assetFolderPath}/Folder.asset";
+            Assert.That(AssetDatabase.CreateFolder(m_assetFolderPath, "Folder.asset"), Is.Not.Empty);
+            var guid = AssetDatabase.AssetPathToGUID(folderPath);
+            var document = CreateUnityObjectDocument(guid, folderPath);
+            var revisionBefore = document.CurrentRevision;
+            var pathBefore = GetSnapshotReference(document, "Icon").Path;
+
+            var result = document.Save();
+
+            Assert.That(result.Success, Is.False);
+            Assert.That(result.Status, Is.EqualTo(GameDBSaveStatus.SerializationFailed));
+            Assert.That(result.FilesCommitted, Is.False);
+            Assert.That(result.Message, Does.Contain("Items[Sword].Icon")
+                .And.Contain(guid).And.Contain("folder"));
+            Assert.That(File.Exists(m_databaseAbsolutePath), Is.False);
+            Assert.That(File.Exists(m_schemaAbsolutePath), Is.False);
             Assert.That(document.CurrentRevision, Is.EqualTo(revisionBefore));
             Assert.That(GetSnapshotReference(document, "Icon").Path, Is.EqualTo(pathBefore));
         }
@@ -334,12 +360,12 @@ namespace GameDBLibrary.Tests
         {
             var state = CreateSavedDocument().CaptureState();
             state.SchemaJson = state.SchemaJson.Replace(
-                "\"formatVersion\": 2", "\"formatVersion\": 3");
+                "\"formatVersion\": 3", "\"formatVersion\": 4");
 
             var exception = Assert.Throws<GameDBSchemaFormatException>(() =>
                 GameDBDocument.RestoreState(state));
 
-            Assert.That(exception.FoundVersion, Is.EqualTo(3));
+            Assert.That(exception.FoundVersion, Is.EqualTo(4));
         }
 
         [Test]

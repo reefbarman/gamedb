@@ -7,6 +7,7 @@ GameDB is a schema-driven game-data editor, runtime library, C# generator, and e
 - [Repository and package overview](../README.md)
 - [Editor authoring](editor-authoring.md)
 - [Runtime use and hot reload](runtime.md)
+- [Optional Addressables integration](addressables.md)
 - [Supported API reference](api-reference.md)
 - [Agent and editor automation](automation.md), including transactional CSV import/export
 - [Legacy optional Google Sheets interoperability](google-sheets.md)
@@ -20,7 +21,7 @@ GameDB is a schema-driven game-data editor, runtime library, C# generator, and e
 3. Set a valid C# scope name.
 4. Create tables, fields, and rows, then save. Unity-object values use GUID-backed references and are path-normalized on real saves.
 5. Generate C# classes under `Assets`.
-6. Put database data and referenced Unity assets under `Resources` folders when using the generated `Resources.Load` helpers.
+6. Put database data and synchronously loaded Unity assets under `Resources`; use the [optional Addressables adapter](addressables.md) for asynchronous non-Resources asset loading.
 
 Import **Basic GameDB** from the Package Manager's **Samples** tab for a small working database.
 

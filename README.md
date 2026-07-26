@@ -71,9 +71,9 @@ The generated load path is relative to a `Resources` folder and omits the `.json
 
 ## Schema format version
 
-Every `.schema.json` file requires the root-level integer `"formatVersion": 2`. GameDB writes this marker when it creates or saves a database and validates it before loading any schema, data, editor state, or automation operation.
+Every `.schema.json` file requires the root-level integer `"formatVersion": 3`. GameDB writes this marker when it creates or saves a database and validates it before loading any schema, data, editor state, or automation operation.
 
-Unversioned, malformed, older, and newer schema formats are refused without rewriting either database file. Format version `2` is the only supported schema contract.
+Unversioned, malformed, older, and newer schema formats are refused without rewriting either database file. Format version `3` is the only supported schema contract.
 
 ## Supported data
 
@@ -81,7 +81,7 @@ GameDB supports:
 
 - strings, 32-bit integers, floats, and booleans
 - colors and 2D/3D/4D vectors
-- Unity object references stored as exact `{ "guid": "...", "path": "Assets/.../Resources/..." }` objects; both strings are empty when unassigned
+- Unity object references stored as exact `{ "guid": "...", "path": "Assets/..." }` objects; both strings are empty when unassigned
 - project enums
 - references to rows in another table
 - arrays of non-dictionary field types
@@ -89,12 +89,19 @@ GameDB supports:
 
 Table references and schema changes are validated before the automation API saves them. Generated code should be regenerated after schema changes.
 
+## Optional Addressables loading
+
+Install Unity Addressables separately when non-Resources Unity-object references need asynchronous loading. The optional `GameDBLibrary.Addressables` assembly loads generated `<Field>Val` references by GUID and returns a disposable typed lease that keeps the asset and dependencies alive. GameDB itself does not depend on Addressables, generate Addressables-specific row members, cache handles, or guess visible addresses.
+
+See [Optional Addressables integration](Documentation~/addressables.md) for installation, asmdef references, **Include GUIDs in Catalog**, content builds, cancellation, failure diagnostics, and lease lifetime.
+
 ## Documentation
 
 The package includes maintained Markdown documentation for:
 
 - [editor authoring](Documentation~/editor-authoring.md), including tables, fields, enums, arrays, dictionaries, settings, and data-only builds;
 - [runtime use and hot reload](Documentation~/runtime.md), including generated code, Play Mode editing, and localization;
+- [optional Addressables integration](Documentation~/addressables.md), including GUID loading and deterministic lease ownership;
 - the [supported API reference](Documentation~/api-reference.md);
 - [agent and editor automation](Documentation~/automation.md), including transactional CSV import/export;
 - [legacy optional Google Sheets interoperability](Documentation~/google-sheets.md).

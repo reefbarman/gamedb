@@ -1,0 +1,26 @@
+{
+  "name": "GameDBLibrary.Addressables",
+  "rootNamespace": "GameDBLibraryAddressables",
+  "references": [
+    "GameDBLibrary",
+    "Unity.Addressables",
+    "Unity.ResourceManager"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [
+    "GAMEDB_ADDRESSABLES"
+  ],
+  "versionDefines": [
+    {
+      "name": "com.unity.addressables",
+      "expression": "[2.9.1,4.0.0)",
+      "define": "GAMEDB_ADDRESSABLES"
+    }
+  ],
+  "noEngineReferences": false
+}

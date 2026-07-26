@@ -18,6 +18,7 @@ namespace GameDBLibrary.Tests
                 "readme",
                 "editor-authoring",
                 "runtime",
+                "addressables",
                 "api-reference",
                 "automation",
                 "google-sheets",
@@ -34,6 +35,7 @@ namespace GameDBLibrary.Tests
         [TestCase("index", "# GameDB documentation")]
         [TestCase("editor-authoring", "# Editor authoring")]
         [TestCase("runtime", "# Runtime use")]
+        [TestCase("addressables", "# Optional Addressables integration")]
         [TestCase("api-reference", "# GameDB API reference")]
         [TestCase("automation", "# GameDB editor automation")]
         [TestCase("basic-sample", "# Basic GameDB sample")]
@@ -53,7 +55,7 @@ namespace GameDBLibrary.Tests
 
             Assert.That(result.Success, Is.True, result.Message);
             Assert.That(result.Content, Does.Contain("## Schema format contract"));
-            Assert.That(result.Content, Does.Contain("\"formatVersion\": 2"));
+            Assert.That(result.Content, Does.Contain("\"formatVersion\": 3"));
             Assert.That(result.Content, Does.Contain("GameDBSaveRequest.SchemaJson"));
         }
 
@@ -74,6 +76,20 @@ namespace GameDBLibrary.Tests
             Assert.That(googleSheets.Content,
                 Does.Contain("rejects databases containing direct Unity-object fields"));
             Assert.That(googleSheets.Content, Does.Contain("use CSV"));
+        }
+
+        [Test]
+        public void ReadDocument_AddressablesDescribesInstallationAndOwnershipContract()
+        {
+            var result = GameDBDocumentationService.ReadDocument("addressables");
+
+            Assert.That(result.Success, Is.True, result.Message);
+            Assert.That(result.Content, Does.Contain("GameDBLibrary.Addressables"));
+            Assert.That(result.Content, Does.Contain("Include GUIDs in Catalog"));
+            Assert.That(result.Content, Does.Contain("AddressableAssetLease"));
+            Assert.That(result.Content, Does.Contain("LoadAddressableAsync"));
+            Assert.That(result.Content, Does.Contain("`Dispose()` is idempotent"));
+            Assert.That(result.Content, Does.Contain("WebGL"));
         }
 
         [Test]

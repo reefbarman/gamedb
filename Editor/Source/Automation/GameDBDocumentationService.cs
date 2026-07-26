@@ -14,6 +14,7 @@ namespace GameDBEditorLibrary.Automation
             new GameDBDocumentationEntry("readme", "Package overview and quick start", "README.md"),
             new GameDBDocumentationEntry("editor-authoring", "Editor authoring", "Documentation~/editor-authoring.md"),
             new GameDBDocumentationEntry("runtime", "Runtime use and hot reload", "Documentation~/runtime.md"),
+            new GameDBDocumentationEntry("addressables", "Optional Addressables integration", "Documentation~/addressables.md"),
             new GameDBDocumentationEntry("api-reference", "Supported API reference", "Documentation~/api-reference.md"),
             new GameDBDocumentationEntry("automation", "Agent and editor automation", "Documentation~/automation.md"),
             new GameDBDocumentationEntry("google-sheets", "Optional Google Sheets interoperability", "Documentation~/google-sheets.md"),

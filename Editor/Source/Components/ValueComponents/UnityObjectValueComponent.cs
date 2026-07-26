@@ -47,6 +47,7 @@ namespace GameDBEditorLibrary
             var path = AssetDatabase.GetAssetPath(selected);
             var guid = AssetDatabase.AssetPathToGUID(path);
             if (string.IsNullOrEmpty(path) || string.IsNullOrEmpty(guid)
+                || AssetDatabase.IsValidFolder(path)
                 || !AssetDatabase.IsMainAsset(selected))
             {
                 EditorUtility.DisplayDialog("Unsupported Unity object",
@@ -61,8 +62,8 @@ namespace GameDBEditorLibrary
             }
             catch (ArgumentException)
             {
-                EditorUtility.DisplayDialog("Not found in Resources folder",
-                    "The asset must be beneath exactly one Resources directory.", "OK");
+                EditorUtility.DisplayDialog("Unsupported Unity object",
+                    "The asset must have a valid project path beneath Assets.", "OK");
                 return reference;
             }
         }

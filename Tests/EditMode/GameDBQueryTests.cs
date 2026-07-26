@@ -698,7 +698,7 @@ namespace GameDBLibrary.Tests
         {
             CreateRepresentativeDatabase();
             File.WriteAllText(m_schemaAbsolutePath,
-                File.ReadAllText(m_schemaAbsolutePath).Replace("\"formatVersion\": 2", "\"formatVersion\": 3"));
+                File.ReadAllText(m_schemaAbsolutePath).Replace("\"formatVersion\": 3", "\"formatVersion\": 4"));
 
             var result = GameDBAutomationService.Query(new GameDBQueryRequest
             {
@@ -708,7 +708,7 @@ namespace GameDBLibrary.Tests
 
             AssertFailure(result, GameDBQueryFailureKind.LoadFailed, "database.loadFailed");
             Assert.That(result.Errors.Single().Message,
-                Does.Contain("format version 3").And.Contain("supported version 2"));
+                Does.Contain("format version 4").And.Contain("supported version 3"));
             Assert.That(result.Tables, Is.Empty);
         }
 

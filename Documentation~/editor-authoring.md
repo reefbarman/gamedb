@@ -12,7 +12,7 @@ Open **Window → GameDB → Open Editor**.
 
 Keep both files under `Assets`. A `Resources` folder is recommended when generated runtime code will load the data with `Resources.Load`.
 
-Every schema requires the root-level integer `"formatVersion": 2`. The editor checks the marker before loading tables or data. Missing, malformed, older, or newer versions are refused without rewriting either file.
+Every schema requires the root-level integer `"formatVersion": 3`. The editor checks the marker before loading tables or data. Missing, malformed, older, or newer versions are refused without rewriting either file.
 
 Registered database paths and other editor preferences are project-scoped; they are not stored in the package installation.
 
@@ -50,7 +50,7 @@ Supported field types are:
 | `Color`, `Vector2`, `Vector3`, `Vector4` | Edited with Unity controls and exposed as Unity value types by generated accessors.                                              |
 | `Enum`                                   | Uses a public enum imported from compiled project code.                                                                          |
 | `Table Reference`                        | Selects a row in another table and generates both key and typed-row accessors.                                                   |
-| `Unity Object`                           | Stores a canonical asset GUID and path. Only main project assets beneath exactly one `Resources` directory are accepted.         |
+| `Unity Object`                           | Stores a canonical asset GUID and path for a main project asset beneath `Assets`.                                                |
 | `Dictionary`                             | Uses string or enum keys and a supported scalar, enum, table-reference, or Unity value type. Dictionaries cannot also be arrays. |
 
 All non-dictionary field types can be arrays. Click the small **E** button beside an array or dictionary value to open its editor. Change the size or add/remove entries, edit the values, then click **Save & Close**. **Close** discards edits made in that popup.
@@ -71,9 +71,9 @@ Removing an enum from this list does not rewrite existing schemas. Keep referenc
 
 ## Unity object fields
 
-Unity object fields can reference textures, audio clips, prefabs, and other main Unity assets. The persisted value contains both the asset GUID and its project path. The selected asset must be beneath exactly one case-sensitive `Resources` directory because Unity-enabled generated accessors load it through `Resources.Load`.
+Unity object fields can reference textures, audio clips, prefabs, and other main Unity assets beneath `Assets`. The persisted value contains both the asset GUID and its current project path. Unity-enabled generated `ObjectVal`/`GetObject()` accessors load synchronously only when the referenced path is beneath exactly one case-sensitive `Resources` directory; load a valid non-Resources reference through the [optional Addressables integration](addressables.md).
 
-A real **Save GameDB** operation resolves every non-empty scalar, array element, and dictionary value from its GUID and refreshes the stored path before writing. Moves and renames within `Resources` are therefore normalized automatically. Missing GUIDs, subassets, scene objects, unloadable assets, and assets moved outside `Resources` block the save without changing the live database or either file. Dry runs and read-only operations do not refresh paths.
+A real **Save GameDB** operation resolves every non-empty scalar, array element, and dictionary value from its GUID and refreshes the stored path before writing. Moves and renames within, into, or out of `Resources` are normalized automatically. Missing GUIDs, subassets, scene objects, package assets, and unloadable assets block the save without changing the live database or either file. Dry runs and read-only operations do not refresh paths.
 
 ## Localization databases
 

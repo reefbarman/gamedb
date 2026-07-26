@@ -101,7 +101,7 @@ namespace GameDBLibrary.Tests
         {
             CreateScalarDatabase();
             File.WriteAllText(m_schemaAbsolutePath,
-                File.ReadAllText(m_schemaAbsolutePath).Replace("\"formatVersion\": 2", "\"formatVersion\": 3"));
+                File.ReadAllText(m_schemaAbsolutePath).Replace("\"formatVersion\": 3", "\"formatVersion\": 4"));
             var dataBefore = File.ReadAllBytes(m_databaseAbsolutePath);
             var schemaBefore = File.ReadAllBytes(m_schemaAbsolutePath);
 
@@ -121,9 +121,9 @@ namespace GameDBLibrary.Tests
             Assert.That(exported.Success, Is.False);
             Assert.That(exported.FailureKind, Is.EqualTo(GameDBCsvFailureKind.LoadFailed));
             Assert.That(exported.Errors.Select(error => error.Code), Does.Contain("csv.loadFailed"));
-            Assert.That(exported.Message, Does.Contain("format version 3"));
+            Assert.That(exported.Message, Does.Contain("format version 4"));
             AssertCsvFailure(imported, GameDBCsvFailureKind.LoadFailed, "csv.loadFailed");
-            Assert.That(imported.Message, Does.Contain("format version 3"));
+            Assert.That(imported.Message, Does.Contain("format version 4"));
             Assert.That(File.ReadAllBytes(m_databaseAbsolutePath), Is.EqualTo(dataBefore));
             Assert.That(File.ReadAllBytes(m_schemaAbsolutePath), Is.EqualTo(schemaBefore));
         }

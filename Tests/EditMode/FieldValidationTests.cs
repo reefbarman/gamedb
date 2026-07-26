@@ -43,6 +43,12 @@ namespace GameDBLibrary.Tests
             var field = new FieldBase("Icon", FieldType.unityObject, false);
 
             Assert.That(field.IsValueValid(ReferenceWire(CanonicalGuid, CanonicalPath)), Is.True);
+            Assert.That(field.IsValueValid(ReferenceWire(CanonicalGuid,
+                "Assets/Game/Sword.asset")), Is.True);
+            Assert.That(field.IsValueValid(ReferenceWire(CanonicalGuid,
+                "Assets/Game/resources/Sword.asset")), Is.True);
+            Assert.That(field.IsValueValid(ReferenceWire(CanonicalGuid,
+                "Assets/Resources/Nested/Resources/Sword.asset")), Is.True);
             Assert.That(field.IsValueValid(ReferenceWire(string.Empty, string.Empty)), Is.True);
         }
 
@@ -75,11 +81,8 @@ namespace GameDBLibrary.Tests
                 ReferenceWire("not-a-guid", CanonicalPath),
                 ReferenceWire(CanonicalGuid, "Packages/Game/Resources/Sword.asset"),
                 ReferenceWire(CanonicalGuid, "Assets/Game\\Resources\\Sword.asset"),
-                ReferenceWire(CanonicalGuid, "Assets/Game/Sword.asset"),
-                ReferenceWire(CanonicalGuid, "Assets/Game/resources/Sword.asset"),
                 ReferenceWire(CanonicalGuid, "Assets/Game/Resources"),
-                ReferenceWire(CanonicalGuid, "Assets/Game/Resources/Sword"),
-                ReferenceWire(CanonicalGuid, "Assets/Resources/Nested/Resources/Sword.asset")
+                ReferenceWire(CanonicalGuid, "Assets/Game/Resources/Sword")
             };
 
             foreach (var invalidValue in invalidValues)

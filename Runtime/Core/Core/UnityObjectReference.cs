@@ -15,7 +15,7 @@ namespace GameDBLibrary
         {
             if (!IsValid(guid, path))
             {
-                throw new ArgumentException("Unity object references require either empty values or a lowercase 32-character asset GUID and an Assets path beneath one Resources directory.");
+                throw new ArgumentException("Unity object references require either empty values or a lowercase 32-character asset GUID and a valid main-asset path beneath Assets.");
             }
 
             Guid = guid;
@@ -65,15 +65,43 @@ namespace GameDBLibrary
                 return guid.Length == 0 && path.Length == 0;
             }
 
-            return IsCanonicalGuid(guid) && TryGetResourcesPath(path, out _);
+            return IsCanonicalGuid(guid) && IsValidAssetPath(path);
+        }
+
+        internal static bool IsValidAssetPath(string assetPath)
+        {
+            if (string.IsNullOrEmpty(assetPath)
+                || !assetPath.StartsWith("Assets/", StringComparison.Ordinal)
+                || assetPath.IndexOf('\\') >= 0)
+            {
+                return false;
+            }
+
+            var segments = assetPath.Split('/');
+            if (segments.Length < 2)
+            {
+                return false;
+            }
+
+            foreach (var segment in segments)
+            {
+                if (segment.Length == 0
+                    || string.Equals(segment, ".", StringComparison.Ordinal)
+                    || string.Equals(segment, "..", StringComparison.Ordinal))
+                {
+                    return false;
+                }
+            }
+
+            var fileName = segments[segments.Length - 1];
+            var extensionIndex = fileName.LastIndexOf('.');
+            return extensionIndex > 0 && extensionIndex < fileName.Length - 1;
         }
 
         internal static bool TryGetResourcesPath(string assetPath, out string resourcesPath)
         {
             resourcesPath = null;
-            if (string.IsNullOrEmpty(assetPath)
-                || !assetPath.StartsWith("Assets/", StringComparison.Ordinal)
-                || assetPath.IndexOf('\\') >= 0)
+            if (!IsValidAssetPath(assetPath))
             {
                 return false;
             }
@@ -102,11 +130,6 @@ namespace GameDBLibrary
 
             var fileName = segments[segments.Length - 1];
             var extensionIndex = fileName.LastIndexOf('.');
-            if (extensionIndex <= 0 || extensionIndex == fileName.Length - 1)
-            {
-                return false;
-            }
-
             segments[segments.Length - 1] = fileName.Substring(0, extensionIndex);
             resourcesPath = string.Join("/", segments, resourcesIndex + 1,
                 segments.Length - resourcesIndex - 1);
@@ -160,7 +183,7 @@ namespace GameDBLibrary
         {
             if (!TryParse(value, out var reference))
             {
-                throw new FormatException("Unity object value must be an exact {guid, path} object containing either empty strings or a lowercase asset GUID and Resources asset path.");
+                throw new FormatException("Unity object value must be an exact {guid, path} object containing either empty strings or a lowercase asset GUID and valid main-asset path beneath Assets.");
             }
 
             return reference;

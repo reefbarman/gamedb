@@ -36,7 +36,8 @@ namespace GameDBLibrary
 
             if (!UnityObjectReference.TryGetResourcesPath(m_reference.Path, out var path))
             {
-                throw new InvalidOperationException("Unity object reference does not contain a valid Resources asset path.");
+                throw new InvalidOperationException(
+                    "Unity object reference is not beneath a Resources directory. Use the optional Addressables loader for non-Resources assets.");
             }
 
             return path;

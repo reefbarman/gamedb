@@ -28,20 +28,20 @@ Attempts to use rooted paths or `..` traversal outside `Assets` fail without wri
 
 ## Schema format contract
 
-Every schema root requires a positive JSON integer `formatVersion`. The current and only supported value is `2`:
+Every schema root requires a positive JSON integer `formatVersion`. The current and only supported value is `3`:
 
 ```json
 {
-  "formatVersion": 2,
+  "formatVersion": 3,
   "tables": {},
   "scope": "Main",
   "localizationDB": false
 }
 ```
 
-GameDB validates this value before hydrating tables or data. Missing, null, string, fractional, non-positive, out-of-range, older, and newer values are rejected. These failures leave both database files unchanged and produce actionable load messages through Inspect/Validate/general mutations, `LoadFailed` through Batch/Query/CSV, or a failed raw Save result.
+GameDB validates this value before hydrating tables or data. Missing, null, string, fractional, non-positive, out-of-range, older, and newer values are rejected. These failures leave both database files unchanged and produce actionable load messages through Inspect/Validate/general mutations, `LoadFailed` through Batch/Query/CSV, or a failed raw Save result. Runtime loading of non-Resources Unity-object references is documented separately in the [optional Addressables guide](addressables.md); automation continues to exchange the transport-neutral `{guid,path}` value.
 
-`GameDBSaveRequest.SchemaJson` must include `"formatVersion": 2`, including for new files and dry runs. Supplying unversioned schema JSON is an error. `ExportJson` returns canonical versioned schema JSON suitable for a later guarded Save.
+`GameDBSaveRequest.SchemaJson` must include `"formatVersion": 3`, including for new files and dry runs. Supplying unversioned schema JSON is an error. `ExportJson` returns canonical versioned schema JSON suitable for a later guarded Save.
 
 ## Read operations
 

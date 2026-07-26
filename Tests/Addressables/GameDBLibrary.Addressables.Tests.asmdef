@@ -1,0 +1,31 @@
+{
+  "name": "GameDBLibrary.Addressables.Tests",
+  "rootNamespace": "GameDBLibrary.Addressables.Tests",
+  "references": [
+    "GameDBLibrary",
+    "GameDBLibrary.Addressables"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS",
+    "GAMEDB_ADDRESSABLES"
+  ],
+  "versionDefines": [
+    {
+      "name": "com.unity.addressables",
+      "expression": "[2.9.1,4.0.0)",
+      "define": "GAMEDB_ADDRESSABLES"
+    }
+  ],
+  "noEngineReferences": false,
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ]
+}

@@ -101,6 +101,12 @@ namespace GameDBEditorLibrary.Documents
                     $"{context} references missing asset GUID '{reference.Guid}'.");
             }
 
+            if (AssetDatabase.IsValidFolder(path))
+            {
+                throw new InvalidOperationException(
+                    $"{context} must reference a main project asset, not a folder; GUID '{reference.Guid}' resolved to '{path}'.");
+            }
+
             UnityEngine.Object asset;
             try
             {
@@ -132,7 +138,7 @@ namespace GameDBEditorLibrary.Documents
             catch (ArgumentException exception)
             {
                 throw new InvalidOperationException(
-                    $"{context} asset '{path}' must be beneath exactly one Resources directory.",
+                    $"{context} asset '{path}' must have a valid project path beneath Assets.",
                     exception);
             }
         }

@@ -172,7 +172,7 @@ A persisted Unity-object value is the exact JSON object:
 {"guid":"0123456789abcdef0123456789abcdef","path":"Assets/Game/Resources/Items/Sword.prefab"}
 ```
 
-The unassigned value is `{"guid":"","path":""}`. Plain strings, `null`, half-empty references, missing or extra keys, malformed GUIDs, and paths outside a single actual `Resources` directory are rejected during import.
+The unassigned value is `{"guid":"","path":""}`. Plain strings, `null`, half-empty references, missing or extra keys, malformed GUIDs, package paths, path traversal, and paths that do not identify an asset file beneath `Assets` are rejected during import.
 
 For a scalar field named `Icon`, Unity generation produces:
 
@@ -183,9 +183,15 @@ string path = row.IconPathVal;
 UnityEngine.Object asset = row.IconObjectVal;
 ```
 
-`IconObjectVal` is emitted only for Unity-enabled generation. It extracts the extensionless path after the validated `Resources` segment and calls `Resources.Load`, equivalent to `Resources.Load("Items/Sword")` for the example above. An empty reference returns `null`; cast a loaded result to the expected Unity type.
+`IconObjectVal` is emitted only for Unity-enabled generation. For a reference beneath exactly one case-sensitive `Resources` directory, it extracts the extensionless Resources path and calls `Resources.Load`, equivalent to `Resources.Load("Items/Sword")` for the example above. An empty reference returns `null`; a valid non-Resources reference throws an actionable transport error instead of returning an ambiguous missing asset. Cast a loaded result to the expected Unity type.
 
 Unity-object arrays expose corresponding `List<UnityObjectReference>`, `List<string>` GUID/path, and Unity-only `List<UnityEngine.Object>` projections. Each projection has its own row-cache entry. Unity-object dictionary values remain `UnityObjectAccessor` objects: use `GetValue()` for the canonical reference, `GetGuid()`, `GetPath()`, and—on `GameDBLibraryUnity.UnityObjectAccessor`—`GetObject()`.
+
+### Optional Addressables loading
+
+When Addressables is installed separately, the optional `GameDBLibrary.Addressables` assembly adds `LoadAddressableAsync<T>()` as an extension over the existing `UnityObjectReference`; generated row classes do not change. It loads by GUID and returns `AddressableAssetLease<T>`, whose disposal releases the owned Addressables handle exactly once. Retain the lease for the complete lifetime of the asset and its dependencies rather than caching only `lease.Asset`.
+
+See [Optional Addressables integration](addressables.md) for package/asmdef setup, **Include GUIDs in Catalog**, content builds, array/dictionary use, cancellation, and failure diagnostics.
 
 ## Play Mode editing and hot reload
 
@@ -232,4 +238,4 @@ The supported generated Unity runtime path is JSON text loaded from `Resources` 
 
 - Binary, compressed, and encrypted GameDB build/load output was removed. Current generation emits no `BinaryGameDB` API.
 - This package does not provide, host, or validate the old remote deployment server. The editor deployment UI was removed. Residual runtime remote-update client APIs remain only as warning-only obsolete source-compatibility shims and will be removed in GameDB 1.0.0; they are not a supported publishing/runtime workflow for new projects.
-- GameDB does not provide automatic Addressables loading. Only Unity-enabled `ObjectVal`/`GetObject()` projections load through `Resources.Load`; core-only output exposes value, GUID, and path data without a `UnityEngine.Object` API.
+- GameDB provides synchronous object loading only through Unity-enabled `ObjectVal`/`GetObject()` Resources projections. Core-only output exposes value, GUID, and path data without a `UnityEngine.Object` API; the separately installed [optional Addressables adapter](addressables.md) loads valid non-Resources references asynchronously.

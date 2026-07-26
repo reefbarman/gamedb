@@ -31,8 +31,8 @@ namespace GameDBLibrary.Tests
             var serialized = GameDBModelCodec.Serialize(CreateRepresentativeDatabase());
             var schema = (IDictionary<string, object>)JsonSerialization.Deserialize(serialized.SchemaJson);
 
-            Assert.That(GameDBSchemaFormat.CurrentVersion, Is.EqualTo(2));
-            Assert.That(schema["formatVersion"], Is.EqualTo(2L));
+            Assert.That(GameDBSchemaFormat.CurrentVersion, Is.EqualTo(3));
+            Assert.That(schema["formatVersion"], Is.EqualTo(3L));
         }
 
         [TestCase("{\"tables\":{},\"scope\":\"Test\",\"localizationDB\":false}")]
@@ -54,29 +54,31 @@ namespace GameDBLibrary.Tests
         [Test]
         public void Import_RejectsNewerFormatBeforeHydratingSchema()
         {
-            const string schemaJson = "{\"formatVersion\":3,\"tables\":\"invalid\",\"scope\":\"Test\",\"localizationDB\":false}";
+            const string schemaJson = "{\"formatVersion\":4,\"tables\":\"invalid\",\"scope\":\"Test\",\"localizationDB\":false}";
 
             var exception = Assert.Throws<GameDBSchemaFormatException>(() =>
                 GameDBModelCodec.Import("{\"tables\":{}}", schemaJson));
 
-            Assert.That(exception.FoundVersion, Is.EqualTo(3));
-            Assert.That(exception.SupportedVersion, Is.EqualTo(2));
-            Assert.That(exception.Message, Does.Contain("newer").And.Contain("version 3").And.Contain("version 2"));
+            Assert.That(exception.FoundVersion, Is.EqualTo(4));
+            Assert.That(exception.SupportedVersion, Is.EqualTo(3));
+            Assert.That(exception.Message, Does.Contain("newer").And.Contain("version 4").And.Contain("version 3"));
             Assert.That(exception.Message, Does.Contain("newer GameDB package"));
         }
 
-        [Test]
-        public void Import_RejectsOlderFormatBeforeHydratingSchema()
+        [TestCase(1)]
+        [TestCase(2)]
+        public void Import_RejectsOlderFormatBeforeHydratingSchema(int formatVersion)
         {
-            const string schemaJson = "{\"formatVersion\":1,\"tables\":\"invalid\",\"scope\":\"Test\",\"localizationDB\":false}";
+            var schemaJson = $"{{\"formatVersion\":{formatVersion},\"tables\":\"invalid\",\"scope\":\"Test\",\"localizationDB\":false}}";
 
             var exception = Assert.Throws<GameDBSchemaFormatException>(() =>
                 GameDBModelCodec.Import("{\"tables\":{}}", schemaJson));
 
-            Assert.That(exception.FoundVersion, Is.EqualTo(1));
-            Assert.That(exception.SupportedVersion, Is.EqualTo(2));
+            Assert.That(exception.FoundVersion, Is.EqualTo(formatVersion));
+            Assert.That(exception.SupportedVersion, Is.EqualTo(3));
             Assert.That(exception.Message,
-                Does.Contain("older").And.Contain("version 1").And.Contain("version 2"));
+                Does.Contain("older").And.Contain($"version {formatVersion}")
+                    .And.Contain("version 3"));
         }
 
         [Test]

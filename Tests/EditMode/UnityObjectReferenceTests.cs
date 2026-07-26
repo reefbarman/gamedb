@@ -9,6 +9,7 @@ namespace GameDBLibrary.Tests
         private const string OtherGuid = "fedcba9876543210fedcba9876543210";
         private const string Path = "Assets/Game/Resources/Items/Sword.asset";
         private const string OtherPath = "Assets/Game/Resources/Items/Shield.asset";
+        private const string AddressablePath = "Assets/Game/Items/Sword.asset";
 
         [Test]
         public void UnityObjectReference_EqualityIncludesGuidAndPath()
@@ -64,6 +65,21 @@ namespace GameDBLibrary.Tests
             Assert.That(accessor.GetObject(), Is.Null);
         }
 
+        [TestCase(AddressablePath)]
+        [TestCase("Assets/Game/resources/Items/Sword.asset")]
+        [TestCase("Assets/Resources/Nested/Resources/Sword.asset")]
+        public void UnityUnityObjectAccessor_NonResourcesReferenceRequiresAddressables(
+            string path)
+        {
+            var reference = new UnityObjectReference(Guid, path);
+            var accessor = new GameDBLibraryUnity.UnityObjectAccessor(reference);
+
+            var exception = Assert.Throws<InvalidOperationException>(() => accessor.GetObject());
+
+            Assert.That(exception.Message, Does.Contain("Addressables")
+                .And.Contain("non-Resources"));
+        }
+
         [Test]
         public void RuntimeImport_RejectsPathStringsAndMalformedObjectsWithoutPublishingRows()
         {
@@ -84,10 +100,22 @@ namespace GameDBLibrary.Tests
 
         [TestCase("Assets/Game/Sword.asset")]
         [TestCase("Assets/Game/resources/Sword.asset")]
-        [TestCase("Assets/Game/Resources")]
-        [TestCase("Assets/Game/Resources/Sword")]
         [TestCase("Assets/Resources/Nested/Resources/Sword.asset")]
-        public void UnityObjectReference_RejectsInvalidResourcesPaths(string path)
+        public void UnityObjectReference_AcceptsValidProjectAssetPaths(string path)
+        {
+            Assert.That(new UnityObjectReference(Guid, path).Path, Is.EqualTo(path));
+        }
+
+        [TestCase("Packages/com.example/Asset.asset")]
+        [TestCase("Assets")]
+        [TestCase("Assets/Game/Asset")]
+        [TestCase("Assets/Game/.asset")]
+        [TestCase("Assets/Game/Asset.")]
+        [TestCase("Assets//Asset.asset")]
+        [TestCase("Assets/Game/./Asset.asset")]
+        [TestCase("Assets/Game/../Asset.asset")]
+        [TestCase("Assets\\Game\\Asset.asset")]
+        public void UnityObjectReference_RejectsInvalidProjectAssetPaths(string path)
         {
             Assert.Throws<ArgumentException>(() => new UnityObjectReference(Guid, path));
         }

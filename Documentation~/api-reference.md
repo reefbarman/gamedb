@@ -160,7 +160,7 @@ public class TableReferenceAccessor<TKey, TRow>
 }
 ```
 
-`IsSet()` distinguishes an unset reference from a set reference. `GetKey()` returns the typed string/enum key, and `GetValue()` returns the referenced generated row. During accessor construction, a set but missing target is resolved through the generated table and can surface reflection or key-lookup exceptions. Editor automation rejects broken references before saving, but runtime JSON imported from another source can still be invalid.
+`IsSet()` distinguishes an unset reference from a set reference. `GetKey()` returns the typed string/enum key, and `GetValue()` returns the referenced generated row. Runtime import validates every non-empty direct, array, and dictionary reference against the complete staged graph before publication, so forward references work while missing target rows fail atomically with source and target coordinates. Accessors resolve through their owning row's immutable publication snapshot; an accessor retained across reload continues to return the row from that same publication.
 
 ## Generated runtime API
 
@@ -229,43 +229,46 @@ For every table:
 ```csharp
 public class <TableName>Table : TableBase
 {
+    internal <TableName>Table();
     public <TableName> GetByKey(<TKey> key);
     public bool TryGetByKey(<TKey> key, out <TableName> row);
-    public Dictionary<<TKey>, <TableName>> GetRows();
+    public IReadOnlyDictionary<<TKey>, <TableName>> GetRows();
 }
 ```
 
-`TKey` is `string` or the configured project enum.
+`TKey` is `string` or the configured project enum. Generated table construction is internal; callers obtain tables from the generated database instance.
 
-| Member        | Missing-key and allocation semantics                                                                                                               |
-| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GetByKey`    | Uses dictionary indexing and throws `KeyNotFoundException` when absent.                                                                            |
-| `TryGetByKey` | Returns `false` and sets `row` to `null` when absent or not of the generated row type.                                                             |
-| `GetRows`     | Returns a newly allocated dictionary snapshot containing the current generated row objects. Mutating that dictionary does not mutate the database. |
+| Member        | Missing-key and publication semantics                                                                                                                                                                        |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `GetByKey`    | Uses dictionary indexing and throws `KeyNotFoundException` when absent.                                                                                                                                      |
+| `TryGetByKey` | Returns `false` and sets `row` to `null` when absent or not of the generated row type.                                                                                                                       |
+| `GetRows`     | Returns the cached read-only row dictionary for the current publication. Repeated calls are reference-identical; successful reload publishes a new projection while retained old projections stay unchanged. |
 
 ### Generated row class and field properties
 
 ```csharp
 public class <TableName> : Row
 {
-    public <TableName>(string key, GameDB gameDB);
+    internal <TableName>(string key);
     public <T> <FieldName>Val { get; }
 }
 ```
 
+Generated row construction is internal. Rows are created and snapshot-bound by GameDB during staging and publication.
+
 Generated scalar/array return shapes are:
 
-| Schema field                                                     | Generated value                                                                                                              |
-| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `string`, `int`, `long`, `float`, `double`, `bool`, project enum | Scalar type, or `List<T>` for an array                                                                                       |
-| `color`, `vector2/3/4` with Unity loading                        | `UnityEngine.Color` / `UnityEngine.Vector2/3/4`                                                                              |
-| `color`, `vector2/3/4` without Unity loading                     | `GameDBLibrary.Color` / `Vector2/3/4`                                                                                        |
-| `unityObject`, all outputs                                       | `<FieldName>Val` (`UnityObjectReference`), `<FieldName>GuidVal`, and `<FieldName>PathVal`; arrays become corresponding lists |
-| `unityObject`, Unity-enabled only                                | additionally `<FieldName>ObjectVal` (`UnityEngine.Object`), or `List<UnityEngine.Object>` for arrays                         |
-| `tableRef`                                                       | `TableReferenceAccessor<TKey, TRow>`; arrays become lists of accessors                                                       |
-| dictionary                                                       | `Dictionary<TKey, TValue>`; table-reference and Unity-object values may themselves be accessor objects                       |
+| Schema field                                                     | Generated value                                                                                                                        |
+| ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `string`, `int`, `long`, `float`, `double`, `bool`, project enum | Scalar type, or `IReadOnlyList<T>` for an array                                                                                        |
+| `color`, `vector2/3/4` with Unity loading                        | `UnityEngine.Color` / `UnityEngine.Vector2/3/4`                                                                                        |
+| `color`, `vector2/3/4` without Unity loading                     | `GameDBLibrary.Color` / `Vector2/3/4`                                                                                                  |
+| `unityObject`, all outputs                                       | `<FieldName>Val` (`UnityObjectReference`), `<FieldName>GuidVal`, and `<FieldName>PathVal`; arrays become corresponding read-only lists |
+| `unityObject`, Unity-enabled only                                | additionally `<FieldName>ObjectVal` (`UnityEngine.Object`), or `IReadOnlyList<UnityEngine.Object>` for arrays                          |
+| `tableRef`                                                       | `TableReferenceAccessor<TKey, TRow>`; arrays become read-only lists of accessors                                                       |
+| dictionary                                                       | `IReadOnlyDictionary<TKey, TValue>`; table-reference and Unity-object values may themselves be accessor objects                        |
 
-Field getters cache their converted accessor/value for the lifetime of the generated row. Generated lists and dictionaries are mutable cached objects owned by that row; treat them as read-only game data. Loading new data replaces rows, so callers should reacquire row, list, dictionary, and table-reference values after import/reload rather than assuming an old object updates in place.
+Field getters cache their converted accessor/value for the lifetime of the generated row. Published lists and dictionaries are recursively read-only, and repeated access is reference-identical within a publication. Loading new data publishes replacement rows and fresh projections; retained old rows, collections, localization metadata, and references remain a coherent view of their original publication. Reacquire them after import/reload when code should observe new data.
 
 The core `UnityObjectAccessor` returns the canonical reference through `GetValue()` and exposes `GetGuid()` and `GetPath()`. `GameDBLibraryUnity.UnityObjectAccessor` additionally exposes `GetObject()`, which loads references beneath exactly one case-sensitive `Resources` directory. Empty returns `null`; a valid non-Resources reference throws `InvalidOperationException`, and malformed wire values are rejected before accessor construction. Unity-object dictionary values remain accessor objects rather than parallel generated dictionaries.
 

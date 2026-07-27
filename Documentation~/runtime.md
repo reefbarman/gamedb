@@ -98,7 +98,7 @@ var error = db.Import(json, new[]
 });
 ```
 
-A successful load or import replaces each table's row objects. It does not mutate previously returned row instances in place.
+A successful load or import publishes one new database snapshot and replaces each table's row objects. It does not mutate previously returned row instances in place. Rows, generated collection projections, table references, and localization metadata retained from an older publication continue to observe that same older snapshot.
 
 ## Load notifications and recaching
 
@@ -127,14 +127,14 @@ Each database instance permits one supported load/import mutation at a time, inc
 
 `LoadAsync` switches back to Unity's main thread before JSON staging, publication, and notification. Async transport does not make JSON parsing or row hydration a background operation, so a large database can still incur a main-thread cost after delivery completes.
 
-After every notified reload, reacquire and recache:
+After every notified reload, reacquire and recache when code should observe the new publication:
 
 - rows returned by `GetByKey`, `TryGetByKey`, or `GetRows`;
 - table-reference accessors and their referenced rows;
 - generated array and dictionary values;
 - derived indexes, lookup maps, and gameplay objects built from database values.
 
-Generated scalar, array, dictionary, table-reference, and Unity-object accessors are cached on each row. A reload creates replacement rows with fresh caches, but code holding an old row continues to see that old row's cached data.
+Generated scalar, array, dictionary, table-reference, and Unity-object accessors are cached on each row. Repeated access within one publication returns the same collection/reference projection. A reload creates replacement rows with fresh caches; code holding an old row or projection continues to see a stable view of its original publication rather than silently mixing old source data with new referenced rows.
 
 ## Tables, rows, and schemas
 
@@ -143,7 +143,7 @@ For a string-key table, the generated API is:
 ```csharp
 Items GetByKey(string key)
 bool TryGetByKey(string key, out Items row)
-Dictionary<string, Items> GetRows()
+IReadOnlyDictionary<string, Items> GetRows()
 ```
 
 An enum-key table uses its configured enum instead of `string`.
@@ -164,7 +164,7 @@ foreach (var pair in db.ItemsTable.GetRows())
 
 - `GetByKey` throws `KeyNotFoundException` when the key is absent.
 - `TryGetByKey` returns `false` and sets `row` to `null` when absent.
-- `GetRows` creates a new dictionary containing the current row objects. Mutating that dictionary does not add or remove database rows.
+- `GetRows` returns a cached read-only dictionary for the current publication. Repeated calls return the same object; a successful reload returns a new projection, while the old projection remains unchanged.
 - Every row inherits `Name`, which is its key represented as a string.
 
 Generated field properties are named `<FieldName>Val`. They return concrete values for strings, `int`, `long`, `float`, `double`, `bool`, project enums, `UnityEngine.Color`, and `UnityEngine.Vector2`/`Vector3`/`Vector4`:
@@ -174,12 +174,12 @@ string label = sword.DisplayNameVal;
 int damage = sword.DamageVal;
 long stableId = sword.StableIdVal;
 double precisionScale = sword.PrecisionScaleVal;
-List<string> tags = sword.TagsVal;
+IReadOnlyList<string> tags = sword.TagsVal;
 ```
 
-All non-dictionary field types may be arrays and are exposed as `List<T>`. Dictionaries cannot be arrays. A dictionary is exposed as `Dictionary<TKey,TValue>`; keys are `string` or a configured enum, and values may be any supported non-dictionary field type. Generated numeric shapes include `long`, `double`, `List<long>`, `List<double>`, `Dictionary<TKey,long>`, and `Dictionary<TKey,double>`.
+All non-dictionary field types may be arrays and are exposed as `IReadOnlyList<T>`. Dictionaries cannot be arrays. A dictionary is exposed as `IReadOnlyDictionary<TKey,TValue>`; keys are `string` or a configured enum, and values may be any supported non-dictionary field type. Generated numeric shapes include `long`, `double`, `IReadOnlyList<long>`, `IReadOnlyList<double>`, `IReadOnlyDictionary<TKey,long>`, and `IReadOnlyDictionary<TKey,double>`.
 
-Runtime JSON represents `long` with an integer token and preserves the full signed Int64 range exactly. General JavaScript parsers can lose precision outside ±9,007,199,254,740,991 unless configured for lossless integers. `double` accepts finite JSON numbers, preserves Double precision, rejects NaN/infinities/overflow, and normalizes negative zero to positive zero. Scalar, array, and dictionary values follow the same rules. Returned lists and dictionaries are cached mutable objects owned by that row; treat them as read-only game data unless temporary local mutation is intentional.
+Runtime JSON represents `long` with an integer token and preserves the full signed Int64 range exactly. General JavaScript parsers can lose precision outside ±9,007,199,254,740,991 unless configured for lossless integers. `double` accepts finite JSON numbers, preserves Double precision, rejects NaN/infinities/overflow, and normalizes negative zero to positive zero. Scalar, array, and dictionary values follow the same rules. Published lists and dictionaries are recursively wrapped in read-only projections: mutation through common collection interfaces throws `NotSupportedException`, repeated access on a row is reference-identical, and nested arrays/dictionaries cannot be used to mutate published data.
 
 Unity-object scalar and array fields have parallel generated projections: `<Field>Val` returns `UnityObjectReference` values, `<Field>GuidVal` returns GUID strings, and `<Field>PathVal` returns paths. Unity-enabled generation additionally emits `<Field>ObjectVal`; core-only generation contains no `UnityEngine.Object` member.
 
@@ -198,9 +198,9 @@ if (categoryRef.IsSet())
 }
 ```
 
-For enum-key target tables, `GetKey()` returns that enum type. An unset reference has `IsSet() == false`; do not rely on `GetKey()` or `GetValue()` unless it is set. Invalid non-empty reference keys fail accessor construction, generally when the generated property is first read; table-reference targets are not validated by the runtime JSON import itself.
+For enum-key target tables, `GetKey()` returns that enum type. An unset reference has `IsSet() == false`; do not rely on `GetKey()` or `GetValue()` unless it is set. Every non-empty direct, array, and dictionary reference is validated against the complete staged table graph before publication. Missing targets fail the import with source table, row, and field plus target table and key; forward references are valid because resolution occurs after all tables are staged.
 
-Arrays of references are `List<TableReferenceAccessor<TKey,TRow>>`. Dictionary table-reference values are also `TableReferenceAccessor<TKey,TRow>` objects; call `GetValue()` for the row. Reacquire all references after a reload.
+Arrays of references are `IReadOnlyList<TableReferenceAccessor<TKey,TRow>>`. Dictionary table-reference values are also `TableReferenceAccessor<TKey,TRow>` objects; call `GetValue()` for the row. Each accessor resolves through its owning row's publication snapshot. Reacquire references after reload when code should observe new data; retained old accessors continue to resolve old rows deterministically.
 
 ## Unity object fields
 

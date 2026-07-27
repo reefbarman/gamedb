@@ -357,11 +357,11 @@ namespace GameDBLibrary.Tests
             internal AsyncTestGameDB()
                 : base("AsyncTest", "AsyncTest")
             {
-                Tables.Add("First", CreateTable("First"));
-                Tables.Add("Second", CreateTable("Second"));
+                RegisterTable("First", CreateTable("First"));
+                RegisterTable("Second", CreateTable("Second"));
             }
 
-            internal string Metadata { get; private set; }
+            internal string Metadata => m_internal.CurrentSnapshot?.Metadata as string;
 
             internal Awaitable LoadAsync(string location, IGameDBDataLoader loader,
                 CancellationToken cancellationToken = default)
@@ -374,7 +374,7 @@ namespace GameDBLibrary.Tests
                 string metadata, CancellationToken cancellationToken = default)
             {
                 return LoadDataAsync(location, loader,
-                    beforePublish: () => Metadata = metadata,
+                    publicationMetadata: metadata,
                     cancellationToken: cancellationToken);
             }
 
@@ -383,8 +383,7 @@ namespace GameDBLibrary.Tests
                 CancellationToken cancellationToken = default)
             {
                 return LoadLocalizationDataAsync(location, loader,
-                    new[] { "Value" }, true, () => Metadata = metadata,
-                    cancellationToken);
+                    new[] { "Value" }, true, metadata, cancellationToken);
             }
 
             internal void CancelWhenNextRowIsCreated(
@@ -395,12 +394,17 @@ namespace GameDBLibrary.Tests
 
             internal void SetMetadata(string metadata)
             {
-                Metadata = metadata;
+                var error = ImportData(Json("old-first", "old-second"),
+                    null, false, metadata);
+                if (error != null)
+                {
+                    throw error;
+                }
             }
 
             internal RowBase GetRow(string table)
             {
-                return Tables[table].GetByKeyRaw("Row");
+                return m_internal.Tables[table].GetByKeyRaw("Row");
             }
 
             internal string GetValue(string table)

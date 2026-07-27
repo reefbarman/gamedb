@@ -1,5 +1,6 @@
 ﻿using GameDBLibrary;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -168,6 +169,7 @@ namespace GameDBEditorLibrary
                 var keySystemType = "string";
                 var keyAccessor = "key";
                 var keyStringToType = "entry.Key";
+                var keyStringToTypeLambda = "key";
 
                 switch (table.TableKeyType.KeyType)
                 {
@@ -177,10 +179,11 @@ namespace GameDBEditorLibrary
                         keySystemType = type;
                         keyAccessor = "key.ToString()";
                         keyStringToType = $"({type})global::System.Enum.Parse(typeof({type}), entry.Key)";
+                        keyStringToTypeLambda = $"({type})global::System.Enum.Parse(typeof({type}), key)";
                         break;
                 }
 
-                var tableClass = string.Format(tableTemplate, gameDB.ScopeName, table.Name, keyType, keyTypeArg, string.Join(",\n", fieldDefinitions.ToArray()), keySystemType, keyAccessor, keyStringToType);
+                var tableClass = string.Format(tableTemplate, gameDB.ScopeName, table.Name, keyType, keyTypeArg, string.Join(",\n", fieldDefinitions.ToArray()), keySystemType, keyAccessor, keyStringToType, keyStringToTypeLambda);
 
                 File.WriteAllText(Path.Combine(exportDirectory, $"{table.Name}.cs"), dataClass);
                 File.WriteAllText(Path.Combine(exportDirectory, $"{table.Name}Schema.cs"), schema);
@@ -280,7 +283,7 @@ namespace GameDBEditorLibrary
 
                         var type = $"global::GameDBLibrary.TableReferenceAccessor<{keyType}, global::GameDB{gameDB.ScopeName}.{tableName}>";
 
-                        accessors.Add(new Accessor { Name = fieldPair.Key, Type = type, ReturnType = type, FieldName = fieldPair.Key, IsArray = isArray, OptionArg = ", m_gameDB", IgnoreGetter = true });
+                        accessors.Add(new Accessor { Name = fieldPair.Key, Type = type, ReturnType = type, FieldName = fieldPair.Key, IsArray = isArray, OptionArg = $", this, {tableName}Schema.TableName", IgnoreGetter = true });
                         break;
                     case FieldType.color:
                         {
@@ -377,14 +380,14 @@ namespace GameDBEditorLibrary
 
                 if (accessor.IsArray)
                 {
-                    valueGetter = string.Format(arrayFieldAccessorTemplate, $"global::System.Collections.Generic.List<{accessor.ReturnType}>", fieldName, table.Name, accessor.Name, accessor.Type, accessor.OptionArg, getterString);
+                    valueGetter = string.Format(arrayFieldAccessorTemplate, $"global::System.Collections.Generic.IReadOnlyList<{accessor.ReturnType}>", fieldName, table.Name, accessor.Name, accessor.Type, accessor.OptionArg, getterString);
                 }
                 else
                 {
                     valueGetter = string.Format(baseFieldAccessorTemplate, accessor.Type, fieldName, table.Name, accessor.Name, accessor.OptionArg, getterString);
                 }
 
-                fieldAccessors += string.Format(baseFieldTemplate, accessor.IsArray ? $"global::System.Collections.Generic.List<{accessor.ReturnType}>" : accessor.ReturnType, accessor.FieldName, valueGetter);
+                fieldAccessors += string.Format(baseFieldTemplate, accessor.IsArray ? $"global::System.Collections.Generic.IReadOnlyList<{accessor.ReturnType}>" : accessor.ReturnType, accessor.FieldName, valueGetter);
             }
 
             return fieldAccessors;
@@ -503,8 +506,11 @@ namespace GameDBEditorLibrary
             typeArg = $"new global::GameDBLibrary.DictionaryType(global::GameDBLibrary.KeyType.@{dictType.KeyType}, {keyTypeArg}, global::GameDBLibrary.FieldType.@{dictType.ValueType}, {valueTypeArg})";
 
             var typeName = $"global::GameDBLibrary.DictionaryAccessor<{keyType}, {valueType}>";
-            var returnType = $"global::System.Collections.Generic.Dictionary<{keyType}, {valueType}>";
-            var optionalArgs = $", m_gameDB, {keyAccessorType}, {valueAccessorType}";
+            var returnType = $"global::System.Collections.Generic.IReadOnlyDictionary<{keyType}, {valueType}>";
+            var referencedTable = dictType.ValueType == FieldType.tableRef
+                ? $"{dictType.ValueTypeArg}Schema.TableName"
+                : "null";
+            var optionalArgs = $", this, {referencedTable}, {keyAccessorType}, {valueAccessorType}";
 
             return new Accessor { Name = fieldName, Type = typeName, ReturnType = returnType, FieldName = fieldName, OptionArg = optionalArgs };
         }
@@ -526,6 +532,11 @@ namespace GameDBEditorLibrary
             var typeNames = new Dictionary<string, string>(StringComparer.Ordinal);
             var fileNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             RegisterGeneratedName(typeNames, "GameDB", "database type", "type.name.collision", issues);
+            if (gameDB.LocalizationDB)
+            {
+                RegisterGeneratedName(typeNames, "GameDBLocalizationSelection",
+                    "localization publication metadata type", "type.name.collision", issues);
+            }
             RegisterFileName(fileNames, "GameDB.cs", "database type", issues);
 
             foreach (var tablePair in gameDB.Tables.OrderBy(pair => pair.Key, StringComparer.Ordinal))
@@ -543,7 +554,7 @@ namespace GameDBEditorLibrary
 
                 var rowMembers = new Dictionary<string, string>(StringComparer.Ordinal);
                 RegisterGeneratedName(rowMembers, tableName, "containing row type", "member.name.collision", issues, tableName);
-                RegisterGeneratedName(rowMembers, "m_gameDB", "generated database field", "member.name.collision", issues, tableName);
+
                 if (gameDB.LocalizationDB)
                 {
                     RegisterGeneratedName(rowMembers, "TranslatedVal", "localization accessor", "member.name.collision", issues, tableName);
@@ -644,6 +655,8 @@ namespace GameDBEditorLibrary
 
                 foreach (var rowPair in table.Data.OrderBy(pair => pair.Key, StringComparer.Ordinal))
                 {
+                    ValidateTableReferenceRows(gameDB, tableName, table,
+                        rowPair.Key, rowPair.Value, issues);
                     var normalizedKey = NormalizeRowKey(rowPair.Key);
                     var generatedKey = "Key" + normalizedKey;
                     if (normalizedKey.Length == 0)
@@ -732,6 +745,78 @@ namespace GameDBEditorLibrary
             {
                 issues.Add(CreateIssue("tableRef.table.missing",
                     $"Referenced table does not exist: {referencedTableName}", tableName, fieldName));
+            }
+        }
+
+        private static void ValidateTableReferenceRows(GameDB gameDB,
+            string tableName, TableBase table, string rowKey, RowBase row,
+            List<ValidationIssue> issues)
+        {
+            foreach (var fieldPair in table.Fields)
+            {
+                if (!row.Data.TryGetValue(fieldPair.Key, out var value))
+                {
+                    continue;
+                }
+
+                var field = fieldPair.Value;
+                if (field.Type == FieldType.tableRef)
+                {
+                    var targetTable = field.GetTypeArg<string>();
+                    if (field.IsArray && value is IEnumerable values
+                        && !(value is string))
+                    {
+                        foreach (var item in values)
+                        {
+                            ValidateTableReferenceRow(gameDB, tableName,
+                                fieldPair.Key, rowKey, targetTable, item, issues);
+                        }
+                    }
+                    else if (!field.IsArray)
+                    {
+                        ValidateTableReferenceRow(gameDB, tableName,
+                            fieldPair.Key, rowKey, targetTable, value, issues);
+                    }
+                }
+                else if (field.Type == FieldType.dictionary)
+                {
+                    var dictionaryType = field.GetTypeArg<DictionaryType>();
+                    if (dictionaryType?.ValueType != FieldType.tableRef
+                        || !(value is IDictionary dictionary))
+                    {
+                        continue;
+                    }
+
+                    foreach (DictionaryEntry item in dictionary)
+                    {
+                        ValidateTableReferenceRow(gameDB, tableName,
+                            fieldPair.Key, rowKey,
+                            dictionaryType.ValueTypeArg as string, item.Value, issues);
+                    }
+                }
+            }
+        }
+
+        private static void ValidateTableReferenceRow(GameDB gameDB,
+            string tableName, string fieldName, string rowKey,
+            string referencedTableName, object value,
+            List<ValidationIssue> issues)
+        {
+            var referencedRow = value as string;
+            if (string.IsNullOrEmpty(referencedRow)
+                || referencedRow == FieldBase.NullRefToken
+                || !gameDB.Tables.TryGetValue(referencedTableName ?? string.Empty,
+                    out var referencedTable))
+            {
+                return;
+            }
+
+            if (!referencedTable.Data.ContainsKey(referencedRow))
+            {
+                issues.Add(CreateIssue("tableRef.row.missing",
+                    $"Table reference {tableName}[{rowKey}].{fieldName} " +
+                    $"targets missing row {referencedTableName}[{referencedRow}].",
+                    tableName, fieldName, rowKey));
             }
         }
 

@@ -20,13 +20,13 @@ namespace GameDBEditorLibrary
         {
             bool success = false;
 
-            if (!m_fields.ContainsKey(fieldName))
+            if (!MutableFields.ContainsKey(fieldName))
             {
                 Field field = new Field(fieldName, type, array, typeArg);
 
-                m_fields.Add(fieldName, field);
+                MutableFields.Add(fieldName, field);
 
-                foreach (var rowPair in m_data)
+                foreach (var rowPair in MutableData)
                 {
                     var row = (RowModel)rowPair.Value;
                     row.SetValue(field.Name, GetDefaultValue(field));
@@ -40,12 +40,12 @@ namespace GameDBEditorLibrary
 
         public bool RemoveField(string fieldName)
         {
-            if (!m_fields.Remove(fieldName))
+            if (!MutableFields.Remove(fieldName))
             {
                 return false;
             }
 
-            foreach (var rowPair in m_data)
+            foreach (var rowPair in MutableData)
             {
                 ((RowModel)rowPair.Value).RemoveField(fieldName);
             }
@@ -60,16 +60,16 @@ namespace GameDBEditorLibrary
 
         public bool RenameField(string oldName, string newName)
         {
-            if (!m_fields.TryGetValue(oldName, out var field) || m_fields.ContainsKey(newName))
+            if (!MutableFields.TryGetValue(oldName, out var field) || MutableFields.ContainsKey(newName))
             {
                 return false;
             }
 
-            m_fields.Remove(oldName);
+            MutableFields.Remove(oldName);
             ((Field)field).Rename(newName);
-            m_fields.Add(newName, field);
+            MutableFields.Add(newName, field);
 
-            foreach (var rowPair in m_data)
+            foreach (var rowPair in MutableData)
             {
                 ((RowModel)rowPair.Value).RenameField(oldName, newName);
             }
@@ -79,15 +79,15 @@ namespace GameDBEditorLibrary
 
         public bool ReplaceField(string fieldName, FieldType type, bool array, object typeArg = null)
         {
-            if (!m_fields.ContainsKey(fieldName))
+            if (!MutableFields.ContainsKey(fieldName))
             {
                 return false;
             }
 
             var field = new Field(fieldName, type, array, typeArg);
-            m_fields[fieldName] = field;
+            MutableFields[fieldName] = field;
 
-            foreach (var rowPair in m_data)
+            foreach (var rowPair in MutableData)
             {
                 ((RowModel)rowPair.Value).SetValue(fieldName, GetDefaultValue(field));
             }
@@ -101,16 +101,16 @@ namespace GameDBEditorLibrary
 
             if (!string.IsNullOrEmpty(key)
                 && key != FieldBase.NullRefToken
-                && !m_data.ContainsKey(key))
+                && !MutableData.ContainsKey(key))
             {
                 var row = new RowModel(key);
 
-                foreach (var fieldPair in m_fields)
+                foreach (var fieldPair in MutableFields)
                 {
                     row.SetValue(fieldPair.Value.Name, GetDefaultValue(fieldPair.Value));
                 }
 
-                m_data.Add(key, row);
+                MutableData.Add(key, row);
                 success = true;
             }
 
@@ -119,25 +119,25 @@ namespace GameDBEditorLibrary
 
         public bool RemoveKey(string key)
         {
-            return m_data.Remove(key);
+            return MutableData.Remove(key);
         }
 
         public bool RenameKey(string oldKey, string newKey)
         {
             if (oldKey == FieldBase.NullRefToken || newKey == FieldBase.NullRefToken
-                || !m_data.TryGetValue(oldKey, out var row) || m_data.ContainsKey(newKey))
+                || !MutableData.TryGetValue(oldKey, out var row) || MutableData.ContainsKey(newKey))
             {
                 return false;
             }
 
-            m_data.Remove(oldKey);
-            m_data.Add(newKey, ((RowModel)row).CopyWithName(newKey));
+            MutableData.Remove(oldKey);
+            MutableData.Add(newKey, ((RowModel)row).CopyWithName(newKey));
             return true;
         }
 
         public bool SetValue(string key, string fieldName, object value)
         {
-            if (!m_data.TryGetValue(key, out var row) || !m_fields.TryGetValue(fieldName, out var field) || !field.IsValueValid(value))
+            if (!MutableData.TryGetValue(key, out var row) || !MutableFields.TryGetValue(fieldName, out var field) || !field.IsValueValid(value))
             {
                 return false;
             }
@@ -177,7 +177,7 @@ namespace GameDBEditorLibrary
                 fields.Add(fieldPair.Key, field);
             }
 
-            m_fields = fields;
+            MutableFields = fields;
 
             //Backwards compatible
             if (tableSchema.ContainsKey("key"))
@@ -205,7 +205,7 @@ namespace GameDBEditorLibrary
         {
             var tableSchema = new Dictionary<string, object>();
 
-            foreach (var fieldPair in m_fields)
+            foreach (var fieldPair in MutableFields)
             {
                 var field = (Field)fieldPair.Value;
                 tableSchema.Add(fieldPair.Key, field.SerializeSchema());
@@ -224,10 +224,10 @@ namespace GameDBEditorLibrary
         {
             var tableData = new Dictionary<string, Dictionary<string, object>>();
 
-            foreach (var rowPair in m_data)
+            foreach (var rowPair in MutableData)
             {
                 var row = (RowModel)rowPair.Value;
-                tableData.Add(rowPair.Key, row.SerializeRow(m_fields));
+                tableData.Add(rowPair.Key, row.SerializeRow(MutableFields));
             }
 
             return tableData;

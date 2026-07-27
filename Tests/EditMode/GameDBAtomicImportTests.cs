@@ -1,11 +1,51 @@
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 
 namespace GameDBLibrary.Tests
 {
     internal sealed class GameDBAtomicImportTests
     {
+        [Test]
+        public void RawRowAndTableLookupsAreNotPublic()
+        {
+            Assert.That(typeof(GameDBBase).Assembly.GetType("GameDBLibrary.IGameDB"),
+                Is.Null);
+            Assert.That(typeof(RowBase).GetMethod("GetValue",
+                BindingFlags.Instance | BindingFlags.Public), Is.Null);
+            Assert.That(typeof(TableBase).GetMethod("GetByKeyRaw",
+                BindingFlags.Instance | BindingFlags.Public), Is.Null);
+            Assert.That(typeof(global::Row).GetMethod("GetCacheOrCreateAccessor",
+                BindingFlags.Instance | BindingFlags.Public), Is.Null);
+            Assert.That(typeof(global::Row).GetMethod("GetCacheOrCreateListAccessor",
+                BindingFlags.Instance | BindingFlags.Public), Is.Null);
+        }
+
+        [Test]
+        public void CoreMutableValueAccessorsReturnDefensiveCopies()
+        {
+            var colorAccessor = new ColorAccessor(new Color(1, 2, 3, 4));
+            var firstColor = colorAccessor.GetValue();
+            firstColor.r = 99;
+            Assert.That(colorAccessor.GetValue().r, Is.EqualTo(1));
+
+            var vector2Accessor = new Vector2Accessor(new Vector2(1f, 2f));
+            var firstVector2 = vector2Accessor.GetValue();
+            firstVector2.x = 99f;
+            Assert.That(vector2Accessor.GetValue().x, Is.EqualTo(1f));
+
+            var vector3Accessor = new Vector3Accessor(new Vector3(1f, 2f, 3f));
+            var firstVector3 = vector3Accessor.GetValue();
+            firstVector3.y = 99f;
+            Assert.That(vector3Accessor.GetValue().y, Is.EqualTo(2f));
+
+            var vector4Accessor = new Vector4Accessor(new Vector4(1f, 2f, 3f, 4f));
+            var firstVector4 = vector4Accessor.GetValue();
+            firstVector4.w = 99f;
+            Assert.That(vector4Accessor.GetValue().w, Is.EqualTo(4f));
+        }
+
         [Test]
         public void Import_SuccessPublishesEveryTableAndPreservesTableIdentity()
         {
@@ -13,6 +53,7 @@ namespace GameDBLibrary.Tests
             var firstTable = gameDB.GetTable("First");
             var secondTable = gameDB.GetTable("Second");
             var oldFirstRow = gameDB.GetRow("First");
+            var oldSnapshot = gameDB.Snapshot;
 
             var error = gameDB.Import(Json("new-first", "new-second"));
 
@@ -23,6 +64,7 @@ namespace GameDBLibrary.Tests
             Assert.That(gameDB.GetValue("Second"), Is.EqualTo("new-second"));
             Assert.That(gameDB.GetRow("First"), Is.Not.SameAs(oldFirstRow));
             Assert.That(oldFirstRow.GetValue("Value"), Is.EqualTo("old-first"));
+            Assert.That(gameDB.Snapshot, Is.Not.SameAs(oldSnapshot));
         }
 
         [TestCase("First")]
@@ -35,6 +77,7 @@ namespace GameDBLibrary.Tests
             var firstRow = gameDB.GetRow("First");
             var secondRow = gameDB.GetRow("Second");
             var thirdRow = gameDB.GetRow("Third");
+            var snapshot = gameDB.Snapshot;
 
             var error = gameDB.Import(Json(
                 malformedTable == "First" ? 42 : "new-first",
@@ -48,6 +91,7 @@ namespace GameDBLibrary.Tests
             Assert.That(gameDB.GetValue("First"), Is.EqualTo("old-first"));
             Assert.That(gameDB.GetValue("Second"), Is.EqualTo("old-second"));
             Assert.That(gameDB.GetValue("Third"), Is.EqualTo("old-third"));
+            Assert.That(gameDB.Snapshot, Is.SameAs(snapshot));
         }
 
         [Test]
@@ -243,6 +287,39 @@ namespace GameDBLibrary.Tests
             Assert.That(gameDB.GetValue("Second"), Is.EqualTo("new-second"));
         }
 
+        [TestCase("direct")]
+        [TestCase("array")]
+        [TestCase("dictionary")]
+        public void Import_MissingTableReferencePreservesPublication(string position)
+        {
+            var gameDB = new ReferenceTestGameDB();
+            Assert.That(gameDB.Import(ReferenceJson("Existing", "Existing",
+                "Existing"), false), Is.Null);
+            var snapshot = gameDB.Snapshot;
+            var missing = "Missing";
+
+            var error = gameDB.Import(ReferenceJson(
+                position == "direct" ? missing : "Existing",
+                position == "array" ? missing : "Existing",
+                position == "dictionary" ? missing : "Existing"), false);
+
+            Assert.That(error, Is.TypeOf<FormatException>());
+            Assert.That(error.Message, Does.Contain("Sources[Source]"));
+            Assert.That(error.Message, Does.Contain("Targets[Missing]"));
+            Assert.That(gameDB.Snapshot, Is.SameAs(snapshot));
+        }
+
+        [Test]
+        public void Import_ForwardTableReferenceUsesCompleteStagedGraph()
+        {
+            var gameDB = new ReferenceTestGameDB();
+
+            var error = gameDB.Import(ReferenceJson("Existing", "Existing",
+                "Existing"), false);
+
+            Assert.That(error, Is.Null);
+        }
+
         [Test]
         public void FailedGateAcquirersDoNotReleaseCurrentOwner()
         {
@@ -291,6 +368,17 @@ namespace GameDBLibrary.Tests
                 ",\"Extra\":\"" + thirdExtra + "\"}}}}";
         }
 
+        private static string ReferenceJson(string direct, string array,
+            string dictionary)
+        {
+            return "{\"tables\":{" +
+                "\"Sources\":{\"Source\":{" +
+                "\"Direct\":\"" + direct + "\"," +
+                "\"Array\":[\"" + array + "\"]," +
+                "\"Dictionary\":{\"Primary\":\"" + dictionary + "\"}}}," +
+                "\"Targets\":{\"Existing\":{}}}}";
+        }
+
         private static string SparseLocalizationJson(object firstValue,
             object secondExtra, object thirdValue)
         {
@@ -305,39 +393,68 @@ namespace GameDBLibrary.Tests
             return value is string text ? "\"" + text + "\"" : value.ToString();
         }
 
+        private sealed class ReferenceTestGameDB : GameDBBase
+        {
+            internal ReferenceTestGameDB()
+                : base("ReferenceTest", "ReferenceTest")
+            {
+                var sources = new TableBase("Sources", KeyType.@string, null,
+                    key => new RowBase(key));
+                sources.Fields.Add("Direct", new FieldBase("Direct",
+                    FieldType.tableRef, false, "Targets"));
+                sources.Fields.Add("Array", new FieldBase("Array",
+                    FieldType.tableRef, true, "Targets"));
+                sources.Fields.Add("Dictionary", new FieldBase("Dictionary",
+                    FieldType.dictionary, false,
+                    new DictionaryType(KeyType.@string, null,
+                        FieldType.tableRef, "Targets")));
+                RegisterTable("Sources", sources);
+                RegisterTable("Targets", new TableBase("Targets", KeyType.@string,
+                    null, key => new RowBase(key)));
+            }
+
+            internal RuntimeGameDBSnapshot Snapshot => m_internal.CurrentSnapshot;
+        }
+
         private sealed class AtomicTestGameDB : GameDBBase
         {
             internal AtomicTestGameDB()
                 : base("AtomicTest", "AtomicTest")
             {
-                Tables.Add("First", CreateTable("First"));
-                Tables.Add("Second", CreateTable("Second"));
-                Tables.Add("Third", CreateTable("Third"));
+                RegisterTable("First", CreateTable("First"));
+                RegisterTable("Second", CreateTable("Second"));
+                RegisterTable("Third", CreateTable("Third"));
             }
 
             internal GameDBInternal Internal => m_internal;
-            internal string Metadata { get; private set; }
+            internal RuntimeGameDBSnapshot Snapshot => m_internal.CurrentSnapshot;
+            internal string Metadata => Snapshot?.Metadata as string;
 
             internal Exception ImportLocalization(string jsonData,
                 string[] columnImportList, string metadata, bool notify = true)
             {
                 return ImportLocalizationData(jsonData, columnImportList, notify,
-                    () => Metadata = metadata);
+                    metadata);
             }
 
             internal void SetMetadata(string metadata)
             {
-                Metadata = metadata;
+                var error = ImportLocalization(Json("old-first", "old-second"),
+                    new[] { "Value", "Extra" }, metadata, false);
+                if (error != null)
+                {
+                    throw error;
+                }
             }
 
             internal TableBase GetTable(string name)
             {
-                return Tables[name];
+                return m_internal.Tables[name];
             }
 
             internal RowBase GetRow(string table)
             {
-                return Tables[table].GetByKeyRaw("Row");
+                return m_internal.Tables[table].GetByKeyRaw("Row");
             }
 
             internal string GetValue(string table)

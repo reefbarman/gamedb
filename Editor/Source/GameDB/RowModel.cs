@@ -11,29 +11,29 @@ namespace GameDBEditorLibrary
 
         public void SetValue(string fieldName, object value)
         {
-            m_data[fieldName] = value;
+            MutableData[fieldName] = value;
         }
 
         public void RemoveField(string fieldName)
         {
-            m_data.Remove(fieldName);
+            MutableData.Remove(fieldName);
         }
 
         public void RenameField(string oldName, string newName)
         {
-            if (!m_data.TryGetValue(oldName, out var value))
+            if (!MutableData.TryGetValue(oldName, out var value))
             {
                 return;
             }
 
-            m_data.Remove(oldName);
-            m_data[newName] = value;
+            MutableData.Remove(oldName);
+            MutableData[newName] = value;
         }
 
         public RowModel CopyWithName(string name)
         {
             var copy = new RowModel(name);
-            foreach (var pair in m_data)
+            foreach (var pair in MutableData)
             {
                 copy.SetValue(pair.Key, pair.Value);
             }
@@ -47,18 +47,18 @@ namespace GameDBEditorLibrary
 
             foreach (var fieldPair in fields)
             {
-                if (!m_data.ContainsKey(fieldPair.Key))
+                if (!MutableData.ContainsKey(fieldPair.Key))
                 {
                     continue;
                 }
 
                 if (fieldPair.Value.Type == FieldType.dictionary)
                 {
-                    row.Add(fieldPair.Key, DictionaryTypeUtils.SerializeValue(fieldPair.Value.GetTypeArg<DictionaryType>(), m_data[fieldPair.Key]));
+                    row.Add(fieldPair.Key, DictionaryTypeUtils.SerializeValue(fieldPair.Value.GetTypeArg<DictionaryType>(), MutableData[fieldPair.Key]));
                 }
                 else
                 {
-                    row.Add(fieldPair.Key, TypeHelpers.SerializeType(fieldPair.Value.Type, fieldPair.Value.IsArray, m_data[fieldPair.Key]));
+                    row.Add(fieldPair.Key, TypeHelpers.SerializeType(fieldPair.Value.Type, fieldPair.Value.IsArray, MutableData[fieldPair.Key]));
                 }
             }
 

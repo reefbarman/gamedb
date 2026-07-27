@@ -10,7 +10,7 @@
             global::System.Collections.Generic.IReadOnlyList<string> fallbackLanguages,
             bool notify = true)
         {
-            LocalizationSelection selection;
+            GameDBLocalizationSelection selection;
             try
             {
                 selection = PrepareLocalizationSelection(language, fallbackLanguages);
@@ -30,8 +30,7 @@
                 }
 
                 return gameDBResource.text;
-            }, selection.CreateColumns(), notify,
-                () => m_localizationSelection = selection);
+            }, selection.CreateColumns(), notify, selection);
         }
 
         public async global::UnityEngine.Awaitable LoadAsync(string path,
@@ -51,8 +50,7 @@
             var selection = PrepareLocalizationSelection(language, fallbackLanguages);
             await LoadLocalizationDataAsync(path,
                 global::GameDBLibraryUnity.ResourcesGameDBDataLoader.Instance,
-                selection.CreateColumns(), notify,
-                () => m_localizationSelection = selection, cancellationToken);
+                selection.CreateColumns(), notify, selection, cancellationToken);
         }
 
         public async global::UnityEngine.Awaitable LoadAsync(string location,
@@ -72,6 +70,5 @@
         {
             var selection = PrepareLocalizationSelection(language, fallbackLanguages);
             await LoadLocalizationDataAsync(location, loader,
-                selection.CreateColumns(), notify,
-                () => m_localizationSelection = selection, cancellationToken);
+                selection.CreateColumns(), notify, selection, cancellationToken);
         }

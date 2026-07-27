@@ -11,7 +11,7 @@
 
         public override Color GetValue()
         {
-            return m_value;
+            return new Color(m_value.r, m_value.g, m_value.b, m_value.a);
         }
     }
 }

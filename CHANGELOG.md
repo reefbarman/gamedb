@@ -28,6 +28,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Advanced the current-only schema contract to format version `4` for exact Int64 and finite Double values; editor, runtime, document, and automation loads refuse missing, malformed, older, or newer formats before hydrating or rewriting database files.
 - Replaced path-string Unity-object values with strict `{guid,path}` references. Real editor saves refresh paths from GUID identity for scalar, array, and dictionary values and accept any loadable main project asset under `Assets`; synchronous object projections remain Resources-only.
 - Expanded generated Unity-object scalar and array APIs with value, GUID, and path projections in every output plus object projections in Unity-enabled output; dictionary values remain accessor objects.
+- Made generated arrays, dictionaries, and table row maps recursively read-only and reference-stable within each atomic publication. Retained rows and table references now resolve against their original snapshot after reload, and runtime import validates direct, array, and dictionary row references before publication.
 
 ### Deprecated
 

@@ -182,29 +182,36 @@ namespace GameDBLibrary.Tests
             AssertAsyncLoadMethods(gameDBType, false);
             AssertAsyncLoadMethods(localizationGameDBType, true);
             Assert.That(itemsTableType, Is.Not.Null);
+            Assert.That(itemsType.GetConstructors(BindingFlags.Instance |
+                BindingFlags.Public), Is.Empty);
+            Assert.That(itemsTableType.GetConstructors(BindingFlags.Instance |
+                BindingFlags.Public), Is.Empty);
             Assert.That(itemsType.GetProperty("PowerVal", BindingFlags.Instance | BindingFlags.Public), Is.Not.Null);
             AssertPropertyType(itemsType, "LongValueVal", typeof(long));
             AssertPropertyType(itemsType, "LongValuesVal",
-                typeof(System.Collections.Generic.List<long>));
+                typeof(System.Collections.Generic.IReadOnlyList<long>));
             AssertPropertyType(itemsType, "LongByKeyVal",
-                typeof(System.Collections.Generic.Dictionary<string, long>));
+                typeof(System.Collections.Generic.IReadOnlyDictionary<string, long>));
             AssertPropertyType(itemsType, "DoubleValueVal", typeof(double));
             AssertPropertyType(itemsType, "DoubleValuesVal",
-                typeof(System.Collections.Generic.List<double>));
+                typeof(System.Collections.Generic.IReadOnlyList<double>));
             AssertPropertyType(itemsType, "DoubleByKeyVal",
-                typeof(System.Collections.Generic.Dictionary<string, double>));
+                typeof(System.Collections.Generic.IReadOnlyDictionary<string, double>));
             Assert.That(itemsType.GetProperty("AttributesVal", BindingFlags.Instance | BindingFlags.Public), Is.Not.Null);
             Assert.That(itemsType.GetProperty("CategoryVal", BindingFlags.Instance | BindingFlags.Public), Is.Not.Null);
             AssertPropertyType(itemsType, "IconVal", typeof(UnityObjectReference));
             AssertPropertyType(itemsType, "IconGuidVal", typeof(string));
             AssertPropertyType(itemsType, "IconPathVal", typeof(string));
             AssertPropertyType(itemsType, "IconObjectVal", typeof(UnityEngine.Object));
-            AssertPropertyType(itemsType, "IconsVal", typeof(System.Collections.Generic.List<UnityObjectReference>));
-            AssertPropertyType(itemsType, "IconsGuidVal", typeof(System.Collections.Generic.List<string>));
-            AssertPropertyType(itemsType, "IconsPathVal", typeof(System.Collections.Generic.List<string>));
-            AssertPropertyType(itemsType, "IconsObjectVal", typeof(System.Collections.Generic.List<UnityEngine.Object>));
+            AssertPropertyType(itemsType, "IconsVal", typeof(System.Collections.Generic.IReadOnlyList<UnityObjectReference>));
+            AssertPropertyType(itemsType, "IconsGuidVal", typeof(System.Collections.Generic.IReadOnlyList<string>));
+            AssertPropertyType(itemsType, "IconsPathVal", typeof(System.Collections.Generic.IReadOnlyList<string>));
+            AssertPropertyType(itemsType, "IconsObjectVal", typeof(System.Collections.Generic.IReadOnlyList<UnityEngine.Object>));
             AssertPropertyType(itemsType, "IconsBySlotVal",
-                typeof(System.Collections.Generic.Dictionary<string, GameDBLibraryUnity.UnityObjectAccessor>));
+                typeof(System.Collections.Generic.IReadOnlyDictionary<string, GameDBLibraryUnity.UnityObjectAccessor>));
+            Assert.That(itemsTableType.GetMethod("GetRows", BindingFlags.Instance | BindingFlags.Public)
+                .ReturnType, Is.EqualTo(typeof(System.Collections.Generic.IReadOnlyDictionary<,>)
+                    .MakeGenericType(typeof(string), itemsType)));
             Assert.That(localizationGameDBType.GetProperty("LocalizationLanguage", BindingFlags.Instance | BindingFlags.Public), Is.Not.Null);
             AssertPropertyType(localizationGameDBType, "LocalizationLanguageChain",
                 typeof(System.Collections.Generic.IReadOnlyList<string>));
@@ -244,6 +251,25 @@ namespace GameDBLibrary.Tests
             Assert.That(sword.GetType().GetProperty("PowerVal").GetValue(sword),
                 Is.EqualTo(12));
             Assert.That(notifications, Is.Zero);
+
+            var getRows = itemsTable.GetType().GetMethod("GetRows");
+            var rowsBeforeReload = getRows.Invoke(itemsTable, null);
+            Assert.That(getRows.Invoke(itemsTable, null), Is.SameAs(rowsBeforeReload));
+            var longValues = sword.GetType().GetProperty("LongValuesVal")
+                .GetValue(sword);
+            Assert.That(sword.GetType().GetProperty("LongValuesVal").GetValue(sword),
+                Is.SameAs(longValues));
+            Assert.Throws<NotSupportedException>(() =>
+                ((System.Collections.IList)longValues).Add(42L));
+            Assert.Throws<NotSupportedException>(() =>
+                ((System.Collections.IDictionary)rowsBeforeReload).Clear());
+
+            yield return Await(InvokeCustomLoader(gameDBType, gameDB,
+                new InlineLoader(m_generatedDataJson), "normal-reload", false));
+            var rowsAfterReload = getRows.Invoke(itemsTable, null);
+            Assert.That(rowsAfterReload, Is.Not.SameAs(rowsBeforeReload));
+            Assert.That(((System.Collections.IDictionary)rowsBeforeReload).Count,
+                Is.EqualTo(1));
 
             var localizationType = RequireType(assembly,
                 $"GameDB{LocalizationScope}.GameDB");
@@ -343,6 +369,19 @@ namespace GameDBLibrary.Tests
                 "Greeting", "TranslatedVal"), Is.EqualTo("Salut"));
             Assert.That(GetTranslation(localizationType, localization,
                 "Fallback", "TranslatedVal"), Is.EqualTo("Reload fallback"));
+
+            var oldTimingRow = GetLocalizationRow(localizationType,
+                localization, "Timing");
+            Assert.That(importWithoutFallbacks.Invoke(localization,
+                    new object[] { LocalizationSecondPublicationJson(), "English", false }),
+                Is.Null);
+            Assert.That(localizationType.GetProperty("LocalizationLanguage")
+                .GetValue(localization), Is.EqualTo("English"));
+            Assert.That(GetRowString(oldTimingRow, "LanguageVal"), Is.EqualTo("French"));
+            Assert.That(GetRowString(oldTimingRow, "TranslatedVal"),
+                Is.EqualTo("Old French timing"));
+            Assert.That(GetTranslation(localizationType, localization,
+                "Timing", "TranslatedVal"), Is.EqualTo("New English timing"));
         }
 
         private static Awaitable InvokeCustomLoader(Type gameDBType, object gameDB,
@@ -370,12 +409,22 @@ namespace GameDBLibrary.Tests
         private static string GetTranslation(Type gameDBType, object gameDB,
             string rowKey, string propertyName)
         {
+            return GetRowString(GetLocalizationRow(gameDBType, gameDB, rowKey),
+                propertyName);
+        }
+
+        private static object GetLocalizationRow(Type gameDBType, object gameDB,
+            string rowKey)
+        {
             var table = gameDBType.GetProperty("TranslationsTable")
                 .GetValue(gameDB);
-            var row = table.GetType().GetMethod("GetByKey")
+            return table.GetType().GetMethod("GetByKey")
                 .Invoke(table, new object[] { rowKey });
-            return (string)row.GetType().GetProperty(propertyName)
-                .GetValue(row);
+        }
+
+        private static string GetRowString(object row, string propertyName)
+        {
+            return (string)row.GetType().GetProperty(propertyName).GetValue(row);
         }
 
         private static IEnumerator Await(Awaitable awaitable)
@@ -440,6 +489,7 @@ namespace GameDBLibrary.Tests
                 "\"Greeting\":{\"English\":\"Hello\",\"French\":\"Bonjour\"}," +
                 "\"Fallback\":{\"English\":\"Hello fallback\"}," +
                 "\"Empty\":{\"French\":\"\",\"English\":\"Should not use\"}," +
+                "\"Timing\":{\"French\":\"Old French timing\",\"English\":\"Old English timing\"}," +
                 "\"Missing\":{}}}}";
         }
 
@@ -449,6 +499,17 @@ namespace GameDBLibrary.Tests
                 "\"Greeting\":{\"French\":\"Salut\"}," +
                 "\"Fallback\":{\"English\":\"Reload fallback\"}," +
                 "\"Empty\":{\"French\":\"\"}," +
+                "\"Timing\":{\"French\":\"Old French timing\"}," +
+                "\"Missing\":{}}}}";
+        }
+
+        private static string LocalizationSecondPublicationJson()
+        {
+            return "{\"tables\":{\"Translations\":{" +
+                "\"Greeting\":{\"English\":\"Hello again\"}," +
+                "\"Fallback\":{\"English\":\"Second fallback\"}," +
+                "\"Empty\":{\"English\":\"Second empty\"}," +
+                "\"Timing\":{\"English\":\"New English timing\"}," +
                 "\"Missing\":{}}}}";
         }
 

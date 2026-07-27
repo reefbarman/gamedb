@@ -62,7 +62,7 @@ namespace GameDBEditorLibrary
         }
     }
 
-    internal class GameDB : Singleton<GameDB>, IGameDB
+    internal class GameDB : Singleton<GameDB>
     {
         internal static List<GameDBBase> RuntimeDBs = new List<GameDBBase>();
 
@@ -483,16 +483,24 @@ namespace GameDBEditorLibrary
             ApplyImportedState(imported);
         }
 
-        private static void ImportFromRuntimeDB(Dictionary<string, TableBase> tables, IGameDB runtimeDB)
+        private static void ImportFromRuntimeDB(Dictionary<string, TableBase> tables,
+            GameDBInternal runtimeDB)
         {
+            var snapshot = runtimeDB.CaptureSnapshot();
+            if (snapshot == null)
+            {
+                throw new InvalidOperationException(
+                    "The runtime GameDB has no published data to import.");
+            }
+
             foreach (var tablePair in tables)
             {
-                if (!runtimeDB.Tables.ContainsKey(tablePair.Key))
+                if (!runtimeDB.Tables.TryGetValue(tablePair.Key, out var runtimeTable))
                 {
                     throw new FormatException("runtime gamedb missing table: " + tablePair.Key);
                 }
 
-                tablePair.Value.Import(runtimeDB.Tables[tablePair.Key]);
+                tablePair.Value.Import(runtimeTable, snapshot);
             }
         }
 

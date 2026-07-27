@@ -15,16 +15,16 @@ namespace GameDB{0}
 {{
     public partial class {1}Table : global::GameDBLibrary.TableBase
     {{
-        public {1}Table(global::System.Func<string, global::GameDBLibrary.RowBase> rowFactory) : base({1}Schema.TableName, {2}, {3}, rowFactory) {{
-            m_fields = new global::System.Collections.Generic.Dictionary<string, global::GameDBLibrary.FieldBase>() {{
+        internal {1}Table(global::System.Func<string, global::GameDBLibrary.RowBase> rowFactory) : base({1}Schema.TableName, {2}, {3}, rowFactory) {{
+            InitializeFields(new global::System.Collections.Generic.Dictionary<string, global::GameDBLibrary.FieldBase>() {{
 {4}
-            }};
+            }});
         }}
 
-        public {1} GetByKey({5} key) {{ return m_data[{6}] as {1}; }}
+        public {1} GetByKey({5} key) {{ return CurrentRows[{6}] as {1}; }}
 
-        public bool TryGetByKey({5} key, out {1} row) {{ row = null; if (m_data.ContainsKey({6})) {{ row = m_data[{6}] as {1}; return row != null; }} return false; }}
+        public bool TryGetByKey({5} key, out {1} row) {{ row = null; var rows = CurrentRows; if (rows.ContainsKey({6})) {{ row = rows[{6}] as {1}; return row != null; }} return false; }}
 
-        public global::System.Collections.Generic.Dictionary<{5}, {1}> GetRows() {{ return global::System.Linq.Enumerable.ToDictionary(m_data, entry => {7}, entry => ({1})entry.Value); }}
+        public global::System.Collections.Generic.IReadOnlyDictionary<{5}, {1}> GetRows() {{ return GetRows<{5}, {1}>(key => {8}); }}
     }}
 }}

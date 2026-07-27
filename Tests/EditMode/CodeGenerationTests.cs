@@ -2,6 +2,7 @@ using GameDBEditorLibrary;
 using GameDBEditorLibrary.Automation;
 using NUnit.Framework;
 using System;
+using System.Collections;
 using System.IO;
 using System.Linq;
 using UnityEditor;
@@ -123,14 +124,14 @@ namespace GameDBLibrary.Tests
 
                 Assert.That(rowCode, Does.Contain("public long LongValueVal"));
                 Assert.That(rowCode, Does.Contain(
-                    "public global::System.Collections.Generic.List<long> LongValuesVal"));
+                    "public global::System.Collections.Generic.IReadOnlyList<long> LongValuesVal"));
                 Assert.That(rowCode, Does.Contain(
-                    "public global::System.Collections.Generic.Dictionary<string, long> LongByKeyVal"));
+                    "public global::System.Collections.Generic.IReadOnlyDictionary<string, long> LongByKeyVal"));
                 Assert.That(rowCode, Does.Contain("public double DoubleValueVal"));
                 Assert.That(rowCode, Does.Contain(
-                    "public global::System.Collections.Generic.List<double> DoubleValuesVal"));
+                    "public global::System.Collections.Generic.IReadOnlyList<double> DoubleValuesVal"));
                 Assert.That(rowCode, Does.Contain(
-                    "public global::System.Collections.Generic.Dictionary<string, double> DoubleByKeyVal"));
+                    "public global::System.Collections.Generic.IReadOnlyDictionary<string, double> DoubleByKeyVal"));
                 Assert.That(rowCode, Does.Contain("global::GameDBLibrary.LongAccessor"));
                 Assert.That(rowCode, Does.Contain("global::GameDBLibrary.DoubleAccessor"));
                 Assert.That(rowCode, Does.Contain(
@@ -141,6 +142,8 @@ namespace GameDBLibrary.Tests
                 Assert.That(rowCode, Does.Contain("typeof(global::GameDBLibrary.DoubleAccessor)"));
                 Assert.That(tableCode, Does.Contain("global::GameDBLibrary.FieldType.@long"));
                 Assert.That(tableCode, Does.Contain("global::GameDBLibrary.FieldType.@double"));
+                Assert.That(tableCode, Does.Contain(
+                    "public global::System.Collections.Generic.IReadOnlyDictionary<string, Items> GetRows()"));
             }
             finally
             {
@@ -212,7 +215,7 @@ namespace GameDBLibrary.Tests
                 Assert.That(unityCode, Does.Contain(".GetPath()"));
                 Assert.That(unityCode, Does.Contain(".GetObject()"));
                 Assert.That(unityCode, Does.Contain(
-                    "global::System.Collections.Generic.List<global::GameDBLibrary.UnityObjectReference> IconsVal"));
+                    "global::System.Collections.Generic.IReadOnlyList<global::GameDBLibrary.UnityObjectReference> IconsVal"));
                 Assert.That(unityCode, Does.Contain(
                     "global::GameDBLibrary.DictionaryAccessor<string, global::GameDBLibraryUnity.UnityObjectAccessor>"));
 
@@ -335,6 +338,83 @@ namespace GameDBLibrary.Tests
         }
 
         [Test]
+        public void Validate_RejectsMissingReferencedRowsBeforeWriting()
+        {
+            var gameDB = CreateInMemoryDatabase("MissingReferenceRows");
+            Assert.That(gameDB.AddTable("Targets", KeyType.@string), Is.True);
+            Assert.That(gameDB.AddTable("Sources", KeyType.@string), Is.True);
+            var targets = (TableModel)gameDB.Tables["Targets"];
+            var sources = (TableModel)gameDB.Tables["Sources"];
+            Assert.That(targets.AddKey("Existing"), Is.True);
+            Assert.That(sources.AddField("Direct", FieldType.tableRef, false,
+                "Targets"), Is.True);
+            Assert.That(sources.AddField("Array", FieldType.tableRef, true,
+                "Targets"), Is.True);
+            Assert.That(sources.AddField("Dictionary", FieldType.dictionary,
+                false, new DictionaryType(KeyType.@string, null,
+                    FieldType.tableRef, "Targets")), Is.True);
+            Assert.That(sources.AddKey("Source"), Is.True);
+            Assert.That(sources.SetValue("Source", "Direct", "Missing"), Is.True);
+            Assert.That(sources.SetValue("Source", "Array",
+                new System.Collections.Generic.List<object> { "Missing" }), Is.True);
+            Assert.That(sources.SetValue("Source", "Dictionary",
+                new System.Collections.Generic.Dictionary<string, object>
+                    { { "Primary", "Missing" } }),
+                Is.True);
+
+            var issues = CSharpExporter.Validate(gameDB, true);
+
+            Assert.That(issues.Count(issue => issue.Code == "tableRef.row.missing"),
+                Is.EqualTo(3));
+            Assert.That(issues.All(issue => issue.Message.Contains(
+                "Targets[Missing]")), Is.True);
+            Assert.That(issues.Select(issue => issue.FieldName),
+                Is.EquivalentTo(new[] { "Direct", "Array", "Dictionary" }));
+        }
+
+        [Test]
+        public void Validate_RejectsMissingReferencedRowsInNonGenericCollections()
+        {
+            var gameDB = CreateInMemoryDatabase("NonGenericReferenceRows");
+            Assert.That(gameDB.AddTable("Targets", KeyType.@string), Is.True);
+            Assert.That(gameDB.AddTable("Sources", KeyType.@string), Is.True);
+            var targets = (TableModel)gameDB.Tables["Targets"];
+            var sources = (TableModel)gameDB.Tables["Sources"];
+            Assert.That(targets.AddKey("Existing"), Is.True);
+            Assert.That(sources.AddField("Array", FieldType.tableRef, true,
+                "Targets"), Is.True);
+            Assert.That(sources.AddField("Dictionary", FieldType.dictionary,
+                false, new DictionaryType(KeyType.@string, null,
+                    FieldType.tableRef, "Targets")), Is.True);
+            Assert.That(sources.AddKey("Source"), Is.True);
+            sources.Data["Source"].MutableData["Array"] =
+                new ArrayList { "Missing" };
+            sources.Data["Source"].MutableData["Dictionary"] =
+                new Hashtable { { "Primary", "Missing" } };
+
+            var issues = CSharpExporter.Validate(gameDB, true);
+
+            Assert.That(issues.Count(issue => issue.Code == "tableRef.row.missing"),
+                Is.EqualTo(2));
+            Assert.That(issues.Select(issue => issue.FieldName),
+                Is.EquivalentTo(new[] { "Array", "Dictionary" }));
+        }
+
+        [Test]
+        public void Validate_RejectsLocalizationPublicationTypeCollision()
+        {
+            var gameDB = CreateInMemoryDatabase("LocalizationTypeCollision");
+            gameDB.LocalizationDB = true;
+            Assert.That(gameDB.AddTable("GameDBLocalizationSelection",
+                KeyType.@string), Is.True);
+
+            var issues = CSharpExporter.Validate(gameDB, true);
+
+            Assert.That(issues.Any(issue => issue.Code == "type.name.collision"
+                && issue.TableName == "GameDBLocalizationSelection"), Is.True);
+        }
+
+        [Test]
         public void Export_RejectsCaseOnlyScopeDirectoryConflict()
         {
             var gameDB = CreateInMemoryDatabase("CaseScope");
@@ -398,7 +478,9 @@ namespace GameDBLibrary.Tests
                 Assert.That(gameDBCode, Does.Contain("new string[] { \"English\" }"));
                 Assert.That(linesCode, Does.Contain("public string TranslatedVal"));
                 Assert.That(linesCode, Does.Contain("public string ResolvedLanguageVal"));
-                Assert.That(linesCode, Does.Contain("m_data.ContainsKey(language)"));
+                Assert.That(linesCode, Does.Contain("GetPublicationMetadata<GameDBLocalizationSelection>()"));
+                Assert.That(linesCode, Does.Contain("HasValue(language)"));
+                Assert.That(linesCode, Does.Not.Contain("m_gameDB"));
                 Assert.That(linesCode, Does.Contain("global::System.Convert.ChangeType"));
             }
             finally

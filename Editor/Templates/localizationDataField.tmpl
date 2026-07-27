@@ -1,8 +1,13 @@
+        private GameDBLocalizationSelection LocalizationSelection =>
+            GetPublicationMetadata<GameDBLocalizationSelection>() ??
+            GameDBLocalizationSelection.Empty;
+
         private string ResolveLocalizationLanguage()
         {{
-            foreach (var language in m_gameDB.LocalizationLanguageChain)
+            var selection = LocalizationSelection;
+            foreach (var language in selection.Chain)
             {{
-                if (m_data.ContainsKey(language))
+                if (HasValue(language))
                 {{
                     return language;
                 }}
@@ -11,7 +16,7 @@
             throw new global::System.Collections.Generic.KeyNotFoundException(
                 $"No translation is available for localization row '{{Name}}' " +
                 $"in table '{0}'. Attempted languages: [" +
-                global::System.String.Join(", ", m_gameDB.LocalizationLanguageChain) +
+                global::System.String.Join(", ", selection.Chain) +
                 "].");
         }}
 
@@ -26,7 +31,7 @@
 
         public string LanguageVal
         {{
-            get {{ return m_gameDB.LocalizationLanguage; }}
+            get {{ return LocalizationSelection.Primary; }}
         }}
 
         public string ResolvedLanguageVal

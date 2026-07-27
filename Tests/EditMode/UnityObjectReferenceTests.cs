@@ -134,11 +134,11 @@ namespace GameDBLibrary.Tests
                 var table = new TableBase("Items", KeyType.@string, null,
                     key => new RowBase(key));
                 table.Fields.Add("Icon", new FieldBase("Icon", FieldType.unityObject, false));
-                Tables.Add("Items", table);
+                RegisterTable("Items", table);
             }
 
             internal UnityObjectReference Icon =>
-                (UnityObjectReference)Tables["Items"].GetByKeyRaw("Sword").GetValue("Icon");
+                (UnityObjectReference)m_internal.Tables["Items"].GetByKeyRaw("Sword").GetValue("Icon");
         }
     }
 }

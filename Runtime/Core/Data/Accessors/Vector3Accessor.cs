@@ -11,7 +11,7 @@
 
         public override Vector3 GetValue()
         {
-            return m_value;
+            return new Vector3(m_value.x, m_value.y, m_value.z);
         }
     }
 }

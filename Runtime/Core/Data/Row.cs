@@ -14,7 +14,7 @@ public class Row : RowBase
         m_listAccessors = new Dictionary<string, ICollection>();
     }
 
-    public T GetCacheOrCreateAccessor<T>(string accessorName, Func<IDataAccessor> createAccessor)
+    protected T GetCacheOrCreateAccessor<T>(string accessorName, Func<IDataAccessor> createAccessor)
     {
         IDataAccessor accessor = null;
 
@@ -31,7 +31,7 @@ public class Row : RowBase
         return (T)accessor;
     }
 
-    public T GetCacheOrCreateListAccessor<T>(string accessorName, Func<ICollection> createAccessor)
+    protected T GetCacheOrCreateListAccessor<T>(string accessorName, Func<ICollection> createAccessor)
     {
         ICollection accessor = null;
 

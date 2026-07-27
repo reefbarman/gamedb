@@ -20,18 +20,32 @@ namespace GameDBLibrary
 
         protected string m_name = string.Empty;
         private Func<string, RowBase> m_rowFactory = null;
+        private GameDBInternal m_owner;
 
         protected TableKey m_tableKey;
 
-        protected Dictionary<string, FieldBase> m_fields = new Dictionary<string, FieldBase>();
-        protected Dictionary<string, RowBase> m_data = new Dictionary<string, RowBase>();
+        private Dictionary<string, FieldBase> m_fields = new Dictionary<string, FieldBase>();
+        private Dictionary<string, RowBase> m_data = new Dictionary<string, RowBase>();
 
         public string Name => m_name;
         internal Dictionary<string, FieldBase> Fields => m_fields;
-        internal Dictionary<string, RowBase> Data => m_data;
+        internal Dictionary<string, FieldBase> MutableFields
+        {
+            get => m_fields;
+            set => m_fields = value ?? throw new ArgumentNullException(nameof(value));
+        }
+        internal Dictionary<string, RowBase> Data =>
+            m_owner?.CurrentSnapshot?.GetRows(this) ?? m_data;
+        internal Dictionary<string, RowBase> MutableData
+        {
+            get => m_data;
+            set => m_data = value ?? throw new ArgumentNullException(nameof(value));
+        }
+        protected IReadOnlyDictionary<string, RowBase> CurrentRows => Data;
         internal TableKey TableKeyType => m_tableKey;
 
-        public TableBase(string name, KeyType type, object typeArg, Func<string, RowBase> rowFactory)
+        protected internal TableBase(string name, KeyType type, object typeArg,
+            Func<string, RowBase> rowFactory)
         {
             m_name = name;
 
@@ -39,9 +53,60 @@ namespace GameDBLibrary
             m_rowFactory = rowFactory;
         }
 
-        public RowBase GetByKeyRaw(string key)
+        protected internal RowBase GetByKeyRaw(string key)
         {
             return Data[key];
+        }
+
+        protected void InitializeFields(Dictionary<string, FieldBase> fields)
+        {
+            if (fields == null)
+            {
+                throw new ArgumentNullException(nameof(fields));
+            }
+
+            if (m_fields.Count != 0)
+            {
+                throw new InvalidOperationException(
+                    $"Fields for table '{Name}' are already initialized.");
+            }
+
+            m_fields = fields;
+        }
+
+        protected IReadOnlyDictionary<TKey, TRow> GetRows<TKey, TRow>(
+            Func<string, TKey> keySelector) where TRow : RowBase
+        {
+            var snapshot = m_owner?.CurrentSnapshot;
+            if (snapshot == null)
+            {
+                var projected = new Dictionary<TKey, TRow>();
+                foreach (var row in m_data)
+                {
+                    projected.Add(keySelector(row.Key), (TRow)row.Value);
+                }
+
+                return new System.Collections.ObjectModel.ReadOnlyDictionary<TKey, TRow>(
+                    projected);
+            }
+
+            return snapshot.GetRows<TKey, TRow>(this, keySelector);
+        }
+
+        internal void AttachOwner(GameDBInternal owner)
+        {
+            if (owner == null)
+            {
+                throw new ArgumentNullException(nameof(owner));
+            }
+
+            if (m_owner != null && !ReferenceEquals(m_owner, owner))
+            {
+                throw new InvalidOperationException(
+                    $"Table '{Name}' is already registered with another GameDB.");
+            }
+
+            m_owner = owner;
         }
 
         internal Dictionary<string, RowBase> StageData(object tableObj,
@@ -79,11 +144,12 @@ namespace GameDBLibrary
             PublishData(StageData(tableObj, columnImportList));
         }
 
-        internal void Import(TableBase table)
+        internal void Import(TableBase table, RuntimeGameDBSnapshot snapshot = null)
         {
             var data = new Dictionary<string, RowBase>();
+            var sourceRows = snapshot == null ? table.Data : snapshot.GetRows(table);
 
-            foreach (var rowPair in table.Data)
+            foreach (var rowPair in sourceRows)
             {
                 RowBase row = m_rowFactory(rowPair.Key);
                 row.Import(m_fields, rowPair.Value);

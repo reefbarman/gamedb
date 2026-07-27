@@ -8,19 +8,30 @@ namespace GameDBLibrary
         private readonly T1 m_referenceKey;
         private readonly T2 m_reference;
 
-        public TableReferenceAccessor(object val, GameDBBase gameDB)
+        public TableReferenceAccessor(object val, RowBase owner, string tableName)
         {
+            if (owner == null)
+            {
+                throw new ArgumentNullException(nameof(owner));
+            }
+
+            if (string.IsNullOrEmpty(tableName))
+            {
+                throw new ArgumentException("Referenced table name is required.",
+                    nameof(tableName));
+            }
+
             var referenceKey = val as string;
 
             if (!string.IsNullOrEmpty(referenceKey))
             {
                 if (typeof(T1).IsEnum)
                 {
-                    m_referenceKey = (T1) Enum.Parse(typeof(T1), referenceKey);
+                    m_referenceKey = (T1)Enum.Parse(typeof(T1), referenceKey);
                 }
                 else
                 {
-                    m_referenceKey = (T1) val;
+                    m_referenceKey = (T1)val;
                 }
 
                 m_keySet = true;
@@ -28,8 +39,7 @@ namespace GameDBLibrary
 
             if (m_keySet)
             {
-                var table = gameDB.GetType().GetProperty($"{typeof(T2).Name}Table").GetValue(gameDB, null);
-                m_reference = (T2) table.GetType().GetMethod("GetByKeyRaw").Invoke(table, new object[] {referenceKey});
+                m_reference = owner.ResolveReference<T2>(tableName, referenceKey);
             }
         }
 

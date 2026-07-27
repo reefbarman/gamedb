@@ -1,33 +1,38 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 
 namespace GameDBLibrary
 {
-    public class DictionaryAccessor<T1, T2> : DataAccessor<Dictionary<T1, T2>>
+    public class DictionaryAccessor<T1, T2> : DataAccessor<IReadOnlyDictionary<T1, T2>>
     {
-        private readonly GameDBBase m_gameDB;
+        private readonly RowBase m_owner;
+        private readonly string m_referencedTable;
         private readonly Type m_keyAccessorType;
         private readonly Type m_valueAccessorType;
 
-        private readonly Dictionary<T1, T2> m_dict;
+        private readonly IReadOnlyDictionary<T1, T2> m_dict;
 
-        public DictionaryAccessor(object val, GameDBBase gameDB, Type keyAccessorType, Type valueAccessorType)
+        public DictionaryAccessor(object val, RowBase owner, string referencedTable,
+            Type keyAccessorType, Type valueAccessorType)
         {
-            m_gameDB = gameDB;
+            m_owner = owner ?? throw new ArgumentNullException(nameof(owner));
+            m_referencedTable = referencedTable;
             m_keyAccessorType = keyAccessorType;
             m_valueAccessorType = valueAccessorType;
 
-            m_dict = new Dictionary<T1, T2>();
-
-            var dict = val as Dictionary<object, object>;
+            var result = new Dictionary<T1, T2>();
+            var dict = val as IDictionary<object, object>;
 
             foreach (var pair in dict)
             {
-                m_dict.Add(GetKeyObject(pair.Key), GetValueObject(pair.Value));
+                result.Add(GetKeyObject(pair.Key), GetValueObject(pair.Value));
             }
+
+            m_dict = new ReadOnlyDictionary<T1, T2>(result);
         }
 
-        public override Dictionary<T1, T2> GetValue()
+        public override IReadOnlyDictionary<T1, T2> GetValue()
         {
             return m_dict;
         }
@@ -48,7 +53,8 @@ namespace GameDBLibrary
 
             if (accessorType.Name.StartsWith("TableReferenceAccessor"))
             {
-                accessor = Activator.CreateInstance(accessorType, val, m_gameDB);
+                accessor = Activator.CreateInstance(accessorType, val, m_owner,
+                    m_referencedTable);
             }
             else
             {

@@ -6,12 +6,12 @@
 
         public Vector2Accessor(object value)
         {
-            m_value = (Vector2) value;
+            m_value = (Vector2)value;
         }
 
         public override Vector2 GetValue()
         {
-            return m_value;
+            return new Vector2(m_value.x, m_value.y);
         }
     }
 }

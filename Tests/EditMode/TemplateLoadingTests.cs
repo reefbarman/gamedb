@@ -8,6 +8,7 @@ namespace GameDBLibrary.Tests
         [TestCase("gameDB")]
         [TestCase("gameDBUnity")]
         [TestCase("unityLoad")]
+        [TestCase("localizationLoad")]
         [TestCase("unityLocalizationLoad")]
         public void LoadTemplate_ReadsTemplatesFromResolvedPackagePath(string templateName)
         {

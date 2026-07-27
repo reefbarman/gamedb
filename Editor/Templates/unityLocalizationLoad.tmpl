@@ -1,7 +1,26 @@
 
-        public global::System.Exception Load(string path, string language, bool notify = true)
+        public global::System.Exception Load(string path, string language,
+            bool notify = true)
         {
-            return LoadData(() =>
+            return Load(path, language,
+                global::System.Array.Empty<string>(), notify);
+        }
+
+        public global::System.Exception Load(string path, string language,
+            global::System.Collections.Generic.IReadOnlyList<string> fallbackLanguages,
+            bool notify = true)
+        {
+            LocalizationSelection selection;
+            try
+            {
+                selection = PrepareLocalizationSelection(language, fallbackLanguages);
+            }
+            catch (global::System.Exception exception)
+            {
+                return exception;
+            }
+
+            return LoadLocalizationData(() =>
             {
                 var gameDBResource = global::UnityEngine.Resources.Load<global::UnityEngine.TextAsset>(path);
 
@@ -11,29 +30,48 @@
                 }
 
                 return gameDBResource.text;
-            }, new[] { language }, notify, () => LocalizationLanguage = language);
+            }, selection.CreateColumns(), notify,
+                () => m_localizationSelection = selection);
         }
 
-        public global::System.Exception Import(string json, string language, bool notify = true)
+        public async global::UnityEngine.Awaitable LoadAsync(string path,
+            string language, bool notify = true,
+            global::System.Threading.CancellationToken cancellationToken = default)
         {
-            return ImportData(json, new[] { language }, notify,
-                () => LocalizationLanguage = language);
+            await LoadAsync(path, language,
+                global::System.Array.Empty<string>(), notify, cancellationToken);
         }
 
-        public global::UnityEngine.Awaitable LoadAsync(string path, string language,
+        public async global::UnityEngine.Awaitable LoadAsync(string path,
+            string language,
+            global::System.Collections.Generic.IReadOnlyList<string> fallbackLanguages,
             bool notify = true,
             global::System.Threading.CancellationToken cancellationToken = default)
         {
-            return LoadDataAsync(path,
+            var selection = PrepareLocalizationSelection(language, fallbackLanguages);
+            await LoadLocalizationDataAsync(path,
                 global::GameDBLibraryUnity.ResourcesGameDBDataLoader.Instance,
-                new[] { language }, notify, () => LocalizationLanguage = language,
-                cancellationToken);
+                selection.CreateColumns(), notify,
+                () => m_localizationSelection = selection, cancellationToken);
         }
 
-        public global::UnityEngine.Awaitable LoadAsync(string location, string language,
-            global::GameDBLibrary.IGameDBDataLoader loader, bool notify = true,
+        public async global::UnityEngine.Awaitable LoadAsync(string location,
+            string language, global::GameDBLibrary.IGameDBDataLoader loader,
+            bool notify = true,
             global::System.Threading.CancellationToken cancellationToken = default)
         {
-            return LoadDataAsync(location, loader, new[] { language }, notify,
-                () => LocalizationLanguage = language, cancellationToken);
+            await LoadAsync(location, language, loader,
+                global::System.Array.Empty<string>(), notify, cancellationToken);
+        }
+
+        public async global::UnityEngine.Awaitable LoadAsync(string location,
+            string language, global::GameDBLibrary.IGameDBDataLoader loader,
+            global::System.Collections.Generic.IReadOnlyList<string> fallbackLanguages,
+            bool notify = true,
+            global::System.Threading.CancellationToken cancellationToken = default)
+        {
+            var selection = PrepareLocalizationSelection(language, fallbackLanguages);
+            await LoadLocalizationDataAsync(location, loader,
+                selection.CreateColumns(), notify,
+                () => m_localizationSelection = selection, cancellationToken);
         }

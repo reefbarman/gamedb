@@ -100,11 +100,19 @@ namespace GameDBEditorLibrary
 
             var gameDBTemplate = LoadTemplate("gameDB");
             var loadTemplate = LoadTemplate("unityLoad");
+            var localizationCode = string.Empty;
 
             if (gameDB.LocalizationDB)
             {
                 loadTemplate = LoadTemplate("unityLocalizationLoad");
                 gameDBTemplate = LoadTemplate("gameDBLocalization");
+                var languages = gameDB.Tables.Values
+                    .SelectMany(table => table.Fields.Keys)
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(language => language, StringComparer.Ordinal)
+                    .Select(language => $"\"{EscapeStringLiteral(language)}\"");
+                localizationCode = string.Format(
+                    LoadTemplate("localizationLoad"), string.Join(", ", languages));
             }
 
             var tableAccessors = string.Empty;
@@ -186,7 +194,12 @@ namespace GameDBEditorLibrary
                 extraGameDBCode = string.Format(gameDBUnityTemplate, loadTemplate);
             }
 
-            var gameDBClass = string.Format(gameDBTemplate, gameDB.ScopeName, tableAccessors, string.Join("\n", tableDefs.ToArray()), extraGameDBCode);
+            var gameDBClass = gameDB.LocalizationDB
+                ? string.Format(gameDBTemplate, gameDB.ScopeName, tableAccessors,
+                    string.Join("\n", tableDefs.ToArray()), extraGameDBCode,
+                    localizationCode)
+                : string.Format(gameDBTemplate, gameDB.ScopeName, tableAccessors,
+                    string.Join("\n", tableDefs.ToArray()), extraGameDBCode);
 
             File.WriteAllText(Path.Combine(exportDirectory, "GameDB.cs"), gameDBClass);
         }
@@ -194,7 +207,6 @@ namespace GameDBEditorLibrary
         private string GenerateLocalizationFieldAccessors(TableBase table, List<string> fieldDefinitions, ref string fieldKeys)
         {
             var baseFieldTemplate = LoadTemplate("localizationDataField");
-            var baseTypeConvertTemplate = LoadTemplate("baseTypeConvert");
             var tableFieldTemplate = LoadTemplate("tableField");
 
             var fields = new SortedDictionary<string, FieldBase>(table.Fields);
@@ -205,8 +217,7 @@ namespace GameDBEditorLibrary
                 fieldDefinitions.Add(string.Format(tableFieldTemplate, table.Name, fieldPair.Key, fieldPair.Value.Type, fieldPair.Value.IsArray.ToString().ToLower(), "null"));
             }
 
-            var dataFieldAccessor = string.Format(baseTypeConvertTemplate, typeof(string).Name, $"GetValue(m_gameDB.LocalizationLanguage)");
-            return string.Format(baseFieldTemplate, "Translated", FieldType.@string.ToString(), dataFieldAccessor, string.Empty);
+            return string.Format(baseFieldTemplate, table.Name);
         }
 
         private string GenerateFieldAccesors(GameDB gameDB, TableBase table, bool unity, List<string> fieldDefinitions, ref string fieldKeys)
@@ -537,6 +548,7 @@ namespace GameDBEditorLibrary
                 {
                     RegisterGeneratedName(rowMembers, "TranslatedVal", "localization accessor", "member.name.collision", issues, tableName);
                     RegisterGeneratedName(rowMembers, "LanguageVal", "localization accessor", "member.name.collision", issues, tableName);
+                    RegisterGeneratedName(rowMembers, "ResolvedLanguageVal", "localization accessor", "member.name.collision", issues, tableName);
                 }
 
                 foreach (var fieldPair in table.Fields.OrderBy(pair => pair.Key, StringComparer.Ordinal))
@@ -544,6 +556,14 @@ namespace GameDBEditorLibrary
                     var fieldName = fieldPair.Key;
                     var field = fieldPair.Value;
                     ValidateSourceIdentifier(fieldName, "field.identifier.invalid", "Field name", issues, tableName, fieldName);
+                    if (gameDB.LocalizationDB &&
+                        (field.Type != FieldType.@string || field.IsArray))
+                    {
+                        issues.Add(CreateIssue("localization.field.invalid",
+                            $"Localization field '{tableName}.{fieldName}' must be a scalar string.",
+                            tableName, fieldName));
+                    }
+
                     if (field.Type == FieldType.@enum)
                     {
                         ValidateEnumType(field.GetSystemType(), "field.enumType.invalid",

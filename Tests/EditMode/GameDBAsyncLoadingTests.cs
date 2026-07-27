@@ -240,6 +240,38 @@ namespace GameDBLibrary.Tests
         }
 
         [UnityTest]
+        public IEnumerator LoadLocalizationAsync_CancellationDuringSparseStagingPreservesStateAndReleasesGate()
+        {
+            var gameDB = CreateLoadedDatabase("old-first", "old-second");
+            gameDB.SetMetadata("old-language");
+            var firstRow = gameDB.GetRow("First");
+            var secondRow = gameDB.GetRow("Second");
+            var notifications = 0;
+            gameDB.OnDBLoaded += () => notifications++;
+            using var cancellation = new CancellationTokenSource();
+            gameDB.CancelWhenNextRowIsCreated(cancellation);
+            Exception exception = null;
+
+            yield return Await(gameDB.LoadLocalizationAsync("localized",
+                    FakeLoader.Completed(SparseLocalizationJson()),
+                    "new-language", cancellation.Token),
+                value => exception = value);
+
+            Assert.That(exception, Is.TypeOf<OperationCanceledException>());
+            Assert.That(gameDB.Metadata, Is.EqualTo("old-language"));
+            Assert.That(gameDB.GetRow("First"), Is.SameAs(firstRow));
+            Assert.That(gameDB.GetRow("Second"), Is.SameAs(secondRow));
+            Assert.That(gameDB.GetValue("First"), Is.EqualTo("old-first"));
+            Assert.That(gameDB.GetValue("Second"), Is.EqualTo("old-second"));
+            Assert.That(notifications, Is.Zero);
+
+            yield return Await(gameDB.LoadAsync("next",
+                    FakeLoader.Completed(Json("next-first", "next-second"))),
+                value => Assert.That(value, Is.Null));
+            Assert.That(gameDB.GetValue("First"), Is.EqualTo("next-first"));
+        }
+
+        [UnityTest]
         public IEnumerator LoadAsync_ImportFailureRetainsConcreteTypeAndOldData()
         {
             var gameDB = CreateLoadedDatabase("old-first", "old-second");
@@ -306,6 +338,13 @@ namespace GameDBLibrary.Tests
                 "\"Second\":{\"Row\":{\"Value\":" + JsonValue(secondValue) + "}}}}";
         }
 
+        private static string SparseLocalizationJson()
+        {
+            return "{\"tables\":{" +
+                "\"First\":{\"Row\":{}}," +
+                "\"Second\":{\"Row\":{\"Value\":\"new-second\"}}}}";
+        }
+
         private static string JsonValue(object value)
         {
             return value is string text ? "\"" + text + "\"" : value.ToString();
@@ -313,6 +352,8 @@ namespace GameDBLibrary.Tests
 
         private sealed class AsyncTestGameDB : GameDBBase
         {
+            private CancellationTokenSource m_cancelWhenRowCreated;
+
             internal AsyncTestGameDB()
                 : base("AsyncTest", "AsyncTest")
             {
@@ -337,20 +378,45 @@ namespace GameDBLibrary.Tests
                     cancellationToken: cancellationToken);
             }
 
+            internal Awaitable LoadLocalizationAsync(string location,
+                IGameDBDataLoader loader, string metadata,
+                CancellationToken cancellationToken = default)
+            {
+                return LoadLocalizationDataAsync(location, loader,
+                    new[] { "Value" }, true, () => Metadata = metadata,
+                    cancellationToken);
+            }
+
+            internal void CancelWhenNextRowIsCreated(
+                CancellationTokenSource cancellation)
+            {
+                m_cancelWhenRowCreated = cancellation;
+            }
+
             internal void SetMetadata(string metadata)
             {
                 Metadata = metadata;
             }
 
-            internal string GetValue(string table)
+            internal RowBase GetRow(string table)
             {
-                return (string)Tables[table].GetByKeyRaw("Row").GetValue("Value");
+                return Tables[table].GetByKeyRaw("Row");
             }
 
-            private static TableBase CreateTable(string name)
+            internal string GetValue(string table)
             {
-                var table = new TableBase(name, KeyType.@string, null,
-                    key => new RowBase(key));
+                return (string)GetRow(table).GetValue("Value");
+            }
+
+            private TableBase CreateTable(string name)
+            {
+                var table = new TableBase(name, KeyType.@string, null, key =>
+                {
+                    var cancellation = m_cancelWhenRowCreated;
+                    m_cancelWhenRowCreated = null;
+                    cancellation?.Cancel();
+                    return new RowBase(key);
+                });
                 table.Fields.Add("Value", new FieldBase("Value", FieldType.@string, false));
                 return table;
             }

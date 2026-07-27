@@ -392,13 +392,64 @@ namespace GameDBLibrary.Tests
                 var gameDBCode = File.ReadAllText(Path.Combine(outputPath, localization.ScopeName, "GameDB.cs"));
                 var linesCode = File.ReadAllText(Path.Combine(outputPath, localization.ScopeName, "Lines.cs"));
                 Assert.That(gameDBCode, Does.Contain("public global::System.Exception Load(string path, string language"));
+                Assert.That(gameDBCode, Does.Contain("public global::System.Exception Import(string json, string language"));
+                Assert.That(gameDBCode, Does.Contain("LocalizationLanguageChain"));
+                Assert.That(gameDBCode, Does.Contain("LoadLocalizationDataAsync"));
+                Assert.That(gameDBCode, Does.Contain("new string[] { \"English\" }"));
                 Assert.That(linesCode, Does.Contain("public string TranslatedVal"));
+                Assert.That(linesCode, Does.Contain("public string ResolvedLanguageVal"));
+                Assert.That(linesCode, Does.Contain("m_data.ContainsKey(language)"));
                 Assert.That(linesCode, Does.Contain("global::System.Convert.ChangeType"));
             }
             finally
             {
                 DeleteDirectory(outputPath);
             }
+        }
+
+        [Test]
+        public void Export_LocalizationCoreOutputIncludesLanguageAwareImportWithoutUnityApis()
+        {
+            var localization = CreateInMemoryDatabase("LocalizationCoreOutput");
+            localization.LocalizationDB = true;
+            Assert.That(localization.AddTable("Lines", KeyType.@string), Is.True);
+            var lines = (TableModel)localization.Tables["Lines"];
+            Assert.That(lines.AddField("English", FieldType.@string, false), Is.True);
+            var outputPath = CreateOutputPath();
+
+            try
+            {
+                new CSharpExporter().Export(outputPath, localization, false);
+                var gameDBCode = File.ReadAllText(Path.Combine(outputPath,
+                    localization.ScopeName, "GameDB.cs"));
+
+                Assert.That(gameDBCode, Does.Contain(
+                    "public global::System.Exception Import(string json, string language"));
+                Assert.That(gameDBCode, Does.Contain("LocalizationLanguageChain"));
+                Assert.That(gameDBCode, Does.Not.Contain("global::UnityEngine"));
+                Assert.That(gameDBCode, Does.Not.Contain("ResourcesGameDBDataLoader"));
+            }
+            finally
+            {
+                DeleteDirectory(outputPath);
+            }
+        }
+
+        [TestCase(FieldType.@int, false)]
+        [TestCase(FieldType.@string, true)]
+        public void Export_RejectsNonScalarStringLocalizationFields(FieldType type,
+            bool isArray)
+        {
+            var localization = CreateInMemoryDatabase("InvalidLocalizationOutput");
+            localization.LocalizationDB = true;
+            Assert.That(localization.AddTable("Lines", KeyType.@string), Is.True);
+            var lines = (TableModel)localization.Tables["Lines"];
+            Assert.That(lines.AddField("English", type, isArray), Is.True);
+
+            var issues = CSharpExporter.Validate(localization);
+
+            Assert.That(issues.Select(issue => issue.Code),
+                Does.Contain("localization.field.invalid"));
         }
 
         [Test]
@@ -482,9 +533,9 @@ namespace GameDBLibrary.Tests
         [TestCase(false, "public global::System.Exception Load(string path, bool notify = true)",
             "public global::UnityEngine.Awaitable LoadAsync(string path, bool notify = true",
             "global::GameDBLibrary.IGameDBDataLoader loader")]
-        [TestCase(true, "public global::System.Exception Load(string path, string language, bool notify = true)",
-            "public global::UnityEngine.Awaitable LoadAsync(string path, string language",
-            "public global::UnityEngine.Awaitable LoadAsync(string location, string language")]
+        [TestCase(true, "public global::System.Exception Load(string path, string language,",
+            "public async global::UnityEngine.Awaitable LoadAsync(string path,",
+            "public async global::UnityEngine.Awaitable LoadAsync(string location,")]
         public void Export_GeneratesJsonOnlyUnityLoader(bool localization,
             string expectedLoader, string expectedAsyncLoader,
             string expectedCustomLoader)
@@ -516,6 +567,9 @@ namespace GameDBLibrary.Tests
                 Assert.That(generatedCode, Does.Contain(
                     "global::GameDBLibraryUnity.ResourcesGameDBDataLoader.Instance"));
                 Assert.That(generatedCode, Does.Contain("gameDBResource.text"));
+                Assert.That(generatedCode, Does.Contain(
+                    "$\"Failed to load GameDB {Name} at path: {path}\""));
+                Assert.That(generatedCode, Does.Not.Contain("{{Name}}"));
                 Assert.That(generatedCode, Does.Not.Contain("BinaryGameDB"));
                 Assert.That(generatedCode, Does.Not.Contain("WebRequestHelper.Request"));
             }

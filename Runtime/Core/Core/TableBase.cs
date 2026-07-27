@@ -46,7 +46,8 @@ namespace GameDBLibrary
 
         internal Dictionary<string, RowBase> StageData(object tableObj,
             string[] columnImportList = null,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default,
+            bool allowMissingSelectedFields = false)
         {
             var data = new Dictionary<string, RowBase>();
 
@@ -59,7 +60,8 @@ namespace GameDBLibrary
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 RowBase row = m_rowFactory(rowPair.Key);
-                row.DeserializeRow(m_fields, rowPair.Value, columnImportList);
+                row.DeserializeRow(m_fields, rowPair.Value, columnImportList,
+                    allowMissingSelectedFields);
 
                 data.Add(rowPair.Key, row);
             }

@@ -1,6 +1,27 @@
-        public {1} {0}Val
+        private string ResolveLocalizationLanguage()
         {{
-            get {{ return {2}; }}
+            foreach (var language in m_gameDB.LocalizationLanguageChain)
+            {{
+                if (m_data.ContainsKey(language))
+                {{
+                    return language;
+                }}
+            }}
+
+            throw new global::System.Collections.Generic.KeyNotFoundException(
+                $"No translation is available for localization row '{{Name}}' " +
+                $"in table '{0}'. Attempted languages: [" +
+                global::System.String.Join(", ", m_gameDB.LocalizationLanguageChain) +
+                "].");
+        }}
+
+        public string TranslatedVal
+        {{
+            get
+            {{
+                return (string)global::System.Convert.ChangeType(
+                    GetValue(ResolveLocalizationLanguage()), typeof(string));
+            }}
         }}
 
         public string LanguageVal
@@ -8,4 +29,7 @@
             get {{ return m_gameDB.LocalizationLanguage; }}
         }}
 
-{3}
+        public string ResolvedLanguageVal
+        {{
+            get {{ return ResolveLocalizationLanguage(); }}
+        }}

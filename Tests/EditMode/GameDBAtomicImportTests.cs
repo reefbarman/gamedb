@@ -85,6 +85,79 @@ namespace GameDBLibrary.Tests
         }
 
         [Test]
+        public void Import_PartialColumnsRejectMissingSelectedFields()
+        {
+            var gameDB = CreateLoadedDatabase("old-first", "old-second");
+            var firstRow = gameDB.GetRow("First");
+            var secondRow = gameDB.GetRow("Second");
+            var thirdRow = gameDB.GetRow("Third");
+
+            var error = gameDB.Import(SparseLocalizationJson(
+                "new-primary", "new-fallback", string.Empty),
+                new[] { "Value", "Extra" });
+
+            Assert.That(error, Is.TypeOf<FormatException>());
+            Assert.That(gameDB.GetRow("First"), Is.SameAs(firstRow));
+            Assert.That(gameDB.GetRow("Second"), Is.SameAs(secondRow));
+            Assert.That(gameDB.GetRow("Third"), Is.SameAs(thirdRow));
+        }
+
+        [Test]
+        public void ImportLocalizationData_AllowsMissingSelectedFieldsAndPublishesMetadata()
+        {
+            var gameDB = CreateLoadedDatabase("old-first", "old-second");
+            gameDB.SetMetadata("old-language");
+            var notifications = 0;
+            string metadataAtNotification = null;
+            string fallbackAtNotification = null;
+            gameDB.OnDBLoaded += () =>
+            {
+                notifications++;
+                metadataAtNotification = gameDB.Metadata;
+                fallbackAtNotification = gameDB.GetExtra("Second");
+            };
+
+            var error = gameDB.ImportLocalization(
+                SparseLocalizationJson("new-primary", "new-fallback", string.Empty),
+                new[] { "Value", "Extra" }, "new-language");
+
+            Assert.That(error, Is.Null);
+            Assert.That(gameDB.Metadata, Is.EqualTo("new-language"));
+            Assert.That(gameDB.GetValue("First"), Is.EqualTo("new-primary"));
+            Assert.Throws<KeyNotFoundException>(() => gameDB.GetExtra("First"));
+            Assert.Throws<KeyNotFoundException>(() => gameDB.GetValue("Second"));
+            Assert.That(gameDB.GetExtra("Second"), Is.EqualTo("new-fallback"));
+            Assert.That(gameDB.GetValue("Third"), Is.Empty);
+            Assert.Throws<KeyNotFoundException>(() => gameDB.GetExtra("Third"));
+            Assert.That(notifications, Is.EqualTo(1));
+            Assert.That(metadataAtNotification, Is.EqualTo("new-language"));
+            Assert.That(fallbackAtNotification, Is.EqualTo("new-fallback"));
+        }
+
+        [Test]
+        public void ImportLocalizationData_InvalidPresentFieldPreservesRowsAndMetadata()
+        {
+            var gameDB = CreateLoadedDatabase("old-first", "old-second");
+            gameDB.SetMetadata("old-language");
+            var firstRow = gameDB.GetRow("First");
+            var secondRow = gameDB.GetRow("Second");
+            var notifications = 0;
+            gameDB.OnDBLoaded += () => notifications++;
+
+            var error = gameDB.ImportLocalization(
+                SparseLocalizationJson("new-primary", 42, string.Empty),
+                new[] { "Value", "Extra" }, "new-language");
+
+            Assert.That(error, Is.TypeOf<FormatException>());
+            Assert.That(gameDB.Metadata, Is.EqualTo("old-language"));
+            Assert.That(gameDB.GetRow("First"), Is.SameAs(firstRow));
+            Assert.That(gameDB.GetRow("Second"), Is.SameAs(secondRow));
+            Assert.That(gameDB.GetValue("First"), Is.EqualTo("old-first"));
+            Assert.That(gameDB.GetValue("Second"), Is.EqualTo("old-second"));
+            Assert.That(notifications, Is.Zero);
+        }
+
+        [Test]
         public void Import_NotifiesOnceAfterCompletePublication()
         {
             var gameDB = CreateLoadedDatabase("old-first", "old-second");
@@ -218,6 +291,15 @@ namespace GameDBLibrary.Tests
                 ",\"Extra\":\"" + thirdExtra + "\"}}}}";
         }
 
+        private static string SparseLocalizationJson(object firstValue,
+            object secondExtra, object thirdValue)
+        {
+            return "{\"tables\":{" +
+                "\"First\":{\"Row\":{\"Value\":" + JsonValue(firstValue) + "}}," +
+                "\"Second\":{\"Row\":{\"Extra\":" + JsonValue(secondExtra) + "}}," +
+                "\"Third\":{\"Row\":{\"Value\":" + JsonValue(thirdValue) + "}}}}";
+        }
+
         private static string JsonValue(object value)
         {
             return value is string text ? "\"" + text + "\"" : value.ToString();
@@ -234,6 +316,19 @@ namespace GameDBLibrary.Tests
             }
 
             internal GameDBInternal Internal => m_internal;
+            internal string Metadata { get; private set; }
+
+            internal Exception ImportLocalization(string jsonData,
+                string[] columnImportList, string metadata, bool notify = true)
+            {
+                return ImportLocalizationData(jsonData, columnImportList, notify,
+                    () => Metadata = metadata);
+            }
+
+            internal void SetMetadata(string metadata)
+            {
+                Metadata = metadata;
+            }
 
             internal TableBase GetTable(string name)
             {

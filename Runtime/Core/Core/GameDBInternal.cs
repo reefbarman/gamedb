@@ -62,14 +62,15 @@ namespace GameDBLibrary
 
         internal Exception ImportOwned(string jsonData, string[] columnImportList = null,
             bool notify = true, Action beforePublish = null,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default,
+            bool allowMissingSelectedFields = false)
         {
             Exception error = null;
 
             try
             {
                 GameDBSerializer.DeserializeData(m_tables, jsonData, columnImportList,
-                    beforePublish, cancellationToken);
+                    beforePublish, cancellationToken, allowMissingSelectedFields);
             }
             catch (OperationCanceledException e)
             {

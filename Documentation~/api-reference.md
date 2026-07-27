@@ -197,22 +197,30 @@ public Awaitable LoadAsync(string location, IGameDBDataLoader loader,
 
 The synchronous `path` is relative to a Unity `Resources` folder and omits the file extension. `Load` returns an `ArgumentException` if no `TextAsset` is found; otherwise it returns the result of atomic import. It does not throw expected load/import failures itself. The default async overload uses `ResourcesGameDBDataLoader.Instance`; the explicit overload uses the supplied loader. Async transport/import/overlap failures throw, and cancellation throws `OperationCanceledException` without replacing previous rows or notifying.
 
-A localization database instead adds:
+A localization database adds transport-independent import and metadata:
 
 ```csharp
-public string LocalizationLanguage { get; private set; }
-public Exception Load(string path, string language, bool notify = true);
+public string LocalizationLanguage { get; }
+public IReadOnlyList<string> LocalizationLanguageChain { get; }
 public Exception Import(string json, string language, bool notify = true);
-public Awaitable LoadAsync(string path, string language,
-    bool notify = true, CancellationToken cancellationToken = default);
+public Exception Import(string json, string language,
+    IReadOnlyList<string> fallbackLanguages, bool notify = true);
+```
+
+Unity-loader generation additionally adds Resources `Load` and Resources/custom-loader `LoadAsync` overloads with the same optional fallback list. The custom-loader fallback shape is:
+
+```csharp
 public Awaitable LoadAsync(string location, string language,
-    IGameDBDataLoader loader, bool notify = true,
+    IGameDBDataLoader loader, IReadOnlyList<string> fallbackLanguages,
+    bool notify = true,
     CancellationToken cancellationToken = default);
 ```
 
-A successful operation publishes `LocalizationLanguage` and the requested language rows together before notification. Failure, overlap, or cancellation preserves both previous language and previous rows. Localization rows expose `TranslatedVal` and `LanguageVal`. If `language` does not match a schema field, partial import can still return success, but reading `TranslatedVal` then fails because no backing value was imported. Fallbacks and locale negotiation remain a later roadmap item.
+The effective chain is primary first followed by caller fallbacks in order; exact ordinal duplicates are removed with first occurrence winning. Null, empty, whitespace-only, and unknown identifiers fail before transport. A successful operation publishes the immutable normalized chain and all staged rows before notification. Failure, overlap, or cancellation preserves the previous chain and rows.
 
-If `IncludeUnityLoader` is `false`, no generated `Load` method, Unity logger, editor registration, or Unity-specific value conversion is emitted; call the inherited `Import` methods with JSON text.
+Localization rows expose `TranslatedVal`, `LanguageVal`, and `ResolvedLanguageVal`. `LanguageVal` is the requested primary; `ResolvedLanguageVal` is the first chain field present on that row. Empty strings are valid translations and do not fall back. If no chain field is present, the translated and resolved-language accessors throw an actionable `KeyNotFoundException`.
+
+If `IncludeUnityLoader` is `false`, language-aware `Import` and localization metadata remain available, but no generated `Load`/`LoadAsync`, Unity logger, editor registration, or Unity-specific value conversion is emitted. Unqualified inherited imports are rejected for localization databases because they cannot establish a primary language.
 
 ### Generated table class
 

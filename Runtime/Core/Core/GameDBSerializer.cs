@@ -9,7 +9,8 @@ namespace GameDBLibrary
         internal static void DeserializeData(Dictionary<string, TableBase> tables,
             string gameDBJSON, string[] columnImportList = null,
             Action beforePublish = null,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default,
+            bool allowMissingSelectedFields = false)
         {
             if (!(JsonSerialization.Deserialize(gameDBJSON) is IDictionary<string, object> gameDBObjDic))
             {
@@ -38,7 +39,8 @@ namespace GameDBLibrary
 
                 stagedData.Add(tablePair.Value,
                     tablePair.Value.StageData(tablesObjDic[tablePair.Key],
-                        columnImportList, cancellationToken));
+                        columnImportList, cancellationToken,
+                        allowMissingSelectedFields));
             }
 
             cancellationToken.ThrowIfCancellationRequested();

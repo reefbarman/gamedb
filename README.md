@@ -67,7 +67,7 @@ public sealed class LoadGameData : MonoBehaviour
 }
 ```
 
-The generated load path is relative to a `Resources` folder and omits the `.json` extension. Generated Unity databases also expose `LoadAsync`: the default overload uses `Resources.LoadAsync<TextAsset>`, while an overload accepting `IGameDBDataLoader` supports other transports. Supported loads are database-atomic; failure, cancellation, or an overlapping operation leaves the previously committed rows active and emits no `OnDBLoaded` notification. See [Runtime use and hot reload](Documentation~/runtime.md#construct-and-load-a-database).
+The generated load path is relative to a `Resources` folder and omits the `.json` extension. Generated Unity databases also expose `LoadAsync`: the default overload uses `Resources.LoadAsync<TextAsset>`, while an overload accepting `IGameDBDataLoader` supports other transports. Supported loads are database-atomic; failure, cancellation, or an overlapping operation leaves the previously committed rows active and emits no `OnDBLoaded` notification. Localization databases additionally support exact ordered fallback chains, sparse per-row resolution, and atomic language-chain metadata. See [Runtime use and hot reload](Documentation~/runtime.md#construct-and-load-a-database).
 
 ## Schema format version
 

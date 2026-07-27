@@ -31,7 +31,8 @@ namespace GameDBLibrary
             return m_data[field];
         }
 
-        internal void DeserializeRow(Dictionary<string, FieldBase> fields, object rowObj, string[] columnImportList = null)
+        internal void DeserializeRow(Dictionary<string, FieldBase> fields, object rowObj,
+            string[] columnImportList = null, bool allowMissingSelectedFields = false)
         {
             var row = new Dictionary<string, object>();
 
@@ -42,12 +43,20 @@ namespace GameDBLibrary
 
             foreach (var fieldPair in fields)
             {
-                if (columnImportList == null || columnImportList.Contains(fieldPair.Key)) {
-                    if (!rowDic.ContainsKey(fieldPair.Key)) {
+                if (columnImportList == null || columnImportList.Contains(fieldPair.Key))
+                {
+                    if (!rowDic.ContainsKey(fieldPair.Key))
+                    {
+                        if (allowMissingSelectedFields)
+                        {
+                            continue;
+                        }
+
                         throw new FormatException("row missing field: " + fieldPair.Key);
                     }
 
-                    if (!fieldPair.Value.IsValueValid(rowDic[fieldPair.Key])) {
+                    if (!fieldPair.Value.IsValueValid(rowDic[fieldPair.Key]))
+                    {
                         throw new FormatException(fieldPair.Key + " field not of expected type " + fieldPair.Value.Type);
                     }
 
@@ -68,10 +77,12 @@ namespace GameDBLibrary
             return TypeUtils.DeserializeValue(field.Type, field.IsArray, field.GetSystemType(), val);
         }
 
-        internal void Import(Dictionary<string, FieldBase> fields, RowBase row) {
+        internal void Import(Dictionary<string, FieldBase> fields, RowBase row)
+        {
             var rowData = new Dictionary<string, object>();
 
-            foreach (var fieldPair in fields) {
+            foreach (var fieldPair in fields)
+            {
                 if (!row.Data.ContainsKey(fieldPair.Key))
                 {
                     throw new FormatException("row missing field: " + fieldPair.Key);

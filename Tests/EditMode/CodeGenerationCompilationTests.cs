@@ -16,6 +16,8 @@ namespace GameDBLibrary.Tests
     {
         private const string GeneratedScope = "CompilationCoverage";
         private const string LocalizationScope = "LocalizationCompilationCoverage";
+        private const string CoreLocalizationScope = "CoreLocalizationCompilationCoverage";
+        private const string EmptyLocalizationScope = "EmptyLocalizationCompilationCoverage";
 
         [SerializeField]
         private string m_assetFolderName;
@@ -36,9 +38,19 @@ namespace GameDBLibrary.Tests
             var representativeDatabase = CreateRepresentativeDatabase(true);
             var localizationDatabase = CreateLocalizationDatabase();
             m_generatedDataJson = representativeDatabase.SerializeData();
-            m_localizationDataJson = localizationDatabase.SerializeData();
+            m_localizationDataJson = LocalizationJson();
             new CSharpExporter().Export(exportRoot, representativeDatabase, true);
             new CSharpExporter().Export(exportRoot, localizationDatabase, true);
+            var coreLocalizationDatabase = CreateLocalizationDatabase();
+            coreLocalizationDatabase.ScopeName = CoreLocalizationScope;
+            new CSharpExporter().Export(exportRoot, coreLocalizationDatabase, false);
+            var emptyLocalizationDatabase = new GameDB();
+            emptyLocalizationDatabase.CreateInMemory(
+                $"CodeGenerationEmptyLocalizationCompilationTests_{Guid.NewGuid():N}/database.json");
+            emptyLocalizationDatabase.ScopeName = EmptyLocalizationScope;
+            emptyLocalizationDatabase.LocalizationDB = true;
+            Assert.That(emptyLocalizationDatabase.AddTable("Lines", KeyType.@string), Is.True);
+            new CSharpExporter().Export(exportRoot, emptyLocalizationDatabase, false);
 
             yield return new RecompileScripts(true, true);
 
@@ -71,7 +83,9 @@ namespace GameDBLibrary.Tests
             var generatedTypesAreLoaded = AppDomain.CurrentDomain.GetAssemblies()
                 .Where(assembly => assembly.GetName().Name == "Assembly-CSharp")
                 .Any(assembly => assembly.GetType($"GameDB{GeneratedScope}.GameDB", false) != null
-                    || assembly.GetType($"GameDB{LocalizationScope}.GameDB", false) != null);
+                    || assembly.GetType($"GameDB{LocalizationScope}.GameDB", false) != null
+                    || assembly.GetType($"GameDB{CoreLocalizationScope}.GameDB", false) != null
+                    || assembly.GetType($"GameDB{EmptyLocalizationScope}.GameDB", false) != null);
             var assetPath = $"Assets/{m_assetFolderName}";
             var deleted = AssetDatabase.DeleteAsset(assetPath);
             if (!deleted && Directory.Exists(GetExportRoot()))
@@ -142,6 +156,7 @@ namespace GameDBLibrary.Tests
             var translations = (TableModel)gameDB.Tables["Translations"];
             Assert.That(translations.AddField("English", FieldType.@string, false), Is.True);
             Assert.That(translations.AddField("French", FieldType.@string, false), Is.True);
+            Assert.That(translations.AddField("German", FieldType.@string, false), Is.True);
             Assert.That(translations.AddKey("Greeting"), Is.True);
             Assert.That(translations.SetValue("Greeting", "English", "Hello"), Is.True);
             Assert.That(translations.SetValue("Greeting", "French", "Bonjour"), Is.True);
@@ -191,8 +206,25 @@ namespace GameDBLibrary.Tests
             AssertPropertyType(itemsType, "IconsBySlotVal",
                 typeof(System.Collections.Generic.Dictionary<string, GameDBLibraryUnity.UnityObjectAccessor>));
             Assert.That(localizationGameDBType.GetProperty("LocalizationLanguage", BindingFlags.Instance | BindingFlags.Public), Is.Not.Null);
+            AssertPropertyType(localizationGameDBType, "LocalizationLanguageChain",
+                typeof(System.Collections.Generic.IReadOnlyList<string>));
             Assert.That(translationsType.GetProperty("TranslatedVal", BindingFlags.Instance | BindingFlags.Public), Is.Not.Null);
             Assert.That(translationsType.GetProperty("LanguageVal", BindingFlags.Instance | BindingFlags.Public), Is.Not.Null);
+            Assert.That(translationsType.GetProperty("ResolvedLanguageVal", BindingFlags.Instance | BindingFlags.Public), Is.Not.Null);
+
+            var coreLocalizationType = RequireType(assembly,
+                $"GameDB{CoreLocalizationScope}.GameDB");
+            Assert.That(coreLocalizationType.GetMethods(BindingFlags.Instance | BindingFlags.Public)
+                .Count(method => method.Name == "Import"), Is.EqualTo(4));
+            Assert.That(coreLocalizationType.GetMethods(BindingFlags.Instance | BindingFlags.Public)
+                .Any(method => method.Name == "LoadAsync"), Is.False);
+
+            var emptyLocalizationType = RequireType(assembly,
+                $"GameDB{EmptyLocalizationScope}.GameDB");
+            Assert.That(emptyLocalizationType.GetMethods(BindingFlags.Instance | BindingFlags.Public)
+                .Count(method => method.Name == "Import"), Is.EqualTo(4));
+            Assert.That(emptyLocalizationType.GetMethods(BindingFlags.Instance | BindingFlags.Public)
+                .Any(method => method.Name == "LoadAsync"), Is.False);
         }
 
         private IEnumerator AssertGeneratedAsyncLoadBehavior(Assembly assembly)
@@ -217,6 +249,41 @@ namespace GameDBLibrary.Tests
                 $"GameDB{LocalizationScope}.GameDB");
             var localization = Activator.CreateInstance(localizationType,
                 "LocalizationBehavior");
+            var unqualifiedImportError = ((GameDBBase)localization)
+                .Import(m_localizationDataJson, false);
+            Assert.That(unqualifiedImportError, Is.TypeOf<InvalidOperationException>());
+
+            var importWithoutFallbacks = localizationType.GetMethods(
+                    BindingFlags.Instance | BindingFlags.Public)
+                .Single(method => method.Name == "Import"
+                    && method.GetParameters().Length == 3
+                    && method.GetParameters()[1].ParameterType == typeof(string));
+            Assert.That(importWithoutFallbacks.Invoke(localization,
+                    new object[] { m_localizationDataJson, null, false }),
+                Is.TypeOf<ArgumentNullException>());
+            Assert.That(importWithoutFallbacks.Invoke(localization,
+                    new object[] { m_localizationDataJson, " ", false }),
+                Is.TypeOf<ArgumentException>());
+
+            var importWithFallbacks = localizationType.GetMethods(
+                    BindingFlags.Instance | BindingFlags.Public)
+                .Single(method => method.Name == "Import"
+                    && method.GetParameters().Any(parameter => parameter.ParameterType
+                        == typeof(System.Collections.Generic.IReadOnlyList<string>)));
+            Assert.That(importWithFallbacks.Invoke(localization,
+                    new object[] { m_localizationDataJson, "French", null, false }),
+                Is.TypeOf<ArgumentNullException>());
+
+            var unknownLoader = new InlineLoader(m_localizationDataJson);
+            var unknownAwaitable = InvokeCustomLoader(localizationType,
+                localization, unknownLoader, "unknown", true, "Unknown",
+                Array.Empty<string>());
+            Exception unknownException = null;
+            yield return Await(unknownAwaitable,
+                exception => unknownException = exception);
+            Assert.That(unknownException, Is.TypeOf<ArgumentException>());
+            Assert.That(unknownLoader.StartCount, Is.Zero);
+
             string languageAtNotification = null;
             string translationAtNotification = null;
             ((GameDBBase)localization).OnDBLoaded += () =>
@@ -224,46 +291,91 @@ namespace GameDBLibrary.Tests
                 languageAtNotification = (string)localizationType
                     .GetProperty("LocalizationLanguage").GetValue(localization);
                 translationAtNotification = GetTranslation(localizationType,
-                    localization, "TranslatedVal");
+                    localization, "Greeting", "TranslatedVal");
             };
 
+            var fallbackLanguages = new System.Collections.Generic.List<string>
+            {
+                "German", "English", "German"
+            };
             var localizationAwaitable = InvokeCustomLoader(localizationType,
                 localization, new InlineLoader(m_localizationDataJson),
-                "localized", true, "French");
+                "localized", true, "French", fallbackLanguages);
+            fallbackLanguages.Clear();
+            fallbackLanguages.Add("Unknown");
             yield return Await(localizationAwaitable);
 
             Assert.That(localizationType.GetProperty("LocalizationLanguage")
                 .GetValue(localization), Is.EqualTo("French"));
+            Assert.That(localizationType.GetProperty("LocalizationLanguageChain")
+                .GetValue(localization), Is.EqualTo(new[] { "French", "German", "English" }));
             Assert.That(GetTranslation(localizationType, localization,
-                "TranslatedVal"), Is.EqualTo("Bonjour"));
+                "Greeting", "TranslatedVal"), Is.EqualTo("Bonjour"));
+            Assert.That(GetTranslation(localizationType, localization,
+                "Greeting", "LanguageVal"), Is.EqualTo("French"));
+            Assert.That(GetTranslation(localizationType, localization,
+                "Greeting", "ResolvedLanguageVal"), Is.EqualTo("French"));
+            Assert.That(GetTranslation(localizationType, localization,
+                "Fallback", "TranslatedVal"), Is.EqualTo("Hello fallback"));
+            Assert.That(GetTranslation(localizationType, localization,
+                "Fallback", "ResolvedLanguageVal"), Is.EqualTo("English"));
+            Assert.That(GetTranslation(localizationType, localization,
+                "Empty", "TranslatedVal"), Is.Empty);
+            Assert.That(GetTranslation(localizationType, localization,
+                "Empty", "ResolvedLanguageVal"), Is.EqualTo("French"));
+            var terminalMiss = Assert.Throws<TargetInvocationException>(() =>
+                GetTranslation(localizationType, localization,
+                    "Missing", "TranslatedVal"));
+            Assert.That(terminalMiss.InnerException,
+                Is.TypeOf<System.Collections.Generic.KeyNotFoundException>());
+            Assert.That(terminalMiss.InnerException.Message, Does.Contain("Missing"));
+            Assert.That(terminalMiss.InnerException.Message,
+                Does.Contain("French, German, English"));
             Assert.That(languageAtNotification, Is.EqualTo("French"));
             Assert.That(translationAtNotification, Is.EqualTo("Bonjour"));
+
+            var editorReloadError = ((GameDBBase)localization)
+                .ImportEditorData(LocalizationReloadJson());
+            Assert.That(editorReloadError, Is.Null);
+            Assert.That(localizationType.GetProperty("LocalizationLanguageChain")
+                .GetValue(localization), Is.EqualTo(new[] { "French", "German", "English" }));
+            Assert.That(GetTranslation(localizationType, localization,
+                "Greeting", "TranslatedVal"), Is.EqualTo("Salut"));
+            Assert.That(GetTranslation(localizationType, localization,
+                "Fallback", "TranslatedVal"), Is.EqualTo("Reload fallback"));
         }
 
         private static Awaitable InvokeCustomLoader(Type gameDBType, object gameDB,
             IGameDBDataLoader loader, string location, bool notify,
-            string language = null)
+            string language = null,
+            System.Collections.Generic.IReadOnlyList<string> fallbackLanguages = null)
         {
             var method = gameDBType.GetMethods(BindingFlags.Instance | BindingFlags.Public)
                 .Single(candidate => candidate.Name == "LoadAsync"
                     && candidate.GetParameters().Any(parameter =>
-                        parameter.ParameterType == typeof(IGameDBDataLoader)));
+                        parameter.ParameterType == typeof(IGameDBDataLoader))
+                    && candidate.GetParameters().Any(parameter =>
+                        parameter.ParameterType == typeof(System.Collections.Generic.IReadOnlyList<string>))
+                        == (fallbackLanguages != null));
             var arguments = language == null
                 ? new object[] { location, loader, notify, default(CancellationToken) }
-                : new object[] { location, language, loader, notify,
-                    default(CancellationToken) };
+                : fallbackLanguages == null
+                    ? new object[] { location, language, loader, notify,
+                        default(CancellationToken) }
+                    : new object[] { location, language, loader, fallbackLanguages,
+                        notify, default(CancellationToken) };
             return (Awaitable)method.Invoke(gameDB, arguments);
         }
 
         private static string GetTranslation(Type gameDBType, object gameDB,
-            string propertyName)
+            string rowKey, string propertyName)
         {
             var table = gameDBType.GetProperty("TranslationsTable")
                 .GetValue(gameDB);
-            var greeting = table.GetType().GetMethod("GetByKey")
-                .Invoke(table, new object[] { "Greeting" });
-            return (string)greeting.GetType().GetProperty(propertyName)
-                .GetValue(greeting);
+            var row = table.GetType().GetMethod("GetByKey")
+                .Invoke(table, new object[] { rowKey });
+            return (string)row.GetType().GetProperty(propertyName)
+                .GetValue(row);
         }
 
         private static IEnumerator Await(Awaitable awaitable)
@@ -279,13 +391,35 @@ namespace GameDBLibrary.Tests
             awaiter.GetResult();
         }
 
+        private static IEnumerator Await(Awaitable awaitable,
+            Action<Exception> onCompleted)
+        {
+            var awaiter = awaitable.GetAwaiter();
+            for (var frame = 0; !awaiter.IsCompleted && frame < 300; frame++)
+            {
+                yield return null;
+            }
+
+            Assert.That(awaiter.IsCompleted, Is.True,
+                "Generated async load timed out after 300 frames.");
+            try
+            {
+                awaiter.GetResult();
+                onCompleted(null);
+            }
+            catch (Exception exception)
+            {
+                onCompleted(exception);
+            }
+        }
+
         private static void AssertAsyncLoadMethods(Type gameDBType, bool localization)
         {
             var methods = gameDBType.GetMethods(BindingFlags.Instance | BindingFlags.Public)
                 .Where(method => method.Name == "LoadAsync")
                 .ToArray();
 
-            Assert.That(methods, Has.Length.EqualTo(2));
+            Assert.That(methods, Has.Length.EqualTo(localization ? 4 : 2));
             Assert.That(methods.All(method => method.ReturnType == typeof(Awaitable)), Is.True);
             Assert.That(methods.Any(method => method.GetParameters()
                 .Any(parameter => parameter.ParameterType == typeof(IGameDBDataLoader))), Is.True);
@@ -295,6 +429,27 @@ namespace GameDBLibrary.Tests
                 .Any(parameter => parameter.ParameterType == typeof(string))), Is.True);
             Assert.That(methods.All(method => method.GetParameters().Count(parameter =>
                 parameter.ParameterType == typeof(string)) == (localization ? 2 : 1)), Is.True);
+            Assert.That(methods.Count(method => method.GetParameters().Any(parameter =>
+                parameter.ParameterType == typeof(System.Collections.Generic.IReadOnlyList<string>))),
+                Is.EqualTo(localization ? 2 : 0));
+        }
+
+        private static string LocalizationJson()
+        {
+            return "{\"tables\":{\"Translations\":{" +
+                "\"Greeting\":{\"English\":\"Hello\",\"French\":\"Bonjour\"}," +
+                "\"Fallback\":{\"English\":\"Hello fallback\"}," +
+                "\"Empty\":{\"French\":\"\",\"English\":\"Should not use\"}," +
+                "\"Missing\":{}}}}";
+        }
+
+        private static string LocalizationReloadJson()
+        {
+            return "{\"tables\":{\"Translations\":{" +
+                "\"Greeting\":{\"French\":\"Salut\"}," +
+                "\"Fallback\":{\"English\":\"Reload fallback\"}," +
+                "\"Empty\":{\"French\":\"\"}," +
+                "\"Missing\":{}}}}";
         }
 
         private static void AssertPropertyType(Type type, string propertyName,
@@ -322,9 +477,12 @@ namespace GameDBLibrary.Tests
                 m_json = json;
             }
 
+            internal int StartCount { get; private set; }
+
             public Awaitable<string> LoadAsync(string location,
                 CancellationToken cancellationToken = default)
             {
+                StartCount++;
                 var completion = new AwaitableCompletionSource<string>();
                 completion.SetResult(m_json);
                 return completion.Awaitable;

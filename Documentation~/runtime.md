@@ -249,26 +249,31 @@ A generated Unity `GameDB` registers itself with the editor when constructed in 
 
 Localization remains supported by the current editor and Unity generator. Enable **Localization DB** before defining the schema. Localization fields are authored as strings; each field name conventionally represents a language identifier such as `en` or `fr`, and each row represents a localization key.
 
-Localization generation changes the runtime contract to:
+Localization generation adds language-aware import and optional ordered fallbacks:
 
 ```csharp
-Exception Load(string path, string language, bool notify = true)
 Exception Import(string json, string language, bool notify = true)
+Exception Import(string json, string language,
+    IReadOnlyList<string> fallbackLanguages, bool notify = true)
 string LocalizationLanguage { get; }
+IReadOnlyList<string> LocalizationLanguageChain { get; }
 ```
 
-`Load` reads the same Resources JSON format. Generated localization databases also expose the corresponding Resources and `IGameDBDataLoader` `LoadAsync` overloads with `language` before `notify`/loader arguments. The requested language and staged rows publish together immediately before notification. Failure, overlap, or cancellation preserves the previous `LocalizationLanguage` and rows. A successful import loads only the field whose name exactly matches `language`. Generated localization rows expose:
+Unity-enabled output adds matching Resources `Load` and Resources/custom-`IGameDBDataLoader` `LoadAsync` overloads. The primary language is always first; fallbacks retain caller order, and exact ordinal duplicates are removed with the first occurrence winning. Null, empty, whitespace-only, and unknown identifiers fail before transport or publication. GameDB does not trim, case-fold, negotiate, or infer parent locales.
+
+The generator builds the known-language set from the ordinal union of scalar string fields across localization tables. Language field names must also be valid generated C# identifiers. Tables may declare different subsets, and externally produced row JSON may omit language fields. Loading hydrates only the normalized chain, and each row selects its first present language field. A present empty or whitespace-only string is authored content and stops fallback; fallback occurs only when the field is absent. The current editor writes dense rows, so sparse external JSON does not round-trip losslessly through Play Mode editor loading. Generated rows expose:
 
 ```csharp
 string text = row.TranslatedVal;
-string language = row.LanguageVal;
+string primary = row.LanguageVal;
+string resolved = row.ResolvedLanguageVal;
 ```
 
-`TranslatedVal` reads the current language field; ordinary per-language `<FieldName>Val` properties are not generated. Switching language requires another `Load(path, language)` or `Import(json, language)`, which replaces rows and normally invokes `OnDBLoaded`; reacquire localized rows and refresh displayed text there.
+`LocalizationLanguage` and `LanguageVal` remain the requested primary. `LocalizationLanguageChain` is the immutable effective chain, while `ResolvedLanguageVal` identifies the field used for that row. If none of the selected fields is present, `TranslatedVal` and `ResolvedLanguageVal` throw a `KeyNotFoundException` naming the row, table, and attempted chain.
 
-Language identifiers are plain strings. Current runtime code does not provide fallback languages, locale negotiation, pluralization, formatting, or integration with Unity's Localization package. If `language` does not match a field, the partial import can still report success but `TranslatedVal` has no backing value and throws when read. The editor/generator does not currently enforce a documented language-code format, so use stable field names that exactly match the strings passed at runtime.
+The selection metadata and every staged table publish together immediately before notification. Validation, load/import failure, overlap, or cancellation preserves the previous chain and rows and emits no notification. **Reload In-Game** reuses the active normalized chain and sparse staging behavior; select a language with `Load` or `Import` before using it. Switching language requires another language-aware `Load` or `Import`; reacquire localized rows and refresh displayed text from `OnDBLoaded`.
 
-Generate localization classes with **Generate for Unity** enabled. With Unity generation disabled, the generated class still has a private-set `LocalizationLanguage`, but no generated public overload sets it; that output does not expose a complete language-selection workflow.
+Core-only generation includes the language-aware `Import` API and metadata but no Unity APIs. Unity-enabled generation additionally provides Resources loading, editor registration, Unity logging, and `LoadAsync`. Locale negotiation, pluralization, formatting, and Unity Localization integration remain outside GameDB.
 
 ## Intentionally unsupported surfaces
 

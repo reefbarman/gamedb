@@ -1,0 +1,148 @@
+        private sealed class LocalizationSelection
+        {{
+            private readonly string[] m_columns;
+
+            internal static readonly LocalizationSelection Empty =
+                new LocalizationSelection(null, global::System.Array.Empty<string>());
+
+            internal string Primary {{ get; }}
+            internal global::System.Collections.Generic.IReadOnlyList<string> Chain {{ get; }}
+
+            internal LocalizationSelection(string primary, string[] languages)
+            {{
+                Primary = primary;
+                m_columns = (string[])languages.Clone();
+                Chain = global::System.Array.AsReadOnly((string[])languages.Clone());
+            }}
+
+            internal string[] CreateColumns()
+            {{
+                return (string[])m_columns.Clone();
+            }}
+        }}
+
+        private static readonly global::System.Collections.Generic.HashSet<string> s_localizationLanguages =
+            new global::System.Collections.Generic.HashSet<string>(
+                new string[] {{ {0} }}, global::System.StringComparer.Ordinal);
+
+        private LocalizationSelection m_localizationSelection = LocalizationSelection.Empty;
+
+        public string LocalizationLanguage => m_localizationSelection.Primary;
+
+        public global::System.Collections.Generic.IReadOnlyList<string> LocalizationLanguageChain =>
+            m_localizationSelection.Chain;
+
+        protected override global::System.Exception ImportEditorDataCore(string jsonData)
+        {{
+            if (m_localizationSelection.Primary == null)
+            {{
+                return new global::System.InvalidOperationException(
+                    "Load or import a localization language before using Reload In-Game.");
+            }}
+
+            return ImportLocalizationData(jsonData,
+                m_localizationSelection.CreateColumns(), true, null);
+        }}
+
+        public override global::System.Exception Import(string jsonData, bool notify = true)
+        {{
+            return new global::System.InvalidOperationException(
+                "Localization databases require a primary language. Use Import(json, language, ...) instead.");
+        }}
+
+        public override global::System.Exception Import(string jsonData,
+            string[] columImportList, bool notify = true)
+        {{
+            return new global::System.InvalidOperationException(
+                "Localization databases do not support unqualified column imports. Use Import(json, language, ...) instead.");
+        }}
+
+        public global::System.Exception Import(string json, string language,
+            bool notify = true)
+        {{
+            return Import(json, language,
+                global::System.Array.Empty<string>(), notify);
+        }}
+
+        public global::System.Exception Import(string json, string language,
+            global::System.Collections.Generic.IReadOnlyList<string> fallbackLanguages,
+            bool notify = true)
+        {{
+            LocalizationSelection selection;
+            try
+            {{
+                selection = PrepareLocalizationSelection(language, fallbackLanguages);
+            }}
+            catch (global::System.Exception exception)
+            {{
+                return exception;
+            }}
+
+            return ImportLocalizationData(json, selection.CreateColumns(), notify,
+                () => m_localizationSelection = selection);
+        }}
+
+        private static LocalizationSelection PrepareLocalizationSelection(string language,
+            global::System.Collections.Generic.IReadOnlyList<string> fallbackLanguages)
+        {{
+            if (language == null)
+            {{
+                throw new global::System.ArgumentNullException(nameof(language));
+            }}
+
+            if (global::System.String.IsNullOrWhiteSpace(language))
+            {{
+                throw new global::System.ArgumentException(
+                    "The primary localization language cannot be empty or whitespace.",
+                    nameof(language));
+            }}
+
+            if (fallbackLanguages == null)
+            {{
+                throw new global::System.ArgumentNullException(nameof(fallbackLanguages));
+            }}
+
+            var languages = new global::System.Collections.Generic.List<string>();
+            var seen = new global::System.Collections.Generic.HashSet<string>(
+                global::System.StringComparer.Ordinal);
+            AddLocalizationLanguage(language, nameof(language), languages, seen);
+
+            for (var index = 0; index < fallbackLanguages.Count; index++)
+            {{
+                var fallbackLanguage = fallbackLanguages[index];
+                if (fallbackLanguage == null)
+                {{
+                    throw new global::System.ArgumentException(
+                        $"Fallback language at index {{index}} cannot be null.",
+                        nameof(fallbackLanguages));
+                }}
+
+                if (global::System.String.IsNullOrWhiteSpace(fallbackLanguage))
+                {{
+                    throw new global::System.ArgumentException(
+                        $"Fallback language at index {{index}} cannot be empty or whitespace.",
+                        nameof(fallbackLanguages));
+                }}
+
+                AddLocalizationLanguage(fallbackLanguage,
+                    $"{{nameof(fallbackLanguages)}}[{{index}}]", languages, seen);
+            }}
+
+            return new LocalizationSelection(language, languages.ToArray());
+        }}
+
+        private static void AddLocalizationLanguage(string language, string parameterName,
+            global::System.Collections.Generic.List<string> languages,
+            global::System.Collections.Generic.HashSet<string> seen)
+        {{
+            if (!s_localizationLanguages.Contains(language))
+            {{
+                throw new global::System.ArgumentException(
+                    $"Unknown localization language '{{language}}'.", parameterName);
+            }}
+
+            if (seen.Add(language))
+            {{
+                languages.Add(language);
+            }}
+        }}

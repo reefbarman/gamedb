@@ -64,7 +64,7 @@ namespace GameDBEditorLibrary
 
     internal class GameDB : Singleton<GameDB>, IGameDB
     {
-        internal static List<GameDBInternal> RuntimeDBs = new List<GameDBInternal>();
+        internal static List<GameDBBase> RuntimeDBs = new List<GameDBBase>();
 
         private Dictionary<string, TableBase> m_tables = null;
         private GameDBDocument m_persistenceDocument;
@@ -103,7 +103,8 @@ namespace GameDBEditorLibrary
             {
                 var schemaJSON = File.ReadAllText(Path.Combine(Application.dataPath, GetSchemaPath(gameDBPath)));
                 var imported = DeserializeSchema(schemaJSON);
-                ImportFromRuntimeDB(imported.Tables, RuntimeDBs[selectedInGameDBIndex]);
+                ImportFromRuntimeDB(imported.Tables,
+                    RuntimeDBs[selectedInGameDBIndex].m_internal);
                 ApplyImportedState(imported);
                 LoadedPath = gameDBPath;
                 m_loadedInGameDB = selectedInGameDBIndex;
@@ -341,7 +342,7 @@ namespace GameDBEditorLibrary
             {
                 var dataJSON = SerializeData();
 
-                loaded = RuntimeDBs[m_loadedInGameDB].Import(dataJSON) == null;
+                loaded = RuntimeDBs[m_loadedInGameDB].ImportEditorData(dataJSON) == null;
             }
             catch (Exception e)
             {

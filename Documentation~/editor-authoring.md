@@ -78,7 +78,7 @@ A real **Save GameDB** operation resolves every non-empty scalar, array element,
 
 ## Localization databases
 
-Enable **Localization DB** before defining a localization schema. Localization tables use string fields and generated language-aware accessors. See [Runtime use](runtime.md) for the loading contract and generated API.
+Enable **Localization DB** before defining a localization schema. Each scalar string field is an exact, case-sensitive language identifier and must also be a valid generated C# identifier; the generated known-language set is the union across all localization tables, so tables may intentionally support different subsets. Arrays and non-string fields are rejected during generation. The current editor writes every declared field for each row, using an empty string as authored content, so editor-authored per-row fallback normally comes from a language absent from that table's schema. Sparse per-row JSON from external tooling is supported at runtime but does not round-trip losslessly through Play Mode editor loading. See [Runtime use](runtime.md#localization-databases) for fallback ordering, loading, metadata, and row accessor behavior.
 
 ## Save and generate classes
 

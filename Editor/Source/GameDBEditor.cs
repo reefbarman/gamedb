@@ -105,7 +105,7 @@ namespace GameDBEditorLibrary
 
         public static void AddRuntimeDB(GameDBBase runtimeDB)
         {
-            GameDB.RuntimeDBs.Add(runtimeDB.m_internal);
+            GameDB.RuntimeDBs.Add(runtimeDB);
         }
 
         public static void Init(EditorWindow window)

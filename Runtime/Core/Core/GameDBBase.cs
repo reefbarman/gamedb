@@ -71,7 +71,7 @@ namespace GameDBLibrary
         /// <param name="jsonData">A string representing the JSON format of the GameDB to import.</param>
         /// <param name="notify">if set to <c>true</c> the <see cref="OnDBLoaded"/> callback will be triggered for the GameDB (defaults to <c>true</c>).</param>
         /// <returns>An exception is returned if the GameDB fails to imprt</returns>
-        public Exception Import(string jsonData, bool notify = true)
+        public virtual Exception Import(string jsonData, bool notify = true)
         {
             return m_internal.Import(jsonData, null, notify);
         }
@@ -84,13 +84,38 @@ namespace GameDBLibrary
         /// <param name="columImportList">An array of field names to import.</param>
         /// <param name="notify">if set to <c>true</c> the <see cref="OnDBLoaded"/> callback will be triggered for the GameDB (defaults to <c>true</c>).</param>
         /// <returns>An exception is returned if the GameDB fails to imprt</returns>
-        public Exception Import(string jsonData, string[] columImportList, bool notify = true)
+        public virtual Exception Import(string jsonData, string[] columImportList, bool notify = true)
         {
             return m_internal.Import(jsonData, columImportList, notify);
         }
 
+        internal Exception ImportEditorData(string jsonData)
+        {
+            return ImportEditorDataCore(jsonData);
+        }
+
+        protected virtual Exception ImportEditorDataCore(string jsonData)
+        {
+            return Import(jsonData);
+        }
+
         protected Exception ImportData(string jsonData, string[] columnImportList,
             bool notify, Action beforePublish)
+        {
+            return ImportDataInternal(jsonData, columnImportList, notify,
+                beforePublish, false);
+        }
+
+        protected Exception ImportLocalizationData(string jsonData,
+            string[] columnImportList, bool notify, Action beforePublish)
+        {
+            return ImportDataInternal(jsonData, columnImportList, notify,
+                beforePublish, true);
+        }
+
+        private Exception ImportDataInternal(string jsonData,
+            string[] columnImportList, bool notify, Action beforePublish,
+            bool allowMissingSelectedFields)
         {
             if (!m_internal.TryBeginOperation())
             {
@@ -100,7 +125,7 @@ namespace GameDBLibrary
             try
             {
                 return m_internal.ImportOwned(jsonData, columnImportList, notify,
-                    beforePublish);
+                    beforePublish, allowMissingSelectedFields: allowMissingSelectedFields);
             }
             finally
             {
@@ -111,6 +136,21 @@ namespace GameDBLibrary
         protected Exception LoadData(Func<string> loadData,
             string[] columnImportList = null, bool notify = true,
             Action beforePublish = null)
+        {
+            return LoadDataInternal(loadData, columnImportList, notify,
+                beforePublish, false);
+        }
+
+        protected Exception LoadLocalizationData(Func<string> loadData,
+            string[] columnImportList, bool notify, Action beforePublish)
+        {
+            return LoadDataInternal(loadData, columnImportList, notify,
+                beforePublish, true);
+        }
+
+        private Exception LoadDataInternal(Func<string> loadData,
+            string[] columnImportList, bool notify, Action beforePublish,
+            bool allowMissingSelectedFields)
         {
             if (loadData == null)
             {
@@ -135,7 +175,7 @@ namespace GameDBLibrary
                 }
 
                 return m_internal.ImportOwned(jsonData, columnImportList, notify,
-                    beforePublish);
+                    beforePublish, allowMissingSelectedFields: allowMissingSelectedFields);
             }
             finally
             {
@@ -143,10 +183,28 @@ namespace GameDBLibrary
             }
         }
 
-        protected async Awaitable LoadDataAsync(string location,
+        protected Awaitable LoadDataAsync(string location,
             IGameDBDataLoader loader, string[] columnImportList = null,
             bool notify = true, Action beforePublish = null,
             CancellationToken cancellationToken = default)
+        {
+            return LoadDataAsyncInternal(location, loader, columnImportList,
+                notify, beforePublish, cancellationToken, false);
+        }
+
+        protected Awaitable LoadLocalizationDataAsync(string location,
+            IGameDBDataLoader loader, string[] columnImportList,
+            bool notify, Action beforePublish,
+            CancellationToken cancellationToken = default)
+        {
+            return LoadDataAsyncInternal(location, loader, columnImportList,
+                notify, beforePublish, cancellationToken, true);
+        }
+
+        private async Awaitable LoadDataAsyncInternal(string location,
+            IGameDBDataLoader loader, string[] columnImportList,
+            bool notify, Action beforePublish,
+            CancellationToken cancellationToken, bool allowMissingSelectedFields)
         {
             if (loader == null)
             {
@@ -192,7 +250,8 @@ namespace GameDBLibrary
                 cancellationToken.ThrowIfCancellationRequested();
 
                 var error = m_internal.ImportOwned(jsonData, columnImportList,
-                    notify, beforePublish, cancellationToken);
+                    notify, beforePublish, cancellationToken,
+                    allowMissingSelectedFields);
                 if (error != null)
                 {
                     throw error;

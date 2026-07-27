@@ -67,7 +67,7 @@ public sealed class LoadGameData : MonoBehaviour
 }
 ```
 
-The generated load path is relative to a `Resources` folder and omits the `.json` extension.
+The generated load path is relative to a `Resources` folder and omits the `.json` extension. Generated Unity databases also expose `LoadAsync`: the default overload uses `Resources.LoadAsync<TextAsset>`, while an overload accepting `IGameDBDataLoader` supports other transports. Supported loads are database-atomic; failure, cancellation, or an overlapping operation leaves the previously committed rows active and emits no `OnDBLoaded` notification. See [Runtime use and hot reload](Documentation~/runtime.md#construct-and-load-a-database).
 
 ## Schema format version
 
@@ -93,7 +93,7 @@ Table references and schema changes are validated before the automation API save
 
 ## Optional Addressables loading
 
-Install Unity Addressables separately when non-Resources Unity-object references need asynchronous loading. The optional `GameDBLibrary.Addressables` assembly loads generated `<Field>Val` references by GUID and returns a disposable typed lease that keeps the asset and dependencies alive. GameDB itself does not depend on Addressables, generate Addressables-specific row members, cache handles, or guess visible addresses.
+Install Unity Addressables separately when GameDB JSON or non-Resources Unity-object references need asynchronous Addressables loading. `AddressablesGameDBDataLoader` acquires database JSON by an explicit key, copies its text, and releases the temporary handle before import. `LoadAddressableAsync<T>` loads generated `<Field>Val` references by GUID and returns a disposable typed lease that keeps the asset and dependencies alive. GameDB itself does not depend on Addressables, generate Addressables-specific row members, cache handles, or guess keys or visible addresses.
 
 See [Optional Addressables integration](Documentation~/addressables.md) for installation, asmdef references, **Include GUIDs in Catalog**, content builds, cancellation, failure diagnostics, and lease lifetime.
 

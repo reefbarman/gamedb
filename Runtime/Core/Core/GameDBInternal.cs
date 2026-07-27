@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace GameDBLibrary
 {
@@ -10,6 +11,7 @@ namespace GameDBLibrary
         protected Dictionary<string, TableBase> m_tables = new Dictionary<string, TableBase>();
         protected string m_name = string.Empty;
         protected Logger m_logger = new Logger();
+        private int m_operationInProgress;
 
         public string Name => m_name;
         public Dictionary<string, TableBase> Tables => m_tables;
@@ -20,21 +22,58 @@ namespace GameDBLibrary
             get { return m_logger; }
         }
 
-        public GameDBInternal(string name) {
+        public GameDBInternal(string name)
+        {
             m_name = name;
         }
 
-        public bool Load(string path) {
+        public bool Load(string path)
+        {
             throw new NotImplementedException("Only Import is supported for runtime dbs");
         }
 
-        public Exception Import(string jsonData, string[] columnImportList = null, bool notify = true)
+        public Exception Import(string jsonData, string[] columnImportList = null,
+            bool notify = true)
+        {
+            if (!TryBeginOperation())
+            {
+                return OperationInProgressException();
+            }
+
+            try
+            {
+                return ImportOwned(jsonData, columnImportList, notify);
+            }
+            finally
+            {
+                EndOperation();
+            }
+        }
+
+        internal bool TryBeginOperation()
+        {
+            return Interlocked.CompareExchange(ref m_operationInProgress, 1, 0) == 0;
+        }
+
+        internal void EndOperation()
+        {
+            Volatile.Write(ref m_operationInProgress, 0);
+        }
+
+        internal Exception ImportOwned(string jsonData, string[] columnImportList = null,
+            bool notify = true, Action beforePublish = null,
+            CancellationToken cancellationToken = default)
         {
             Exception error = null;
 
             try
             {
-                GameDBSerializer.DeserializeData(m_tables, jsonData, columnImportList);
+                GameDBSerializer.DeserializeData(m_tables, jsonData, columnImportList,
+                    beforePublish, cancellationToken);
+            }
+            catch (OperationCanceledException e)
+            {
+                error = e;
             }
             catch (Exception e)
             {
@@ -51,6 +90,12 @@ namespace GameDBLibrary
             }
 
             return error;
+        }
+
+        internal static InvalidOperationException OperationInProgressException()
+        {
+            return new InvalidOperationException(
+                "A GameDB load or import operation is already in progress for this database instance.");
         }
     }
 }

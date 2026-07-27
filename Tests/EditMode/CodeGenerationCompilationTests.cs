@@ -5,6 +5,7 @@ using System.Collections;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Threading;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.TestTools;
@@ -19,6 +20,12 @@ namespace GameDBLibrary.Tests
         [SerializeField]
         private string m_assetFolderName;
 
+        [SerializeField]
+        private string m_generatedDataJson;
+
+        [SerializeField]
+        private string m_localizationDataJson;
+
         [UnityTest]
         public IEnumerator ExportedCodeCompilesAndRegenerationRemovesStaleTableTypes()
         {
@@ -26,13 +33,18 @@ namespace GameDBLibrary.Tests
             var exportRoot = GetExportRoot();
             Directory.CreateDirectory(exportRoot);
 
-            new CSharpExporter().Export(exportRoot, CreateRepresentativeDatabase(true), true);
-            new CSharpExporter().Export(exportRoot, CreateLocalizationDatabase(), true);
+            var representativeDatabase = CreateRepresentativeDatabase(true);
+            var localizationDatabase = CreateLocalizationDatabase();
+            m_generatedDataJson = representativeDatabase.SerializeData();
+            m_localizationDataJson = localizationDatabase.SerializeData();
+            new CSharpExporter().Export(exportRoot, representativeDatabase, true);
+            new CSharpExporter().Export(exportRoot, localizationDatabase, true);
 
             yield return new RecompileScripts(true, true);
 
             var assembly = GetGeneratedAssembly();
             AssertGeneratedMembers(assembly);
+            yield return AssertGeneratedAsyncLoadBehavior(assembly);
             Assert.That(assembly.GetType($"GameDB{GeneratedScope}.Obsolete", false), Is.Not.Null);
             Assert.That(assembly.GetType($"GameDB{LocalizationScope}.Translations", false), Is.Not.Null);
 
@@ -68,6 +80,8 @@ namespace GameDBLibrary.Tests
             }
 
             m_assetFolderName = null;
+            m_generatedDataJson = null;
+            m_localizationDataJson = null;
             if (generatedTypesAreLoaded)
             {
                 yield return new RecompileScripts(true, true);
@@ -104,6 +118,7 @@ namespace GameDBLibrary.Tests
             Assert.That(items.AddField("IconsBySlot", FieldType.dictionary, false,
                 new DictionaryType(KeyType.@string, null, FieldType.unityObject, null)), Is.True);
             Assert.That(items.AddKey("Sword"), Is.True);
+            Assert.That(items.SetValue("Sword", "Power", 12L), Is.True);
 
             if (includeObsoleteTable)
             {
@@ -128,6 +143,8 @@ namespace GameDBLibrary.Tests
             Assert.That(translations.AddField("English", FieldType.@string, false), Is.True);
             Assert.That(translations.AddField("French", FieldType.@string, false), Is.True);
             Assert.That(translations.AddKey("Greeting"), Is.True);
+            Assert.That(translations.SetValue("Greeting", "English", "Hello"), Is.True);
+            Assert.That(translations.SetValue("Greeting", "French", "Bonjour"), Is.True);
 
             return gameDB;
         }
@@ -147,6 +164,8 @@ namespace GameDBLibrary.Tests
             var translationsType = RequireType(assembly, $"GameDB{LocalizationScope}.Translations");
 
             Assert.That(gameDBType.GetProperty("ItemsTable", BindingFlags.Instance | BindingFlags.Public), Is.Not.Null);
+            AssertAsyncLoadMethods(gameDBType, false);
+            AssertAsyncLoadMethods(localizationGameDBType, true);
             Assert.That(itemsTableType, Is.Not.Null);
             Assert.That(itemsType.GetProperty("PowerVal", BindingFlags.Instance | BindingFlags.Public), Is.Not.Null);
             AssertPropertyType(itemsType, "LongValueVal", typeof(long));
@@ -176,6 +195,108 @@ namespace GameDBLibrary.Tests
             Assert.That(translationsType.GetProperty("LanguageVal", BindingFlags.Instance | BindingFlags.Public), Is.Not.Null);
         }
 
+        private IEnumerator AssertGeneratedAsyncLoadBehavior(Assembly assembly)
+        {
+            var gameDBType = RequireType(assembly, $"GameDB{GeneratedScope}.GameDB");
+            var gameDB = Activator.CreateInstance(gameDBType, "GeneratedBehavior");
+            var notifications = 0;
+            ((GameDBBase)gameDB).OnDBLoaded += () => notifications++;
+
+            var normalAwaitable = InvokeCustomLoader(gameDBType, gameDB,
+                new InlineLoader(m_generatedDataJson), "normal", false);
+            yield return Await(normalAwaitable);
+
+            var itemsTable = gameDBType.GetProperty("ItemsTable").GetValue(gameDB);
+            var sword = itemsTable.GetType().GetMethod("GetByKey")
+                .Invoke(itemsTable, new object[] { "Sword" });
+            Assert.That(sword.GetType().GetProperty("PowerVal").GetValue(sword),
+                Is.EqualTo(12));
+            Assert.That(notifications, Is.Zero);
+
+            var localizationType = RequireType(assembly,
+                $"GameDB{LocalizationScope}.GameDB");
+            var localization = Activator.CreateInstance(localizationType,
+                "LocalizationBehavior");
+            string languageAtNotification = null;
+            string translationAtNotification = null;
+            ((GameDBBase)localization).OnDBLoaded += () =>
+            {
+                languageAtNotification = (string)localizationType
+                    .GetProperty("LocalizationLanguage").GetValue(localization);
+                translationAtNotification = GetTranslation(localizationType,
+                    localization, "TranslatedVal");
+            };
+
+            var localizationAwaitable = InvokeCustomLoader(localizationType,
+                localization, new InlineLoader(m_localizationDataJson),
+                "localized", true, "French");
+            yield return Await(localizationAwaitable);
+
+            Assert.That(localizationType.GetProperty("LocalizationLanguage")
+                .GetValue(localization), Is.EqualTo("French"));
+            Assert.That(GetTranslation(localizationType, localization,
+                "TranslatedVal"), Is.EqualTo("Bonjour"));
+            Assert.That(languageAtNotification, Is.EqualTo("French"));
+            Assert.That(translationAtNotification, Is.EqualTo("Bonjour"));
+        }
+
+        private static Awaitable InvokeCustomLoader(Type gameDBType, object gameDB,
+            IGameDBDataLoader loader, string location, bool notify,
+            string language = null)
+        {
+            var method = gameDBType.GetMethods(BindingFlags.Instance | BindingFlags.Public)
+                .Single(candidate => candidate.Name == "LoadAsync"
+                    && candidate.GetParameters().Any(parameter =>
+                        parameter.ParameterType == typeof(IGameDBDataLoader)));
+            var arguments = language == null
+                ? new object[] { location, loader, notify, default(CancellationToken) }
+                : new object[] { location, language, loader, notify,
+                    default(CancellationToken) };
+            return (Awaitable)method.Invoke(gameDB, arguments);
+        }
+
+        private static string GetTranslation(Type gameDBType, object gameDB,
+            string propertyName)
+        {
+            var table = gameDBType.GetProperty("TranslationsTable")
+                .GetValue(gameDB);
+            var greeting = table.GetType().GetMethod("GetByKey")
+                .Invoke(table, new object[] { "Greeting" });
+            return (string)greeting.GetType().GetProperty(propertyName)
+                .GetValue(greeting);
+        }
+
+        private static IEnumerator Await(Awaitable awaitable)
+        {
+            var awaiter = awaitable.GetAwaiter();
+            for (var frame = 0; !awaiter.IsCompleted && frame < 300; frame++)
+            {
+                yield return null;
+            }
+
+            Assert.That(awaiter.IsCompleted, Is.True,
+                "Generated async load timed out after 300 frames.");
+            awaiter.GetResult();
+        }
+
+        private static void AssertAsyncLoadMethods(Type gameDBType, bool localization)
+        {
+            var methods = gameDBType.GetMethods(BindingFlags.Instance | BindingFlags.Public)
+                .Where(method => method.Name == "LoadAsync")
+                .ToArray();
+
+            Assert.That(methods, Has.Length.EqualTo(2));
+            Assert.That(methods.All(method => method.ReturnType == typeof(Awaitable)), Is.True);
+            Assert.That(methods.Any(method => method.GetParameters()
+                .Any(parameter => parameter.ParameterType == typeof(IGameDBDataLoader))), Is.True);
+            Assert.That(methods.All(method => method.GetParameters()
+                .Any(parameter => parameter.ParameterType == typeof(System.Threading.CancellationToken))), Is.True);
+            Assert.That(methods.All(method => method.GetParameters()
+                .Any(parameter => parameter.ParameterType == typeof(string))), Is.True);
+            Assert.That(methods.All(method => method.GetParameters().Count(parameter =>
+                parameter.ParameterType == typeof(string)) == (localization ? 2 : 1)), Is.True);
+        }
+
         private static void AssertPropertyType(Type type, string propertyName,
             Type expectedType)
         {
@@ -190,6 +311,24 @@ namespace GameDBLibrary.Tests
             var type = assembly.GetType(typeName, false);
             Assert.That(type, Is.Not.Null, $"Expected generated type '{typeName}' in Assembly-CSharp.");
             return type;
+        }
+
+        private sealed class InlineLoader : IGameDBDataLoader
+        {
+            private readonly string m_json;
+
+            internal InlineLoader(string json)
+            {
+                m_json = json;
+            }
+
+            public Awaitable<string> LoadAsync(string location,
+                CancellationToken cancellationToken = default)
+            {
+                var completion = new AwaitableCompletionSource<string>();
+                completion.SetResult(m_json);
+                return completion.Awaitable;
+            }
         }
 
         private string GetExportRoot()

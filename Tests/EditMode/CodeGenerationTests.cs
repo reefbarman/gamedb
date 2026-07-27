@@ -479,9 +479,15 @@ namespace GameDBLibrary.Tests
             }
         }
 
-        [TestCase(false, "public global::System.Exception Load(string path, bool notify = true)")]
-        [TestCase(true, "public global::System.Exception Load(string path, string language, bool notify = true)")]
-        public void Export_GeneratesJsonOnlyUnityLoader(bool localization, string expectedLoader)
+        [TestCase(false, "public global::System.Exception Load(string path, bool notify = true)",
+            "public global::UnityEngine.Awaitable LoadAsync(string path, bool notify = true",
+            "global::GameDBLibrary.IGameDBDataLoader loader")]
+        [TestCase(true, "public global::System.Exception Load(string path, string language, bool notify = true)",
+            "public global::UnityEngine.Awaitable LoadAsync(string path, string language",
+            "public global::UnityEngine.Awaitable LoadAsync(string location, string language")]
+        public void Export_GeneratesJsonOnlyUnityLoader(bool localization,
+            string expectedLoader, string expectedAsyncLoader,
+            string expectedCustomLoader)
         {
             var id = Guid.NewGuid().ToString("N");
             var assetFolderName = $"GameDBTests_{id}";
@@ -505,6 +511,10 @@ namespace GameDBLibrary.Tests
 
                 var generatedCode = File.ReadAllText(Path.Combine(outputPath, "GeneratedTest", "GameDB.cs"));
                 Assert.That(generatedCode, Does.Contain(expectedLoader));
+                Assert.That(generatedCode, Does.Contain(expectedAsyncLoader));
+                Assert.That(generatedCode, Does.Contain(expectedCustomLoader));
+                Assert.That(generatedCode, Does.Contain(
+                    "global::GameDBLibraryUnity.ResourcesGameDBDataLoader.Instance"));
                 Assert.That(generatedCode, Does.Contain("gameDBResource.text"));
                 Assert.That(generatedCode, Does.Not.Contain("BinaryGameDB"));
                 Assert.That(generatedCode, Does.Not.Contain("WebRequestHelper.Request"));

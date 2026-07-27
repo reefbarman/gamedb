@@ -1,12 +1,31 @@
 
         public global::System.Exception Load(string path, bool notify = true)
         {
-            var gameDBResource = global::UnityEngine.Resources.Load<global::UnityEngine.TextAsset>(path);
-
-            if (gameDBResource == null)
+            return LoadData(() =>
             {
-                return new global::System.ArgumentException($"Failed to load GameDB {Name} at path: {path}");
-            }
+                var gameDBResource = global::UnityEngine.Resources.Load<global::UnityEngine.TextAsset>(path);
 
-            return Import(gameDBResource.text, notify);
+                if (gameDBResource == null)
+                {
+                    throw new global::System.ArgumentException($"Failed to load GameDB {Name} at path: {path}");
+                }
+
+                return gameDBResource.text;
+            }, notify: notify);
+        }
+
+        public global::UnityEngine.Awaitable LoadAsync(string path, bool notify = true,
+            global::System.Threading.CancellationToken cancellationToken = default)
+        {
+            return LoadDataAsync(path,
+                global::GameDBLibraryUnity.ResourcesGameDBDataLoader.Instance,
+                notify: notify, cancellationToken: cancellationToken);
+        }
+
+        public global::UnityEngine.Awaitable LoadAsync(string location,
+            global::GameDBLibrary.IGameDBDataLoader loader, bool notify = true,
+            global::System.Threading.CancellationToken cancellationToken = default)
+        {
+            return LoadDataAsync(location, loader, notify: notify,
+                cancellationToken: cancellationToken);
         }

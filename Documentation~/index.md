@@ -20,7 +20,7 @@ GameDB is a schema-driven game-data editor, runtime library, C# generator, and e
 3. Set a valid C# scope name.
 4. Create tables, fields, and rows, then save. Unity-object values use GUID-backed references and are path-normalized on real saves.
 5. Generate C# classes under `Assets`.
-6. Put database data and synchronously loaded Unity assets under `Resources`; use the [optional Addressables adapter](addressables.md) for asynchronous non-Resources asset loading.
+6. Put database data and synchronously loaded Unity assets under `Resources` to use the generated default loaders. For database JSON from another transport, pass an `IGameDBDataLoader` to `LoadAsync`; use the [optional Addressables adapter](addressables.md) for Addressables-backed database JSON or asynchronous non-Resources asset loading.
 
 Import **Basic GameDB** from the Package Manager's **Samples** tab for a small working database.
 

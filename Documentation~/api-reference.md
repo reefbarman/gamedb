@@ -11,7 +11,7 @@ This is a curated reference for the supported public C# surface in the current G
 | `GameDBEditorLibrary`        | Unity Editor only (`includePlatforms: Editor`); references `GameDBLibrary`                | `GameDBEditorLibrary`, `GameDBEditorLibrary.Automation`                 |
 | Generated project assembly   | Wherever the generated `.cs` files are placed under `Assets/`                             | `GameDB{ScopeName}`                                                     |
 
-Do not reference `GameDBEditorLibrary` from a player/runtime assembly. Generated code references `GameDBLibrary`; generation with the Unity loader enabled also emits Unity-specific value access and a `Resources.Load` helper.
+Do not reference `GameDBEditorLibrary` from a player/runtime assembly. Generated code references `GameDBLibrary`; generation with the Unity loader enabled also emits Unity-specific value access, synchronous `Resources.Load`, asynchronous Resources loading, and a transport-neutral `LoadAsync` overload.
 
 ## Hand-written runtime API
 
@@ -19,16 +19,18 @@ Do not reference `GameDBEditorLibrary` from a player/runtime assembly. Generated
 
 Generated `GameDB{ScopeName}.GameDB` classes derive from this type. Applications normally construct the generated class rather than subclassing `GameDBBase` themselves.
 
-| Member                                                                            | Behavior                                                                                                                                                            |
-| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Action OnDBLoaded`                                                               | Invoked after a successful import when `notify` is `true`. It is a public delegate field; use `+=`/`-=` when subscribing.                                           |
-| `string ScopeName { get; }`                                                       | Scope fixed by the generated constructor.                                                                                                                           |
-| `string Name { get; }`                                                            | Instance name passed to the generated `GameDB` constructor.                                                                                                         |
-| `Logger Logger { get; set; }`                                                     | Controls internal logging. Unity-enabled generated classes install a generated Unity-console logger.                                                                |
-| `Exception Import(string jsonData, bool notify = true)`                           | Imports all fields from data JSON. Returns `null` on success or the caught exception on failure.                                                                    |
-| `Exception Import(string jsonData, string[] columImportList, bool notify = true)` | Imports only named fields. Returns `null` on success or the caught exception on failure. The parameter name is spelled `columImportList` in the current binary API. |
+| Member                                                                            | Behavior                                                                                                                                                                |
+| --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Action OnDBLoaded`                                                               | Invoked synchronously after a successful supported load or import has committed when `notify` is `true`. It is a public delegate field; use `+=`/`-=` when subscribing. |
+| `string ScopeName { get; }`                                                       | Scope fixed by the generated constructor.                                                                                                                               |
+| `string Name { get; }`                                                            | Instance name passed to the generated `GameDB` constructor.                                                                                                             |
+| `Logger Logger { get; set; }`                                                     | Controls internal logging. Unity-enabled generated classes install a generated Unity-console logger.                                                                    |
+| `Exception Import(string jsonData, bool notify = true)`                           | Imports all fields from data JSON. Returns `null` on success or the caught exception on failure.                                                                        |
+| `Exception Import(string jsonData, string[] columImportList, bool notify = true)` | Imports only named fields. Returns `null` on success or the caught exception on failure. The parameter name is spelled `columImportList` in the current binary API.     |
 
-Import failures are logged through `Logger` and returned, not rethrown by these methods. `OnDBLoaded` is not invoked after a failed import. Missing rows/fields, malformed JSON, duplicate JSON properties, and incompatible values can produce the returned exception. Import is not database-wide transactional: if a later table fails, tables deserialized earlier in the same call may already have been replaced. `OnDBLoaded` runs synchronously outside the deserialization catch, so an exception thrown by a subscriber propagates from `Import`/generated `Load` rather than being returned.
+Import failures are logged through `Logger` and returned, not rethrown by these methods. `OnDBLoaded` is not invoked after a failed import. Missing rows/fields, malformed JSON, duplicate JSON properties, and incompatible values can produce the returned exception. Import stages every generated table and publishes all row dictionaries only after complete success; any failure preserves the entire previous database. `OnDBLoaded` runs synchronously after publication and outside the deserialization catch, so a subscriber exception propagates after committed data remains active.
+
+Each instance accepts one supported load/import mutation at a time. Overlapping or reentrant synchronous calls return `InvalidOperationException`; generated async calls throw it before starting another transport.
 
 The protected constructor and protected `Tables` property exist for generated subclasses:
 
@@ -38,6 +40,29 @@ protected Dictionary<string, TableBase> Tables { get; }
 ```
 
 They are generated-code extension points, not a recommended alternative to generated typed access.
+
+### Async database loaders
+
+```csharp
+public interface IGameDBDataLoader
+{
+    Awaitable<string> LoadAsync(string location,
+        CancellationToken cancellationToken = default);
+}
+
+public sealed class GameDBDataLoadException : Exception
+{
+    public string Location { get; }
+    public Type LoaderType { get; }
+}
+
+public sealed class ResourcesGameDBDataLoader : IGameDBDataLoader
+{
+    public static ResourcesGameDBDataLoader Instance { get; }
+}
+```
+
+`IGameDBDataLoader` acquires JSON only; it never mutates a database. `location` is interpreted by the loader. Generated `LoadAsync` wraps a loader's acquisition failure once in `GameDBDataLoadException`, preserving its `InnerException`; caller cancellation, overlap rejection, and JSON/import exceptions are not transport-wrapped. `ResourcesGameDBDataLoader` is in `GameDBLibraryUnity` and uses `Resources.LoadAsync<TextAsset>`.
 
 ### `GameDBLibrary.Logger`
 
@@ -87,7 +112,9 @@ Awaitable<AddressableAssetLease<T>> LoadAddressableAsync<T>(
     where T : UnityEngine.Object;
 ```
 
-`AddressableAssetLease<T>` has read-only `Asset` and `IsDisposed` properties and an idempotent `Dispose()`. Every successful call owns one load reference until its lease is disposed; accessing `Asset` after disposal throws `ObjectDisposedException`. Expected Addressables failures throw `AddressableAssetLoadException` with `AssetGuid`, `AssetPath`, `RequestedType`, and an underlying `InnerException` when available. See the [optional Addressables contract](addressables.md).
+`AddressableAssetLease<T>` has read-only `Asset` and `IsDisposed` properties and an idempotent `Dispose()`. Every successful call owns one load reference until its lease is disposed; accessing `Asset` after disposal throws `ObjectDisposedException`. Expected Addressables failures throw `AddressableAssetLoadException` with `AssetGuid`, `AssetPath`, `RequestedType`, and an underlying `InnerException` when available.
+
+The same optional assembly exposes `AddressablesGameDBDataLoader.Instance : IGameDBDataLoader`. Its `location` is an explicit Addressables key. It loads a database `TextAsset`, copies its JSON, and releases the temporary handle before returning; unlike referenced assets, database JSON does not return a lease. See the [optional Addressables contract](addressables.md).
 
 Unity conversions are extension methods in `GameDBLibraryUnity.TypeHelpers`:
 
@@ -161,9 +188,14 @@ Unity-loader generation adds:
 
 ```csharp
 public Exception Load(string path, bool notify = true);
+public Awaitable LoadAsync(string path, bool notify = true,
+    CancellationToken cancellationToken = default);
+public Awaitable LoadAsync(string location, IGameDBDataLoader loader,
+    bool notify = true,
+    CancellationToken cancellationToken = default);
 ```
 
-`path` is relative to a Unity `Resources` folder and omits the file extension. `Load` returns an `ArgumentException` if no `TextAsset` is found; otherwise it returns the result of `Import`. It does not throw expected load/import failures itself.
+The synchronous `path` is relative to a Unity `Resources` folder and omits the file extension. `Load` returns an `ArgumentException` if no `TextAsset` is found; otherwise it returns the result of atomic import. It does not throw expected load/import failures itself. The default async overload uses `ResourcesGameDBDataLoader.Instance`; the explicit overload uses the supplied loader. Async transport/import/overlap failures throw, and cancellation throws `OperationCanceledException` without replacing previous rows or notifying.
 
 A localization database instead adds:
 
@@ -171,9 +203,14 @@ A localization database instead adds:
 public string LocalizationLanguage { get; private set; }
 public Exception Load(string path, string language, bool notify = true);
 public Exception Import(string json, string language, bool notify = true);
+public Awaitable LoadAsync(string path, string language,
+    bool notify = true, CancellationToken cancellationToken = default);
+public Awaitable LoadAsync(string location, string language,
+    IGameDBDataLoader loader, bool notify = true,
+    CancellationToken cancellationToken = default);
 ```
 
-These methods set `LocalizationLanguage` before validating or importing the requested data, so the property keeps the requested value even when the method returns an error. A successful import loads only the requested language column. Localization rows expose `TranslatedVal` and `LanguageVal`. If `language` does not match a schema field, partial import can still return success, but reading `TranslatedVal` then fails because no backing value was imported. There is no built-in fallback or locale negotiation.
+A successful operation publishes `LocalizationLanguage` and the requested language rows together before notification. Failure, overlap, or cancellation preserves both previous language and previous rows. Localization rows expose `TranslatedVal` and `LanguageVal`. If `language` does not match a schema field, partial import can still return success, but reading `TranslatedVal` then fails because no backing value was imported. Fallbacks and locale negotiation remain a later roadmap item.
 
 If `IncludeUnityLoader` is `false`, no generated `Load` method, Unity logger, editor registration, or Unity-specific value conversion is emitted; call the inherited `Import` methods with JSON text.
 

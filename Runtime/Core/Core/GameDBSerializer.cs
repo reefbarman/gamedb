@@ -1,11 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace GameDBLibrary
 {
     internal class GameDBSerializer
     {
-        internal static void DeserializeData(Dictionary<string, TableBase> tables, string gameDBJSON, string[] columnImportList = null)
+        internal static void DeserializeData(Dictionary<string, TableBase> tables,
+            string gameDBJSON, string[] columnImportList = null,
+            Action beforePublish = null,
+            CancellationToken cancellationToken = default)
         {
             if (!(JsonSerialization.Deserialize(gameDBJSON) is IDictionary<string, object> gameDBObjDic))
             {
@@ -22,14 +26,27 @@ namespace GameDBLibrary
                 throw new FormatException("gamedb tables object not a dictionary");
             }
 
+            var stagedData = new Dictionary<TableBase, Dictionary<string, RowBase>>();
+
             foreach (var tablePair in tables)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 if (!tablesObjDic.ContainsKey(tablePair.Key))
                 {
                     throw new FormatException("gamedb missing table: " + tablePair.Key);
                 }
 
-                tablePair.Value.DeserializeData(tablesObjDic[tablePair.Key], columnImportList);
+                stagedData.Add(tablePair.Value,
+                    tablePair.Value.StageData(tablesObjDic[tablePair.Key],
+                        columnImportList, cancellationToken));
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            beforePublish?.Invoke();
+
+            foreach (var candidate in stagedData)
+            {
+                candidate.Key.PublishData(candidate.Value);
             }
         }
     }

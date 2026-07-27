@@ -4,6 +4,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System.Threading;
+using UnityEngine;
 
 namespace GameDBLibrary
 {
@@ -85,6 +87,121 @@ namespace GameDBLibrary
         public Exception Import(string jsonData, string[] columImportList, bool notify = true)
         {
             return m_internal.Import(jsonData, columImportList, notify);
+        }
+
+        protected Exception ImportData(string jsonData, string[] columnImportList,
+            bool notify, Action beforePublish)
+        {
+            if (!m_internal.TryBeginOperation())
+            {
+                return GameDBInternal.OperationInProgressException();
+            }
+
+            try
+            {
+                return m_internal.ImportOwned(jsonData, columnImportList, notify,
+                    beforePublish);
+            }
+            finally
+            {
+                m_internal.EndOperation();
+            }
+        }
+
+        protected Exception LoadData(Func<string> loadData,
+            string[] columnImportList = null, bool notify = true,
+            Action beforePublish = null)
+        {
+            if (loadData == null)
+            {
+                return new ArgumentNullException(nameof(loadData));
+            }
+
+            if (!m_internal.TryBeginOperation())
+            {
+                return GameDBInternal.OperationInProgressException();
+            }
+
+            try
+            {
+                string jsonData;
+                try
+                {
+                    jsonData = loadData();
+                }
+                catch (Exception exception)
+                {
+                    return exception;
+                }
+
+                return m_internal.ImportOwned(jsonData, columnImportList, notify,
+                    beforePublish);
+            }
+            finally
+            {
+                m_internal.EndOperation();
+            }
+        }
+
+        protected async Awaitable LoadDataAsync(string location,
+            IGameDBDataLoader loader, string[] columnImportList = null,
+            bool notify = true, Action beforePublish = null,
+            CancellationToken cancellationToken = default)
+        {
+            if (loader == null)
+            {
+                throw new ArgumentNullException(nameof(loader));
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            await Awaitable.MainThreadAsync();
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (!m_internal.TryBeginOperation())
+            {
+                throw GameDBInternal.OperationInProgressException();
+            }
+
+            try
+            {
+                string jsonData;
+                try
+                {
+                    jsonData = await loader.LoadAsync(location, cancellationToken);
+                    if (jsonData == null)
+                    {
+                        throw new InvalidOperationException(
+                            "The GameDB data loader returned null JSON.");
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (GameDBDataLoadException)
+                {
+                    throw;
+                }
+                catch (Exception exception)
+                {
+                    throw new GameDBDataLoadException(location,
+                        loader.GetType(), exception);
+                }
+
+                await Awaitable.MainThreadAsync();
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var error = m_internal.ImportOwned(jsonData, columnImportList,
+                    notify, beforePublish, cancellationToken);
+                if (error != null)
+                {
+                    throw error;
+                }
+            }
+            finally
+            {
+                m_internal.EndOperation();
+            }
         }
 
         /// <summary>

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace GameDBLibrary
 {
@@ -43,7 +44,9 @@ namespace GameDBLibrary
             return Data[key];
         }
 
-        internal void DeserializeData(object tableObj, string[] columnImportList = null)
+        internal Dictionary<string, RowBase> StageData(object tableObj,
+            string[] columnImportList = null,
+            CancellationToken cancellationToken = default)
         {
             var data = new Dictionary<string, RowBase>();
 
@@ -52,20 +55,34 @@ namespace GameDBLibrary
                 throw new FormatException("top level table object not a dictionary");
             }
 
-            foreach (var rowPair in tableDic) {
+            foreach (var rowPair in tableDic)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
                 RowBase row = m_rowFactory(rowPair.Key);
                 row.DeserializeRow(m_fields, rowPair.Value, columnImportList);
 
                 data.Add(rowPair.Key, row);
             }
 
-            m_data = data;
+            return data;
         }
 
-        internal void Import(TableBase table) {
+        internal void PublishData(Dictionary<string, RowBase> data)
+        {
+            m_data = data ?? throw new ArgumentNullException(nameof(data));
+        }
+
+        internal void DeserializeData(object tableObj, string[] columnImportList = null)
+        {
+            PublishData(StageData(tableObj, columnImportList));
+        }
+
+        internal void Import(TableBase table)
+        {
             var data = new Dictionary<string, RowBase>();
 
-            foreach (var rowPair in table.Data) {
+            foreach (var rowPair in table.Data)
+            {
                 RowBase row = m_rowFactory(rowPair.Key);
                 row.Import(m_fields, rowPair.Value);
 

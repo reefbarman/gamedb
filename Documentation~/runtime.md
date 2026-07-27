@@ -39,7 +39,7 @@ if (error != null)
 }
 ```
 
-The normal generated overload is:
+The generated synchronous overload remains:
 
 ```csharp
 Exception Load(string path, bool notify = true)
@@ -47,7 +47,37 @@ Exception Load(string path, bool notify = true)
 
 It calls `Resources.Load<TextAsset>(path)` and imports the asset's text. If no `TextAsset` is found, it returns an `ArgumentException` containing the database name and path. It does not throw that lookup error. Invalid JSON, missing tables or fields, type mismatches, and other import failures are also returned as an `Exception` and logged through `db.Logger`.
 
-Always check the return value. Import is not transactional across the whole database: if a later table fails, tables processed earlier may already contain new rows. `OnDBLoaded` is not invoked after a failed import.
+Generated Unity databases also expose asynchronous Resources loading and an explicit transport-neutral overload:
+
+```csharp
+Awaitable LoadAsync(string path, bool notify = true,
+    CancellationToken cancellationToken = default)
+
+Awaitable LoadAsync(string location, IGameDBDataLoader loader,
+    bool notify = true,
+    CancellationToken cancellationToken = default)
+```
+
+The default overload uses `Resources.LoadAsync<TextAsset>`. The loader overload treats `location` as opaque and lets the supplied loader interpret it. `LoadAsync` completes normally on success and throws on transport, overlap, or import failure; cancellation throws `OperationCanceledException`. Transport failures are wrapped once in `GameDBDataLoadException`, whose `Location`, `LoaderType`, and `InnerException` identify the failed acquisition. JSON/import failures retain their concrete exception type.
+
+All supported imports and loads are database-atomic. GameDB stages every table before publication: success replaces every table's rows together, while transport failure, cancellation, malformed JSON, missing data, or a later-table failure preserves every previous table and emits no notification. Generated table objects remain stable across reloads, but row objects are replaced on success. Import, publication, notification, and supported runtime observation are main-thread-oriented; this contract does not make GameDB reads thread-safe against concurrent background-thread access.
+
+```csharp
+try
+{
+    await db.LoadAsync("GameDBs/main", cancellationToken: destroyCancellationToken);
+}
+catch (OperationCanceledException)
+{
+    // The previously committed database is still active.
+}
+catch (Exception exception)
+{
+    Debug.LogException(exception);
+}
+```
+
+`Resources.LoadAsync` has no abort/release API. Cancelling the returned GameDB operation stops waiting and prevents import, but Unity's underlying Resources request may still finish. GameDB does not call `Resources.UnloadAsset` on the shared `TextAsset`; normal Resources cleanup controls its lifetime. Unity `Awaitable` values are pooled and single-await—await each `LoadAsync` invocation exactly once.
 
 ## Import JSON directly
 
@@ -72,7 +102,7 @@ A successful load or import replaces each table's row objects. It does not mutat
 
 ## Load notifications and recaching
 
-`GameDBBase.OnDBLoaded` is a public `Action`. It runs synchronously after a successful `Load` or `Import` when `notify` is `true` (the default):
+`GameDBBase.OnDBLoaded` is a public `Action`. It runs synchronously after a successful `Load`, `LoadAsync`, or `Import` when `notify` is `true` (the default):
 
 ```csharp
 Items sword = null;
@@ -91,7 +121,11 @@ if (error != null)
 }
 ```
 
-Subscribe before the first load if the same callback should populate initial caches. Pass `notify: false` only when the caller will update dependants itself. Import catches and returns deserialization exceptions, but an exception thrown by an `OnDBLoaded` subscriber is outside that catch and propagates from `Load` or `Import`.
+Subscribe before the first load if the same callback should populate initial caches. Pass `notify: false` only when the caller will update dependants itself. Synchronous import catches and returns deserialization exceptions; async load throws them. An exception thrown by an `OnDBLoaded` subscriber propagates after the new data has committed from synchronous or asynchronous paths.
+
+Each database instance permits one supported load/import mutation at a time, including transport acquisition and notification. A concurrent or reentrant operation is rejected before starting its transport; synchronous methods return `InvalidOperationException`, while async methods throw it. Reads continue to observe the last committed rows until the next complete publication.
+
+`LoadAsync` switches back to Unity's main thread before JSON staging, publication, and notification. Async transport does not make JSON parsing or row hydration a background operation, so a large database can still incur a main-thread cost after delivery completes.
 
 After every notified reload, reacquire and recache:
 
@@ -223,7 +257,7 @@ Exception Import(string json, string language, bool notify = true)
 string LocalizationLanguage { get; }
 ```
 
-`Load` reads the same Resources JSON format. Both methods set `LocalizationLanguage` before validating or importing the requested data, so the property keeps the requested value even when the method returns an error. A successful import loads only the field whose name exactly matches `language`. Generated localization rows expose:
+`Load` reads the same Resources JSON format. Generated localization databases also expose the corresponding Resources and `IGameDBDataLoader` `LoadAsync` overloads with `language` before `notify`/loader arguments. The requested language and staged rows publish together immediately before notification. Failure, overlap, or cancellation preserves the previous `LocalizationLanguage` and rows. A successful import loads only the field whose name exactly matches `language`. Generated localization rows expose:
 
 ```csharp
 string text = row.TranslatedVal;
@@ -238,8 +272,9 @@ Generate localization classes with **Generate for Unity** enabled. With Unity ge
 
 ## Intentionally unsupported surfaces
 
-The supported generated Unity runtime path is JSON text loaded from `Resources` or supplied to `Import`.
+The supported generated Unity runtime path is JSON text loaded from `Resources`, acquired through an explicit `IGameDBDataLoader`, or supplied to `Import`.
 
 - Binary, compressed, and encrypted GameDB build/load output was removed. Current generation emits no `BinaryGameDB` API.
 - This package does not provide, host, or validate the old remote deployment server. The editor deployment UI was removed. Residual runtime remote-update client APIs remain only as warning-only obsolete source-compatibility shims and will be removed in GameDB 1.0.0; they are not a supported publishing/runtime workflow for new projects.
-- GameDB provides synchronous object loading only through Unity-enabled `ObjectVal`/`GetObject()` Resources projections. Core-only output exposes value, GUID, and path data without a `UnityEngine.Object` API; the separately installed [optional Addressables adapter](addressables.md) loads valid non-Resources references asynchronously.
+- GameDB provides synchronous object loading only through Unity-enabled `ObjectVal`/`GetObject()` Resources projections. Core-only output exposes value, GUID, and path data without a `UnityEngine.Object` API; the separately installed [optional Addressables adapter](addressables.md) loads valid non-Resources references and GameDB JSON asynchronously.
+- The warning-only obsolete `ImportFromServer` remote/deployment shim is outside the supported async-loading concurrency contract. Its eventual callback uses atomic `Import`, but an outstanding unsupported remote request has no freshness guarantee against newer supported loads. Do not use it for new projects.

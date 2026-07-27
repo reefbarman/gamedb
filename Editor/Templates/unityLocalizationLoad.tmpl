@@ -1,20 +1,39 @@
 
         public global::System.Exception Load(string path, string language, bool notify = true)
         {
-            LocalizationLanguage = language;
-
-            var gameDBResource = global::UnityEngine.Resources.Load<global::UnityEngine.TextAsset>(path);
-
-            if (gameDBResource == null)
+            return LoadData(() =>
             {
-                return new global::System.ArgumentException($"Failed to load GameDB {Name} at path: {path}");
-            }
+                var gameDBResource = global::UnityEngine.Resources.Load<global::UnityEngine.TextAsset>(path);
 
-            return Import(gameDBResource.text, new[] { language }, notify);
+                if (gameDBResource == null)
+                {
+                    throw new global::System.ArgumentException($"Failed to load GameDB {Name} at path: {path}");
+                }
+
+                return gameDBResource.text;
+            }, new[] { language }, notify, () => LocalizationLanguage = language);
         }
 
         public global::System.Exception Import(string json, string language, bool notify = true)
         {
-            LocalizationLanguage = language;
-            return Import(json, new[] { language }, notify);
+            return ImportData(json, new[] { language }, notify,
+                () => LocalizationLanguage = language);
+        }
+
+        public global::UnityEngine.Awaitable LoadAsync(string path, string language,
+            bool notify = true,
+            global::System.Threading.CancellationToken cancellationToken = default)
+        {
+            return LoadDataAsync(path,
+                global::GameDBLibraryUnity.ResourcesGameDBDataLoader.Instance,
+                new[] { language }, notify, () => LocalizationLanguage = language,
+                cancellationToken);
+        }
+
+        public global::UnityEngine.Awaitable LoadAsync(string location, string language,
+            global::GameDBLibrary.IGameDBDataLoader loader, bool notify = true,
+            global::System.Threading.CancellationToken cancellationToken = default)
+        {
+            return LoadDataAsync(location, loader, new[] { language }, notify,
+                () => LocalizationLanguage = language, cancellationToken);
         }

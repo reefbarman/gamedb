@@ -1,8 +1,8 @@
 # Optional Addressables integration
 
-GameDB can load GUID-backed Unity-object values through Unity Addressables without making Addressables a dependency of the GameDB package. The integration is compiled only when a supported Addressables package is installed.
+GameDB can load GUID-backed Unity-object values and GameDB JSON `TextAsset` data through Unity Addressables without making Addressables a dependency of the GameDB package. The integration is compiled only when a supported Addressables package is installed.
 
-This adapter loads referenced assets. It does not load the GameDB JSON database itself; generated database `Load` methods continue to use `Resources`, and direct JSON remains available through `Import`.
+Referenced assets and database JSON intentionally use different ownership contracts: asset loads return a retained lease, while database loads copy text and release their temporary handle before the database imports it.
 
 ## Install
 
@@ -35,7 +35,26 @@ Assets loaded through Addressables must be outside `Resources`; Unity moves an a
 
 Changing an asset's visible Addressables address does not affect GameDB loading while its GUID remains in the catalog.
 
-## Load and release
+## Load database JSON
+
+Generated Unity databases accept any `IGameDBDataLoader`. Use the optional singleton with an explicit Addressables key:
+
+```csharp
+using GameDBLibraryAddressables;
+
+await db.LoadAsync(
+    "main-database",
+    AddressablesGameDBDataLoader.Instance,
+    cancellationToken: destroyCancellationToken);
+```
+
+For this loader, `location` is the key passed directly to `Addressables.LoadAssetAsync<TextAsset>`. It may be a configured visible address or GUID supplied by the caller; GameDB does not reinterpret a Resources path or fall back between address, GUID, path, and label.
+
+The loader copies `TextAsset.text` while its handle is valid, releases that handle exactly once, then returns the JSON to GameDB's atomic importer. The caller receives no lease because database rows do not retain the `TextAsset` or its dependencies. Transport failures are wrapped by generated `LoadAsync` in `GameDBDataLoadException`; JSON/import failures retain their concrete exception type.
+
+Cancellation before import preserves the previously committed database. If an Addressables operation was acquired, GameDB releases its valid owned handle exactly once; early release does not guarantee that the underlying provider I/O is physically aborted.
+
+## Load and release referenced assets
 
 The generated `<Field>Val` property remains a `GameDBLibrary.UnityObjectReference`. Import the optional namespace and load the requested Unity type:
 
@@ -81,6 +100,8 @@ For array fields, load each `UnityObjectReference` from `<Field>Val` as needed. 
 
 ## Resources or Addressables
 
+For database JSON, use the generated default `LoadAsync(path)` for Resources data or pass `AddressablesGameDBDataLoader.Instance` with an explicit Addressables key.
+
 Use one loading transport for each referenced asset:
 
 - Keep an asset beneath exactly one case-sensitive `Resources` directory when synchronous generated `<Field>ObjectVal` or `GetObject()` access is appropriate.
@@ -90,11 +111,11 @@ A valid non-Resources reference causes the synchronous `ObjectVal`/`GetObject()`
 
 ## Failures and cancellation
 
-`LoadAddressableAsync<T>()` switches to Unity's main thread and polls through Unity `Awaitable` frame waits. It does not use `AsyncOperationHandle.Task`, so the adapter does not depend on an API unavailable on WebGL.
+Both Addressables loaders switch to Unity's main thread and poll through Unity `Awaitable` frame waits. They do not use `AsyncOperationHandle.Task`, so the adapter does not depend on an API unavailable on WebGL.
 
-A cancelled token throws `OperationCanceledException`. If an Addressables operation was already acquired, GameDB releases it exactly once before propagating cancellation.
+Cancellation throws `OperationCanceledException`. If an Addressables operation was acquired, GameDB releases its valid owned handle exactly once; early release does not guarantee that provider I/O is physically aborted.
 
-Other load failures throw `AddressableAssetLoadException`. The exception exposes:
+For database JSON, generated `LoadAsync` wraps non-cancellation acquisition failures in `GameDBDataLoadException`. For `LoadAddressableAsync<T>` referenced-asset loads, other failures throw `AddressableAssetLoadException`, which exposes:
 
 - `AssetGuid`;
 - `AssetPath`;

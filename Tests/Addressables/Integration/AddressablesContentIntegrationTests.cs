@@ -2,6 +2,7 @@ using GameDBLibrary;
 using NUnit.Framework;
 using System;
 using System.Collections;
+using System.IO;
 using UnityEditor;
 using UnityEditor.AddressableAssets;
 using UnityEditor.AddressableAssets.Build;
@@ -19,8 +20,10 @@ namespace GameDBLibraryAddressables.Tests
         private const string TestRoot = "Assets/GameDBAddressablesIntegrationTests";
         private const string ConfigFolder = TestRoot + "/Config";
         private const string AssetPath = TestRoot + "/Sword.prefab";
+        private const string DatabasePath = TestRoot + "/main.json";
         private const string SettingsName = "GameDBAddressablesIntegrationSettings";
         private const string CustomAddress = "custom-visible-address-not-used-by-gamedb";
+        private const string DatabaseAddress = "gamedb-main-json";
 
         [UnityTest]
         [Explicit("Builds content and initializes the global Addressables runtime; run in an isolated filtered Unity process.")]
@@ -53,8 +56,14 @@ namespace GameDBLibraryAddressables.Tests
                     UnityEngine.Object.DestroyImmediate(source);
                 }
 
+                File.WriteAllText(DatabasePath,
+                    "{\"tables\":{\"Items\":{\"Sword\":{}}}}");
+                AssetDatabase.ImportAsset(DatabasePath, ImportAssetOptions.ForceSynchronousImport);
+
                 var guid = AssetDatabase.AssetPathToGUID(AssetPath);
+                var databaseGuid = AssetDatabase.AssetPathToGUID(DatabasePath);
                 Assert.That(guid, Has.Length.EqualTo(32));
+                Assert.That(databaseGuid, Has.Length.EqualTo(32));
 
                 var settings = AddressableAssetSettings.Create(
                     ConfigFolder, SettingsName, true, true);
@@ -72,6 +81,8 @@ namespace GameDBLibraryAddressables.Tests
 
                 var entry = settings.CreateOrMoveEntry(guid, group);
                 entry.address = CustomAddress;
+                var databaseEntry = settings.CreateOrMoveEntry(databaseGuid, group);
+                databaseEntry.address = DatabaseAddress;
                 settings.SetDirty(
                     AddressableAssetSettings.ModificationEvent.EntryModified,
                     entry,
@@ -97,6 +108,7 @@ namespace GameDBLibraryAddressables.Tests
                 Exception exception = null;
                 yield return Await(
                     reference.LoadAddressableAsync<GameObject>(),
+                    "GUID-backed prefab",
                     value => lease = value,
                     value => exception = value);
 
@@ -104,6 +116,21 @@ namespace GameDBLibraryAddressables.Tests
                 Assert.That(lease.Asset, Is.Not.Null);
                 Assert.That(lease.Asset.name, Is.EqualTo("Sword"));
                 Assert.That(entry.address, Is.EqualTo(CustomAddress));
+
+                string databaseJson = null;
+                Exception databaseException = null;
+                yield return Await(
+                    AddressablesGameDBDataLoader.Instance.LoadAsync(DatabaseAddress),
+                    "database JSON",
+                    value => databaseJson = value,
+                    value => databaseException = value);
+
+                Assert.That(databaseException, Is.Null);
+                Assert.That(databaseJson,
+                    Is.EqualTo("{\"tables\":{\"Items\":{\"Sword\":{}}}}"));
+                Assert.That(databaseEntry.address, Is.EqualTo(DatabaseAddress));
+                Assert.That(lease.Asset, Is.Not.Null);
+                Assert.That(lease.Asset.name, Is.EqualTo("Sword"));
             }
             finally
             {
@@ -141,14 +168,17 @@ namespace GameDBLibraryAddressables.Tests
         }
 
         private static IEnumerator Await<T>(Awaitable<T> awaitable,
-            Action<T> onSuccess, Action<Exception> onFailure)
+            string operation, Action<T> onSuccess, Action<Exception> onFailure)
         {
             var awaiter = awaitable.GetAwaiter();
-            while (!awaiter.IsCompleted)
+            var timeout = System.Diagnostics.Stopwatch.StartNew();
+            while (!awaiter.IsCompleted && timeout.Elapsed < TimeSpan.FromSeconds(180))
             {
                 yield return null;
             }
 
+            Assert.That(awaiter.IsCompleted, Is.True,
+                $"Addressables {operation} load did not complete within 180 seconds.");
             try
             {
                 onSuccess(awaiter.GetResult());

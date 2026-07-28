@@ -236,12 +236,12 @@ See [Optional Addressables integration](addressables.md) for package/asmdef setu
 A generated Unity `GameDB` registers itself with the editor when constructed in Play Mode. To edit and push runtime data:
 
 1. Enter Play Mode and ensure the relevant generated `GameDB` instance has been constructed and loaded.
-2. Open **Window → GameDB → Open Editor**.
-3. Select the project database asset and the runtime instance by its constructor `Name`.
-4. Click **Load GameDB**. In Play Mode this loads the asset's schema but copies current data from the selected runtime instance into the editor.
-5. Edit row data. Schema editing and class generation are disabled in Play Mode.
-6. Click **Reload In-Game** to serialize the editor's current data and import it into that runtime instance.
-7. Click **Save GameDB** separately if the edits should also be written to the project `.json` and `.schema.json` files.
+2. Open **Window → GameDB → Open Editor** and open the project database before entering Play Mode.
+3. In Play Mode, select the runtime instance by its constructor `Name` under **Runtime GameDB**.
+4. Click **Load Runtime Data**. This keeps the project asset's schema but copies current data from the selected runtime instance into the editor draft.
+5. Edit row data. Schema editing, Save, Generate, and Build are disabled in Play Mode.
+6. Click **Reload In-Game** to serialize the editor's current data and import it into that same runtime instance.
+7. To persist the edits to project files, leave Play Mode, make or retain the corresponding document edits, and click **Save**.
 
 **Reload In-Game** uses the normal import path with notifications enabled. Use `OnDBLoaded` to rebuild every runtime cache as described above. This workflow is explicit; GameDB does not watch the JSON asset or automatically reload it when the file changes.
 

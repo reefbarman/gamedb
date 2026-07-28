@@ -1,0 +1,10 @@
+.gamedb-editor {
+    --gamedb-space-xs: 4px;
+    --gamedb-space-sm: 8px;
+    --gamedb-space-md: 12px;
+    --gamedb-border-color: rgba(128, 128, 128, 0.35);
+    --gamedb-panel-color: rgba(128, 128, 128, 0.08);
+    --gamedb-muted-text-color: rgba(190, 190, 190, 0.75);
+    --gamedb-navigation-width: 180px;
+    --gamedb-inspector-width: 240px;
+}

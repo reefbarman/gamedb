@@ -1,4 +1,5 @@
 using GameDBEditorLibrary;
+using GameDBEditorLibrary.Workspace;
 using GameDBLibrary;
 using NUnit.Framework;
 using System;
@@ -51,7 +52,9 @@ namespace GameDBLibrary.Tests
         {
             var editorAssembly = typeof(GameDBEditor).Assembly;
 
-            Assert.That(editorAssembly.GetType("GameDBEditorLibrary.BuildComponent"), Is.Not.Null);
+            Assert.That(editorAssembly.GetType("GameDBEditorLibrary.BuildComponent"), Is.Null);
+            Assert.That(typeof(GameDBEditorOutputService).GetMethod("Build",
+                BindingFlags.Instance | BindingFlags.Public), Is.Not.Null);
             Assert.That(editorAssembly.GetType("GameDBEditorLibrary.DeploymentComponent"), Is.Null);
             Assert.That(editorAssembly.GetType("GameDBEditorLibrary.DeploymentPickerComponent"), Is.Null);
             Assert.That(editorAssembly.GetType("GameDBEditorLibrary.ServerManagementComponent"), Is.Null);

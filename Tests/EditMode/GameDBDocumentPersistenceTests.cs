@@ -84,6 +84,55 @@ namespace GameDBLibrary.Tests
         }
 
         [Test]
+        public void Save_CommandAuthoredScalarReferenceSchemaRoundTripsOnReload()
+        {
+            var document = GameDBDocument.CreateNew(m_databasePath,
+                "PersistenceTests", false, GameDBFilePairStore.Instance,
+                new RecordingPostSaveActions());
+            Assert.That(document.ApplyTransaction(new GameDBCommand[]
+            {
+                new SetDatabaseMetadataCommand("AuthoredScope", true),
+                new AddTableCommand("Targets", KeyType.@string, null),
+                new AddRowCommand("Targets", "Target1",
+                    new Dictionary<string, object>()),
+                new AddTableCommand("Items", KeyType.@string, null),
+                new AddFieldCommand("Items", "Name",
+                    new GameDBFieldTypeSpec(FieldType.@string, false, null)),
+                new AddFieldCommand("Items", "Target",
+                    new GameDBFieldTypeSpec(FieldType.tableRef, false, "Targets")),
+                new AddRowCommand("Items", "Sword", new Dictionary<string, object>
+                {
+                    { "Name", "Steel" },
+                    { "Target", "Target1" }
+                })
+            }).Success, Is.True);
+
+            var saved = document.Save();
+            var loaded = GameDBDocument.Load(m_databasePath,
+                GameDBFilePairStore.Instance, new RecordingPostSaveActions());
+            var snapshot = loaded.CreateSnapshot();
+            var items = snapshot.Tables.Single(table => table.Name == "Items");
+            var row = items.Rows.Single(candidate => candidate.Key == "Sword");
+
+            Assert.That(saved.Success, Is.True, saved.Message);
+            Assert.That(snapshot.ScopeName, Is.EqualTo("AuthoredScope"));
+            Assert.That(snapshot.LocalizationDatabase, Is.True);
+            Assert.That(items.Fields.Select(field => new
+            {
+                field.Name,
+                field.FieldType,
+                field.TypeArgument
+            }), Is.EqualTo(new[]
+            {
+                new { Name = "Name", FieldType = FieldType.@string, TypeArgument = (string)null },
+                new { Name = "Target", FieldType = FieldType.tableRef, TypeArgument = "Targets" }
+            }));
+            Assert.That(row.Values["Name"], Is.EqualTo("Steel"));
+            Assert.That(row.Values["Target"], Is.EqualTo("Target1"));
+            Assert.That(loaded.IsDirty, Is.False);
+        }
+
+        [Test]
         public void Load_RejectsNewerSchemaFormatWithoutChangingFiles()
         {
             CreateSavedDocument();
@@ -124,26 +173,6 @@ namespace GameDBLibrary.Tests
             Assert.That(File.ReadAllBytes(m_schemaAbsolutePath), Is.EqualTo(schemaBefore));
         }
 
-        [Test]
-        public void LoadRuntimeDB_RejectsNewerSchemaFormatAndPreservesPreviousModel()
-        {
-            CreateSavedDocument();
-            var legacy = new GameDB();
-            Assert.That(legacy.Load($"{m_assetFolderName}/database.json"), Is.True);
-            var tablesBefore = legacy.Tables;
-            var scopeBefore = legacy.ScopeName;
-            var pathBefore = legacy.LoadedPath;
-            File.WriteAllText(m_schemaAbsolutePath,
-                File.ReadAllText(m_schemaAbsolutePath).Replace("\"formatVersion\": 4", "\"formatVersion\": 5"));
-            LogAssert.Expect(LogType.Error, new Regex("^failed to load gameDB:"));
-            LogAssert.Expect(LogType.Exception, new Regex(
-                "Schema format version 5 is newer than the supported version 4"));
-
-            Assert.That(legacy.LoadRuntimeDB(0, $"{m_assetFolderName}/database.json"), Is.False);
-            Assert.That(legacy.Tables, Is.SameAs(tablesBefore));
-            Assert.That(legacy.ScopeName, Is.EqualTo(scopeBefore));
-            Assert.That(legacy.LoadedPath, Is.EqualTo(pathBefore));
-        }
 
         [Test]
         public void Save_NormalizesUnityObjectPathsAcrossAllShapesAndConverges()
@@ -305,6 +334,9 @@ namespace GameDBLibrary.Tests
             var actions = new RecordingPostSaveActions();
             document = GameDBDocument.Load(m_databasePath, GameDBFilePairStore.Instance, actions);
             var revisionBefore = document.CurrentRevision;
+            var stateBefore = document.GetSessionState();
+            var changes = new List<GameDBDocumentStateChange>();
+            document.StateChanged += changes.Add;
 
             var result = document.Save(new GameDBSaveOptions { ForceWrite = true });
 
@@ -315,6 +347,29 @@ namespace GameDBLibrary.Tests
             Assert.That(result.RevisionCurrent, Is.EqualTo(revisionBefore));
             Assert.That(actions.Imports, Has.Count.EqualTo(2));
             Assert.That(actions.Notifications, Is.EqualTo(new[] { "PersistenceTests" }));
+            AssertSaveStateChange(changes, result, stateBefore, document.GetSessionState());
+        }
+
+        [Test]
+        public void Save_NoChangesAndConflictEachReportExactOutcomeWithoutStateMutation()
+        {
+            var store = new InMemoryPairStore();
+            var document = GameDBDocument.CreateNew(m_databasePath, "PersistenceTests", false,
+                store, new RecordingPostSaveActions());
+            Assert.That(document.Save().Success, Is.True);
+            var baseline = document.GetSessionState();
+            var changes = new List<GameDBDocumentStateChange>();
+            document.StateChanged += changes.Add;
+
+            var noChanges = document.Save();
+            store.SetPair(new byte[] { 1 }, new byte[] { 2 });
+            var conflict = document.Save();
+
+            Assert.That(noChanges.Status, Is.EqualTo(GameDBSaveStatus.NoChanges));
+            Assert.That(conflict.Status, Is.EqualTo(GameDBSaveStatus.Conflict));
+            Assert.That(changes, Has.Count.EqualTo(2));
+            AssertSaveStateChange(new[] { changes[0] }, noChanges, baseline, baseline);
+            AssertSaveStateChange(new[] { changes[1] }, conflict, baseline, baseline);
         }
 
         [Test]
@@ -324,6 +379,9 @@ namespace GameDBLibrary.Tests
             var document = GameDBDocument.CreateNew(m_databasePath, "PersistenceTests", false,
                 GameDBFilePairStore.Instance, failingActions);
 
+            var firstChanges = new List<GameDBDocumentStateChange>();
+            document.StateChanged += firstChanges.Add;
+            var firstState = document.GetSessionState();
             var first = document.Save();
             var capturedState = document.CaptureState();
             Assert.That(capturedState.DataImportPending, Is.True);
@@ -336,6 +394,9 @@ namespace GameDBLibrary.Tests
             var retryActions = new RecordingPostSaveActions();
             var restored = GameDBDocument.RestoreState(serializedState,
                 GameDBFilePairStore.Instance, retryActions);
+            var restoredInitial = restored.GetSessionState();
+            var retryChanges = new List<GameDBDocumentStateChange>();
+            restored.StateChanged += retryChanges.Add;
 
             Assert.That(first.Success, Is.False);
             Assert.That(first.Status, Is.EqualTo(GameDBSaveStatus.PostSavePending));
@@ -345,6 +406,12 @@ namespace GameDBLibrary.Tests
             Assert.That(serializedState.DocumentId, Is.EqualTo(document.DocumentId));
             Assert.That(restored.DocumentId, Is.EqualTo(document.DocumentId));
             Assert.That(restored.HasPendingPostSaveWork, Is.True);
+            Assert.That(firstChanges, Has.Count.EqualTo(1));
+            Assert.That(firstChanges[0].Current.HasPendingPostSaveWork, Is.True);
+            Assert.That(firstChanges[0].Current.IsDirty, Is.False);
+            AssertSaveStateChange(firstChanges, first, firstState,
+                document.GetSessionState());
+            Assert.That(restoredInitial.HasPendingPostSaveWork, Is.True);
 
             var retried = restored.Save();
 
@@ -353,6 +420,9 @@ namespace GameDBLibrary.Tests
             Assert.That(restored.HasPendingPostSaveWork, Is.False);
             Assert.That(retryActions.Imports, Is.EqualTo(new[] { m_databasePath }));
             Assert.That(retryActions.Notifications, Is.EqualTo(new[] { "PersistenceTests" }));
+            AssertSaveStateChange(retryChanges, retried, restoredInitial,
+                restored.GetSessionState());
+            Assert.That(retryChanges[0].Current.HasPendingPostSaveWork, Is.False);
         }
 
         [Test]
@@ -382,6 +452,60 @@ namespace GameDBLibrary.Tests
         }
 
         [Test]
+        public void Save_PendingRetryRecoveryLatchesUnknownAndClearsPendingState()
+        {
+            var store = new InMemoryPairStore();
+            var actions = new RecordingPostSaveActions { FailDataImports = 1 };
+            var document = GameDBDocument.CreateNew(m_databasePath, "PersistenceTests", false,
+                store, actions);
+            Assert.That(document.Save().Status, Is.EqualTo(GameDBSaveStatus.PostSavePending));
+            var stateBefore = document.GetSessionState();
+            var artifacts = new[] { "database.interrupted.tmp" };
+            store.NextReadException = new GameDBRecoveryRequiredException(artifacts);
+            var changes = new List<GameDBDocumentStateChange>();
+            document.StateChanged += changes.Add;
+
+            var result = document.Save();
+
+            Assert.That(result.Status, Is.EqualTo(GameDBSaveStatus.PersistenceStateUnknown));
+            Assert.That(result.PostSavePending, Is.False);
+            Assert.That(result.RecoveryArtifacts, Is.EqualTo(artifacts));
+            Assert.That(document.HasPendingPostSaveWork, Is.False);
+            Assert.That(document.GetSessionState().PersistenceStateUnknown, Is.True);
+            AssertSaveStateChange(changes, result, stateBefore,
+                document.GetSessionState());
+        }
+
+        [Test]
+        public void Save_RecoveryArtifactsLatchUnknownStateAndRoundTrip()
+        {
+            var store = new InMemoryPairStore();
+            var document = GameDBDocument.CreateNew(m_databasePath, "PersistenceTests", false,
+                store, new RecordingPostSaveActions());
+            Assert.That(document.Save().Success, Is.True);
+            var artifacts = new[] { "database.interrupted.tmp" };
+            store.NextReadException = new GameDBRecoveryRequiredException(artifacts);
+            var changes = new List<GameDBDocumentStateChange>();
+            document.StateChanged += changes.Add;
+            var stateBefore = document.GetSessionState();
+
+            var result = document.Save();
+            var restored = GameDBDocument.RestoreState(document.CaptureState(),
+                store, new RecordingPostSaveActions());
+            var readsBeforeRetry = store.ReadCount;
+            var retry = restored.Save();
+
+            Assert.That(result.Status, Is.EqualTo(GameDBSaveStatus.PersistenceStateUnknown));
+            Assert.That(result.RecoveryArtifacts, Is.EqualTo(artifacts));
+            AssertSaveStateChange(changes, result, stateBefore,
+                document.GetSessionState());
+            Assert.That(document.GetSessionState().PersistenceStateUnknown, Is.True);
+            Assert.That(restored.GetSessionState().PersistenceStateUnknown, Is.True);
+            Assert.That(retry.Status, Is.EqualTo(GameDBSaveStatus.PersistenceStateUnknown));
+            Assert.That(store.ReadCount, Is.EqualTo(readsBeforeRetry));
+        }
+
+        [Test]
         public void Save_UnknownPersistenceStateIsCapturedAndBlocksRetry()
         {
             var store = new InMemoryPairStore
@@ -396,15 +520,25 @@ namespace GameDBLibrary.Tests
             var document = GameDBDocument.CreateNew(m_databasePath, "PersistenceTests", false,
                 store, new RecordingPostSaveActions());
 
+            var firstChanges = new List<GameDBDocumentStateChange>();
+            document.StateChanged += firstChanges.Add;
+            var firstState = document.GetSessionState();
             var first = document.Save();
             var restored = GameDBDocument.RestoreState(document.CaptureState(),
                 store, new RecordingPostSaveActions());
+            var secondChanges = new List<GameDBDocumentStateChange>();
+            restored.StateChanged += secondChanges.Add;
+            var secondState = restored.GetSessionState();
             var second = restored.Save();
 
             Assert.That(first.Status, Is.EqualTo(GameDBSaveStatus.PersistenceStateUnknown));
             Assert.That(first.RecoveryArtifacts, Is.EqualTo(new[] { "database.tmp" }));
             Assert.That(second.Status, Is.EqualTo(GameDBSaveStatus.PersistenceStateUnknown));
             Assert.That(store.CommitCount, Is.EqualTo(1));
+            AssertSaveStateChange(firstChanges, first, firstState,
+                document.GetSessionState());
+            Assert.That(firstChanges[0].Current.PersistenceStateUnknown, Is.True);
+            AssertSaveStateChange(secondChanges, second, secondState, secondState);
         }
 
         [Test]
@@ -453,6 +587,267 @@ namespace GameDBLibrary.Tests
         }
 
         [Test]
+        public void ProbeDiskState_Unchanged_WhenPairMatchesBaselineAndWorkingCopyIsDirty()
+        {
+            var store = new InMemoryPairStore();
+            var document = GameDBDocument.CreateNew(m_databasePath, "PersistenceTests", false,
+                store, new RecordingPostSaveActions());
+            Assert.That(document.Save().Success, Is.True);
+            Assert.That(document.ApplyTransaction(new GameDBCommand[]
+            {
+                new SetDatabaseMetadataCommand("DirtyWorkingCopy", false)
+            }).Success, Is.True);
+
+            var result = ProbeDiskStateReadOnly(document, store, 1);
+
+            Assert.That(result.State, Is.EqualTo(GameDBDiskState.Unchanged));
+            Assert.That(result.ObservedToken, Is.EqualTo(result.BaselineToken));
+            Assert.That(document.IsDirty, Is.True);
+        }
+
+        [Test]
+        public void ProbeDiskState_Unchanged_ForNeverSavedAbsentPair()
+        {
+            var store = new InMemoryPairStore();
+            var document = GameDBDocument.CreateNew(m_databasePath, "Unsaved", false,
+                store, new RecordingPostSaveActions());
+
+            var result = ProbeDiskStateReadOnly(document, store, 1);
+
+            Assert.That(result.State, Is.EqualTo(GameDBDiskState.Unchanged));
+            Assert.That(result.ObservedToken.HasValue, Is.True);
+            Assert.That(result.ObservedToken.Value.DataExists, Is.False);
+            Assert.That(result.ObservedToken.Value.SchemaExists, Is.False);
+        }
+
+        [Test]
+        public void ProbeDiskState_Modified_WhenCompletePairDiffersFromBaseline()
+        {
+            var store = new InMemoryPairStore();
+            var document = GameDBDocument.CreateNew(m_databasePath, "PersistenceTests", false,
+                store, new RecordingPostSaveActions());
+            Assert.That(document.Save().Success, Is.True);
+            store.SetPair(new byte[] { 1 }, new byte[] { 2 });
+
+            var result = ProbeDiskStateReadOnly(document, store, 1);
+
+            Assert.That(result.State, Is.EqualTo(GameDBDiskState.Modified));
+            Assert.That(result.ObservedToken.HasValue, Is.True);
+            Assert.That(result.ObservedToken.Value, Is.Not.EqualTo(result.BaselineToken));
+            Assert.That(result.ObservedToken.Value.DataExists, Is.True);
+            Assert.That(result.ObservedToken.Value.SchemaExists, Is.True);
+        }
+
+        [TestCase(false, false)]
+        [TestCase(true, false)]
+        [TestCase(false, true)]
+        public void ProbeDiskState_MissingOrIncomplete_WhenPairIsNotComplete(
+            bool dataExists, bool schemaExists)
+        {
+            var store = new InMemoryPairStore();
+            var document = GameDBDocument.CreateNew(m_databasePath, "PersistenceTests", false,
+                store, new RecordingPostSaveActions());
+            Assert.That(document.Save().Success, Is.True);
+            store.SetPair(dataExists ? new byte[] { 1 } : null,
+                schemaExists ? new byte[] { 2 } : null);
+
+            var result = ProbeDiskStateReadOnly(document, store, 1);
+
+            Assert.That(result.State, Is.EqualTo(GameDBDiskState.MissingOrIncomplete));
+            Assert.That(result.ObservedToken.HasValue, Is.True);
+            Assert.That(result.ObservedToken.Value.DataExists, Is.EqualTo(dataExists));
+            Assert.That(result.ObservedToken.Value.SchemaExists, Is.EqualTo(schemaExists));
+        }
+
+        [Test]
+        public void ProbeDiskState_MissingOrIncomplete_WhenRestoredPartialBaselineMatchesDisk()
+        {
+            var store = new InMemoryPairStore();
+            var original = GameDBDocument.CreateNew(m_databasePath, "PersistenceTests", false,
+                store, new RecordingPostSaveActions());
+            var state = original.CaptureState();
+            store.SetPair(new byte[] { 1 }, null);
+            var partialToken = store.Read(m_databasePath).Token;
+            state.BaselineDiskToken = partialToken;
+            var document = GameDBDocument.RestoreState(state,
+                store, new RecordingPostSaveActions());
+
+            var result = ProbeDiskStateReadOnly(document, store, 1);
+
+            Assert.That(result.State, Is.EqualTo(GameDBDiskState.MissingOrIncomplete));
+            Assert.That(result.BaselineToken, Is.EqualTo(partialToken));
+            Assert.That(result.ObservedToken, Is.EqualTo(partialToken));
+        }
+
+        [Test]
+        public void ProbeDiskState_RecoveryRequired_WhenReadFindsArtifacts()
+        {
+            var store = new InMemoryPairStore();
+            var document = GameDBDocument.CreateNew(m_databasePath, "PersistenceTests", false,
+                store, new RecordingPostSaveActions());
+            Assert.That(document.Save().Success, Is.True);
+            store.NextReadException = new GameDBRecoveryRequiredException(
+                new[] { "database.interrupted.tmp" });
+
+            var result = ProbeDiskStateReadOnly(document, store, 1);
+
+            Assert.That(result.State, Is.EqualTo(GameDBDiskState.RecoveryRequired));
+            Assert.That(result.ObservedToken.HasValue, Is.False);
+            Assert.That(result.RecoveryArtifacts,
+                Is.EqualTo(new[] { "database.interrupted.tmp" }));
+        }
+
+        [Test]
+        public void ProbeDiskState_ReadFailed_WhenStoreReadThrows()
+        {
+            var store = new InMemoryPairStore();
+            var document = GameDBDocument.CreateNew(m_databasePath, "PersistenceTests", false,
+                store, new RecordingPostSaveActions());
+            Assert.That(document.Save().Success, Is.True);
+            store.NextReadException = new IOException("probe read failed");
+
+            var result = ProbeDiskStateReadOnly(document, store, 1);
+
+            Assert.That(result.State, Is.EqualTo(GameDBDiskState.ReadFailed));
+            Assert.That(result.Message, Is.EqualTo("probe read failed"));
+            Assert.That(result.ObservedToken.HasValue, Is.False);
+            Assert.That(result.RecoveryArtifacts, Is.Empty);
+        }
+
+        [Test]
+        public void ProbeDiskState_RecoveryRequired_WhenPersistenceStateIsUnknownWithoutReading()
+        {
+            var store = new InMemoryPairStore
+            {
+                NextCommit = new GameDBPairCommitResult
+                {
+                    Status = GameDBPairCommitStatus.StateUnknown,
+                    Message = "ambiguous write"
+                }
+            };
+            var document = GameDBDocument.CreateNew(m_databasePath, "PersistenceTests", false,
+                store, new RecordingPostSaveActions());
+            Assert.That(document.Save().Status,
+                Is.EqualTo(GameDBSaveStatus.PersistenceStateUnknown));
+
+            var result = ProbeDiskStateReadOnly(document, store, 0);
+
+            Assert.That(result.State, Is.EqualTo(GameDBDiskState.RecoveryRequired));
+            Assert.That(result.ObservedToken.HasValue, Is.False);
+            Assert.That(result.Message, Does.Contain("unknown"));
+        }
+
+        [Test]
+        public void ReplaceWorkingState_PreservesPendingPostSaveStateAndBaseline()
+        {
+            var store = new InMemoryPairStore();
+            var actions = new RecordingPostSaveActions { FailDataImports = 1 };
+            var document = GameDBDocument.CreateNew(m_databasePath, "PendingState", false,
+                store, actions);
+            var save = document.Save();
+            Assert.That(save.Status, Is.EqualTo(GameDBSaveStatus.PostSavePending));
+            var savedState = document.SerializeCurrent();
+            var changed = document.ApplyTransaction(new GameDBCommand[]
+            {
+                new SetDatabaseMetadataCommand("ChangedPendingState", false)
+            });
+            Assert.That(changed.Success, Is.True, changed.Message);
+            var before = document.CaptureState();
+
+            var result = document.ReplaceWorkingState(savedState.DataJson, savedState.SchemaJson,
+                document.CurrentRevision, GameDBDocumentChangeOrigin.Undo);
+            var after = document.CaptureState();
+
+            Assert.That(result.Success, Is.True, result.Message);
+            Assert.That(after.DocumentId, Is.EqualTo(before.DocumentId));
+            Assert.That(after.AssetPath, Is.EqualTo(before.AssetPath));
+            Assert.That(after.BaselineRevision, Is.EqualTo(before.BaselineRevision));
+            Assert.That(after.BaselineDiskToken, Is.EqualTo(before.BaselineDiskToken));
+            Assert.That(after.DataImportPending, Is.EqualTo(before.DataImportPending));
+            Assert.That(after.SchemaImportPending, Is.EqualTo(before.SchemaImportPending));
+            Assert.That(after.CallbackPending, Is.EqualTo(before.CallbackPending));
+            Assert.That(after.PendingScopeName, Is.EqualTo(before.PendingScopeName));
+            Assert.That(after.PersistenceStateUnknown,
+                Is.EqualTo(before.PersistenceStateUnknown));
+            Assert.That(document.HasPendingPostSaveWork, Is.True);
+            Assert.That(after.WasDirty, Is.False);
+        }
+
+        [Test]
+        public void ReplaceWorkingState_PreservesUnknownPersistenceStateAndBaseline()
+        {
+            var store = new InMemoryPairStore
+            {
+                NextCommit = new GameDBPairCommitResult
+                {
+                    Status = GameDBPairCommitStatus.StateUnknown,
+                    Message = "ambiguous write"
+                }
+            };
+            var document = GameDBDocument.CreateNew(m_databasePath, "UnknownState", false,
+                store, new RecordingPostSaveActions());
+            var savedState = document.SerializeCurrent();
+            Assert.That(document.Save().Status,
+                Is.EqualTo(GameDBSaveStatus.PersistenceStateUnknown));
+            var changed = document.ApplyTransaction(new GameDBCommand[]
+            {
+                new SetDatabaseMetadataCommand("ChangedUnknownState", false)
+            });
+            Assert.That(changed.Success, Is.True, changed.Message);
+            var before = document.CaptureState();
+
+            var result = document.ReplaceWorkingState(savedState.DataJson, savedState.SchemaJson,
+                document.CurrentRevision, GameDBDocumentChangeOrigin.Recovery);
+            var after = document.CaptureState();
+
+            Assert.That(result.Success, Is.True, result.Message);
+            Assert.That(after.DocumentId, Is.EqualTo(before.DocumentId));
+            Assert.That(after.AssetPath, Is.EqualTo(before.AssetPath));
+            Assert.That(after.BaselineRevision, Is.EqualTo(before.BaselineRevision));
+            Assert.That(after.BaselineDiskToken, Is.EqualTo(before.BaselineDiskToken));
+            Assert.That(after.PersistenceStateUnknown, Is.True);
+            Assert.That(after.DataImportPending, Is.EqualTo(before.DataImportPending));
+            Assert.That(after.SchemaImportPending, Is.EqualTo(before.SchemaImportPending));
+            Assert.That(after.CallbackPending, Is.EqualTo(before.CallbackPending));
+            Assert.That(after.PendingScopeName, Is.EqualTo(before.PendingScopeName));
+            Assert.That(after.WasDirty, Is.EqualTo(before.WasDirty));
+            Assert.That(document.Save().Status,
+                Is.EqualTo(GameDBSaveStatus.PersistenceStateUnknown));
+            Assert.That(store.CommitCount, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void ReplaceWorkingState_AfterSavePreservesNewBaselineAndMakesOldContentDirty()
+        {
+            var store = new InMemoryPairStore();
+            var document = GameDBDocument.CreateNew(m_databasePath, "First", false,
+                store, new RecordingPostSaveActions());
+            Assert.That(document.Save().Success, Is.True);
+            var oldContent = document.SerializeCurrent();
+            var changed = document.ApplyTransaction(new GameDBCommand[]
+            {
+                new SetDatabaseMetadataCommand("Second", false)
+            });
+            Assert.That(changed.Success, Is.True, changed.Message);
+            Assert.That(document.Save().Success, Is.True);
+            var savedBaseline = document.CaptureState();
+
+            var result = document.ReplaceWorkingState(oldContent.DataJson, oldContent.SchemaJson,
+                document.CurrentRevision, GameDBDocumentChangeOrigin.Undo);
+            var restored = document.CaptureState();
+
+            Assert.That(result.Success, Is.True, result.Message);
+            Assert.That(result.AttemptedSnapshot.ScopeName, Is.EqualTo("First"));
+            Assert.That(restored.BaselineRevision, Is.EqualTo(savedBaseline.BaselineRevision));
+            Assert.That(restored.BaselineDiskToken,
+                Is.EqualTo(savedBaseline.BaselineDiskToken));
+            Assert.That(restored.WasDirty, Is.True);
+            Assert.That(document.IsDirty, Is.True);
+            Assert.That(document.CurrentRevision, Is.EqualTo(oldContent.Revision));
+            Assert.That(document.BaselineRevision, Is.Not.EqualTo(oldContent.Revision));
+        }
+
+        [Test]
         public void LegacyCreate_UsesSharedPersistenceAndFilenameScope()
         {
             var notifications = new List<string>();
@@ -498,19 +893,81 @@ namespace GameDBLibrary.Tests
         }
 
         [Test]
+        public void Save_ReentrantAttemptsFromCommitAndStateSubscriberAreRejected()
+        {
+            var store = new InMemoryPairStore();
+            var actions = new RecordingPostSaveActions();
+            var document = GameDBDocument.CreateNew(m_databasePath, "PersistenceTests", false,
+                store, actions);
+            GameDBSaveOutcome commitNested = null;
+            GameDBSaveOutcome subscriberNested = null;
+            var stateNotifications = 0;
+            store.OnCommit = () => commitNested = document.Save();
+            document.StateChanged += change =>
+            {
+                stateNotifications++;
+                subscriberNested = document.Save();
+            };
+
+            var saved = document.Save();
+
+            Assert.That(saved.Success, Is.True, saved.Message);
+            Assert.That(commitNested.Status, Is.EqualTo(GameDBSaveStatus.SaveInProgress));
+            Assert.That(subscriberNested.Status, Is.EqualTo(GameDBSaveStatus.SaveInProgress));
+            Assert.That(store.CommitCount, Is.EqualTo(1));
+            Assert.That(actions.Imports, Has.Count.EqualTo(2));
+            Assert.That(actions.Notifications, Has.Count.EqualTo(1));
+            Assert.That(stateNotifications, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void Save_ReentrantAttemptsFromPostSaveCallbacksAreRejected()
+        {
+            var store = new InMemoryPairStore();
+            var actions = new RecordingPostSaveActions();
+            var document = GameDBDocument.CreateNew(m_databasePath, "PersistenceTests", false,
+                store, actions);
+            var nested = new List<GameDBSaveOutcome>();
+            actions.OnImport = _ => nested.Add(document.Save());
+            actions.OnNotify = _ => nested.Add(document.Save());
+
+            var saved = document.Save();
+
+            Assert.That(saved.Success, Is.True, saved.Message);
+            Assert.That(nested, Has.Count.EqualTo(3));
+            Assert.That(nested.Select(result => result.Status),
+                Is.All.EqualTo(GameDBSaveStatus.SaveInProgress));
+            Assert.That(store.CommitCount, Is.EqualTo(1));
+            Assert.That(actions.Imports, Has.Count.EqualTo(2));
+            Assert.That(actions.Notifications, Has.Count.EqualTo(1));
+        }
+
+        [Test]
         public void Save_BindsBaselineToWrittenRevisionWhenDocumentAdvancesDuringCommit()
         {
             var store = new InMemoryPairStore();
             var document = GameDBDocument.CreateNew(m_databasePath, "PersistenceTests", false,
                 store, new RecordingPostSaveActions());
             var revisionWritten = document.CurrentRevision;
+            var observed = new List<GameDBDocumentStateChange>();
+            var saveGateAvailable = false;
+            GameDBTransactionResult transaction = null;
+            document.StateChanged += change =>
+            {
+                observed.Add(change);
+                if (change.Origin == GameDBDocumentStateChangeOrigin.Save)
+                {
+                    saveGateAvailable = document.ProbeDiskState().State
+                        == GameDBDiskState.Unchanged;
+                }
+            };
             store.OnCommit = () =>
             {
-                var result = document.ApplyTransaction(new GameDBCommand[]
+                transaction = document.ApplyTransaction(new GameDBCommand[]
                 {
                     new AddTableCommand("Later", KeyType.@string, null)
                 });
-                Assert.That(result.Success, Is.True, result.Message);
+                Assert.That(transaction.Success, Is.True, transaction.Message);
             };
 
             var saved = document.Save();
@@ -521,6 +978,21 @@ namespace GameDBLibrary.Tests
             Assert.That(saved.RevisionCurrent, Is.Not.EqualTo(revisionWritten));
             Assert.That(document.BaselineRevision, Is.EqualTo(revisionWritten));
             Assert.That(document.IsDirty, Is.True);
+            Assert.That(observed.Select(change => change.Origin), Is.EqualTo(new[]
+            {
+                GameDBDocumentStateChangeOrigin.Transaction,
+                GameDBDocumentStateChangeOrigin.Save
+            }));
+            Assert.That(observed[1].Previous, Is.EqualTo(observed[0].Current));
+            Assert.That(observed[1].Current.CurrentRevision,
+                Is.EqualTo(transaction.AttemptedRevision));
+            Assert.That(observed[1].Current.BaselineRevision, Is.EqualTo(revisionWritten));
+            Assert.That(observed[1].Current.IsDirty, Is.True);
+            Assert.That(observed[1].Current.HasPendingPostSaveWork, Is.False);
+            Assert.That(transaction.NotificationErrorsDeferred, Is.True);
+            Assert.That(transaction.NotificationErrors, Is.Empty);
+            Assert.That(saved.NotificationErrorsDeferred, Is.False);
+            Assert.That(saveGateAvailable, Is.True);
         }
 
         private GameDBDocument CreateUnityObjectDocument(string guid, string path)
@@ -601,6 +1073,22 @@ namespace GameDBLibrary.Tests
             Assert.That(wire["path"], Is.EqualTo(expectedPath));
         }
 
+        private static void AssertSaveStateChange(
+            IReadOnlyCollection<GameDBDocumentStateChange> changes,
+            GameDBSaveOutcome outcome, GameDBDocumentSessionState expectedPrevious,
+            GameDBDocumentSessionState expectedCurrent)
+        {
+            Assert.That(changes.Count, Is.EqualTo(1));
+            var change = changes.Single();
+            Assert.That(change.Origin, Is.EqualTo(GameDBDocumentStateChangeOrigin.Save));
+            Assert.That(change.SaveStatus, Is.EqualTo(outcome.Status));
+            Assert.That(change.Message, Is.EqualTo(outcome.Message));
+            Assert.That(change.FilesCommitted, Is.EqualTo(outcome.FilesCommitted));
+            Assert.That(change.RecoveryArtifacts, Is.EqualTo(outcome.RecoveryArtifacts));
+            Assert.That(change.Previous, Is.EqualTo(expectedPrevious));
+            Assert.That(change.Current, Is.EqualTo(expectedCurrent));
+        }
+
         private GameDBDocument CreateSavedDocument()
         {
             var document = GameDBDocument.CreateNew(m_databasePath, "PersistenceTests", false,
@@ -609,11 +1097,48 @@ namespace GameDBLibrary.Tests
             return document;
         }
 
+        private static GameDBDiskStateResult ProbeDiskStateReadOnly(
+            GameDBDocument document, InMemoryPairStore store, int expectedReads)
+        {
+            var stateBefore = JsonUtility.ToJson(document.CaptureState());
+            var currentRevisionBefore = document.CurrentRevision;
+            var baselineRevisionBefore = document.BaselineRevision;
+            var dirtyBefore = document.IsDirty;
+            var pendingBefore = document.HasPendingPostSaveWork;
+            var commitsBefore = store.CommitCount;
+            var readsBefore = store.ReadCount;
+            var notifications = 0;
+            Action<GameDBDocumentChange> onChanged = _ => notifications++;
+            document.Changed += onChanged;
+
+            GameDBDiskStateResult result;
+            try
+            {
+                result = document.ProbeDiskState();
+            }
+            finally
+            {
+                document.Changed -= onChanged;
+            }
+
+            Assert.That(JsonUtility.ToJson(document.CaptureState()), Is.EqualTo(stateBefore));
+            Assert.That(document.CurrentRevision, Is.EqualTo(currentRevisionBefore));
+            Assert.That(document.BaselineRevision, Is.EqualTo(baselineRevisionBefore));
+            Assert.That(document.IsDirty, Is.EqualTo(dirtyBefore));
+            Assert.That(document.HasPendingPostSaveWork, Is.EqualTo(pendingBefore));
+            Assert.That(store.CommitCount, Is.EqualTo(commitsBefore));
+            Assert.That(store.ReadCount, Is.EqualTo(readsBefore + expectedReads));
+            Assert.That(notifications, Is.Zero);
+            return result;
+        }
+
         private sealed class RecordingPostSaveActions : IGameDBPostSaveActions
         {
             internal List<string> Imports { get; } = new List<string>();
             internal List<string> Notifications { get; } = new List<string>();
             internal int FailDataImports { get; set; }
+            internal Action<string> OnImport { get; set; }
+            internal Action<string> OnNotify { get; set; }
 
             public void Import(string assetPath)
             {
@@ -625,11 +1150,13 @@ namespace GameDBLibrary.Tests
                 }
 
                 Imports.Add(assetPath);
+                OnImport?.Invoke(assetPath);
             }
 
             public void Notify(string scopeName)
             {
                 Notifications.Add(scopeName);
+                OnNotify?.Invoke(scopeName);
             }
         }
 
@@ -639,8 +1166,12 @@ namespace GameDBLibrary.Tests
             private byte[] m_schemaBytes;
 
             internal GameDBPairCommitResult NextCommit { get; set; }
+            internal Exception NextReadException { get; set; }
             internal Action OnCommit { get; set; }
             internal int CommitCount { get; private set; }
+            internal int ReadCount { get; private set; }
+
+            public StringComparer LockKeyComparer => StringComparer.Ordinal;
 
             public GameDBResolvedPath Resolve(string assetPath)
             {
@@ -652,8 +1183,23 @@ namespace GameDBLibrary.Tests
 
             public GameDBPairRead Read(string assetPath)
             {
-                return new GameDBPairRead(Resolve(assetPath), m_dataBytes, m_schemaBytes,
+                ReadCount++;
+                if (NextReadException != null)
+                {
+                    var exception = NextReadException;
+                    NextReadException = null;
+                    throw exception;
+                }
+
+                return new GameDBPairRead(Resolve(assetPath),
+                    m_dataBytes?.ToArray(), m_schemaBytes?.ToArray(),
                     Token(m_dataBytes, m_schemaBytes));
+            }
+
+            internal void SetPair(byte[] dataBytes, byte[] schemaBytes)
+            {
+                m_dataBytes = dataBytes?.ToArray();
+                m_schemaBytes = schemaBytes?.ToArray();
             }
 
             public GameDBPairCommitResult Commit(string assetPath, GameDBDiskToken expectedToken,

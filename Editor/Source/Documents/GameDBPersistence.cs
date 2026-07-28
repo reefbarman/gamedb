@@ -124,6 +124,7 @@ namespace GameDBEditorLibrary.Documents
 
     internal interface IGameDBPairStore
     {
+        StringComparer LockKeyComparer { get; }
         GameDBResolvedPath Resolve(string assetPath);
         GameDBPairRead Read(string assetPath);
         GameDBPairCommitResult Commit(string assetPath, GameDBDiskToken expectedToken,
@@ -138,6 +139,8 @@ namespace GameDBEditorLibrary.Documents
         private static readonly object PathLocksGate = new object();
 
         internal static GameDBFilePairStore Instance { get; } = new GameDBFilePairStore();
+
+        public StringComparer LockKeyComparer => PathKeyComparer();
 
         private GameDBFilePairStore()
         {
@@ -158,10 +161,10 @@ namespace GameDBEditorLibrary.Documents
                 throw new ArgumentException("DatabasePath must identify a data .json file, not a schema file.");
             }
 
-            var relativePath = normalized.Substring("Assets/".Length);
+            var inputRelativePath = normalized.Substring("Assets/".Length);
             var assetsRoot = Path.GetFullPath(Application.dataPath)
                 .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-            var absolutePath = Path.GetFullPath(Path.Combine(assetsRoot, relativePath))
+            var absolutePath = Path.GetFullPath(Path.Combine(assetsRoot, inputRelativePath))
                 .Normalize(NormalizationForm.FormC);
             var prefix = assetsRoot + Path.DirectorySeparatorChar;
             if (!absolutePath.StartsWith(prefix, PathComparison()))
@@ -171,8 +174,9 @@ namespace GameDBEditorLibrary.Documents
 
             RejectExistingLinks(assetsRoot, absolutePath);
             var schemaAbsolutePath = Path.ChangeExtension(absolutePath, ".schema.json");
-            var canonicalAssetPath = "Assets/" + absolutePath.Substring(assetsRoot.Length + 1)
+            var relativePath = absolutePath.Substring(assetsRoot.Length + 1)
                 .Replace(Path.DirectorySeparatorChar, '/');
+            var canonicalAssetPath = "Assets/" + relativePath;
             var schemaAssetPath = Path.ChangeExtension(canonicalAssetPath, ".schema.json");
             var lockKey = absolutePath.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar)
                 .Normalize(NormalizationForm.FormC);
@@ -503,7 +507,7 @@ namespace GameDBEditorLibrary.Documents
                 : StringComparison.Ordinal;
         }
 
-        private static StringComparer PathKeyComparer()
+        internal static StringComparer PathKeyComparer()
         {
             return IsCaseInsensitivePlatform()
                 ? StringComparer.OrdinalIgnoreCase

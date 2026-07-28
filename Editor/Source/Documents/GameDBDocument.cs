@@ -9,6 +9,7 @@ namespace GameDBEditorLibrary.Documents
     internal sealed class GameDBTransactionOptions
     {
         internal string ExpectedRevision { get; set; }
+        internal IReadOnlyCollection<GameDBCommandKind> AllowedOperations { get; set; }
         internal IReadOnlyCollection<GameDBCommandKind> AllowedDestructiveOperations { get; set; }
             = Array.Empty<GameDBCommandKind>();
     }
@@ -46,7 +47,45 @@ namespace GameDBEditorLibrary.Documents
             = Array.Empty<GameDBCommandKind>();
         internal IReadOnlyList<string> NotificationErrors { get; set; }
             = Array.Empty<string>();
+        internal bool NotificationErrorsDeferred { get; set; }
         internal IReadOnlyList<string> AttemptedMetadataErrors { get; set; }
+            = Array.Empty<string>();
+    }
+
+    internal enum GameDBDocumentChangeOrigin
+    {
+        Transaction,
+        Undo,
+        Redo,
+        Recovery,
+        RuntimeImport
+    }
+
+    internal enum GameDBWorkingStateFailureKind
+    {
+        None,
+        InvalidRequest,
+        RevisionConflict,
+        ImportFailed,
+        SerializationFailed,
+        ValidationFailed,
+        ValidationThrew,
+        SnapshotFailed
+    }
+
+    internal sealed class GameDBWorkingStateResult
+    {
+        internal bool Success { get; set; }
+        internal GameDBWorkingStateFailureKind FailureKind { get; set; }
+        internal string Message { get; set; }
+        internal string RevisionBefore { get; set; }
+        internal string RevisionAfter { get; set; }
+        internal string AttemptedRevision { get; set; }
+        internal GameDBSerializedState AttemptedState { get; set; }
+        internal GameDBSnapshot AttemptedSnapshot { get; set; }
+        internal IReadOnlyList<GameDBValidationIssue> Issues { get; set; }
+            = Array.Empty<GameDBValidationIssue>();
+        internal IReadOnlyList<string> NotificationErrors { get; set; }
             = Array.Empty<string>();
     }
 
@@ -55,14 +94,17 @@ namespace GameDBEditorLibrary.Documents
         internal string DocumentId { get; }
         internal string RevisionBefore { get; }
         internal string RevisionAfter { get; }
+        internal GameDBDocumentChangeOrigin Origin { get; }
         internal IReadOnlyList<GameDBCommandKind> Commands { get; }
 
         internal GameDBDocumentChange(string documentId, string revisionBefore,
-            string revisionAfter, IReadOnlyList<GameDBCommandKind> commands)
+            string revisionAfter, IReadOnlyList<GameDBCommandKind> commands,
+            GameDBDocumentChangeOrigin origin = GameDBDocumentChangeOrigin.Transaction)
         {
             DocumentId = documentId;
             RevisionBefore = revisionBefore;
             RevisionAfter = revisionAfter;
+            Origin = origin;
             Commands = commands;
         }
     }
@@ -82,13 +124,19 @@ namespace GameDBEditorLibrary.Documents
         private string m_currentRevision;
         private GameDBDiskToken m_baselineDiskToken;
         private GameDBPostSaveState m_pendingPostSave;
+        private GameDBDocumentHistory m_history;
         private bool m_persistenceStateUnknown;
         private bool m_drainingChanges;
+        private bool m_saveInProgress;
+        private int m_notificationDeferralDepth;
+        private GameDBDocumentSessionState m_lastQueuedSessionState;
         private Action<GameDBDocumentChange> m_changed;
+        private Action<GameDBDocumentStateChange> m_stateChanged;
 
         internal string DocumentId { get; }
         internal string AssetPath { get; }
         internal string SchemaAssetPath { get; }
+        internal IGameDBPairStore PairStore => m_pairStore;
 
         internal string BaselineRevision
         {
@@ -149,6 +197,24 @@ namespace GameDBEditorLibrary.Documents
                 lock (m_gate)
                 {
                     m_changed -= value;
+                }
+            }
+        }
+
+        internal event Action<GameDBDocumentStateChange> StateChanged
+        {
+            add
+            {
+                lock (m_gate)
+                {
+                    m_stateChanged += value;
+                }
+            }
+            remove
+            {
+                lock (m_gate)
+                {
+                    m_stateChanged -= value;
                 }
             }
         }
@@ -426,6 +492,57 @@ namespace GameDBEditorLibrary.Documents
             }
         }
 
+        internal GameDBDocumentSessionState GetSessionState()
+        {
+            lock (m_gate)
+            {
+                return GetSessionStateLocked();
+            }
+        }
+
+        internal void EnableHistory(int maximumEntries = GameDBDocumentHistory.DefaultMaximumEntries)
+        {
+            lock (m_gate)
+            {
+                if (m_history == null)
+                {
+                    m_history = new GameDBDocumentHistory(
+                        GameDBModelCodec.Serialize(m_model), maximumEntries);
+                }
+            }
+        }
+
+        internal void ResetHistory()
+        {
+            lock (m_gate)
+            {
+                if (m_history != null)
+                {
+                    m_history = new GameDBDocumentHistory(
+                        GameDBModelCodec.Serialize(m_model));
+                }
+            }
+        }
+
+        internal GameDBHistoryState GetHistoryState()
+        {
+            lock (m_gate)
+            {
+                return m_history?.GetState()
+                    ?? new GameDBHistoryState(false, false, null, null);
+            }
+        }
+
+        internal GameDBHistoryResult Undo()
+        {
+            return MoveHistory(false);
+        }
+
+        internal GameDBHistoryResult Redo()
+        {
+            return MoveHistory(true);
+        }
+
         internal GameDBDocumentState CaptureState()
         {
             lock (m_gate)
@@ -450,12 +567,460 @@ namespace GameDBEditorLibrary.Documents
             }
         }
 
-        internal GameDBSaveOutcome Save(GameDBSaveOptions options = null)
+        internal GameDBWorkingStateResult ReplaceWorkingState(string dataJson,
+            string schemaJson, string expectedRevision, GameDBDocumentChangeOrigin origin)
+        {
+            return ReplaceWorkingState(dataJson, schemaJson, expectedRevision, origin, false);
+        }
+
+        private GameDBWorkingStateResult ReplaceWorkingState(string dataJson,
+            string schemaJson, string expectedRevision, GameDBDocumentChangeOrigin origin,
+            bool moveHistory)
+        {
+            GameDBWorkingStateResult result;
+            GameDBDocumentChange change = null;
+            var drainChanges = false;
+
+            lock (m_gate)
+            {
+                var stateBefore = GetSessionStateLocked();
+                var revisionBefore = stateBefore.CurrentRevision;
+                if (!Enum.IsDefined(typeof(GameDBDocumentChangeOrigin), origin)
+                    || origin == GameDBDocumentChangeOrigin.Transaction)
+                {
+                    return WorkingStateFailure(GameDBWorkingStateFailureKind.InvalidRequest,
+                        "Working-state replacement requires a valid non-transaction origin.", revisionBefore);
+                }
+
+                if (dataJson == null || schemaJson == null)
+                {
+                    return WorkingStateFailure(GameDBWorkingStateFailureKind.InvalidRequest,
+                        "Data and schema JSON are required.", revisionBefore);
+                }
+
+                if (string.IsNullOrWhiteSpace(expectedRevision))
+                {
+                    return WorkingStateFailure(GameDBWorkingStateFailureKind.InvalidRequest,
+                        "Expected revision is required.", revisionBefore);
+                }
+
+                if (!string.Equals(expectedRevision, revisionBefore,
+                    StringComparison.OrdinalIgnoreCase))
+                {
+                    return WorkingStateFailure(GameDBWorkingStateFailureKind.RevisionConflict,
+                        $"Revision conflict. Expected {expectedRevision}, but the document is {revisionBefore}.",
+                        revisionBefore);
+                }
+
+                GameDB candidate;
+                try
+                {
+                    candidate = GameDBModelCodec.Import(dataJson, schemaJson, m_model.LoadedPath);
+                }
+                catch (Exception exception)
+                {
+                    return WorkingStateFailure(GameDBWorkingStateFailureKind.ImportFailed,
+                        exception.Message, revisionBefore);
+                }
+
+                GameDBSerializedState state;
+                try
+                {
+                    state = GameDBModelCodec.Serialize(candidate);
+                }
+                catch (Exception exception)
+                {
+                    return WorkingStateFailure(GameDBWorkingStateFailureKind.SerializationFailed,
+                        exception.Message, revisionBefore);
+                }
+
+                List<GameDBValidationIssue> issues;
+                try
+                {
+                    issues = GameDBModelOperations.Validate(candidate);
+                }
+                catch (Exception exception)
+                {
+                    return WorkingStateFailure(GameDBWorkingStateFailureKind.ValidationThrew,
+                        exception.Message, revisionBefore, state);
+                }
+
+                GameDBSnapshot snapshot;
+                try
+                {
+                    snapshot = GameDBModelCodec.CreateSnapshot(AssetPath, SchemaAssetPath, candidate);
+                }
+                catch (Exception exception)
+                {
+                    return WorkingStateFailure(GameDBWorkingStateFailureKind.SnapshotFailed,
+                        exception.Message, revisionBefore, state, issues);
+                }
+
+                if (issues.Count > 0)
+                {
+                    return new GameDBWorkingStateResult
+                    {
+                        Success = false,
+                        FailureKind = GameDBWorkingStateFailureKind.ValidationFailed,
+                        Message = $"Working-state replacement blocked by {issues.Count} validation issue(s).",
+                        RevisionBefore = revisionBefore,
+                        RevisionAfter = revisionBefore,
+                        AttemptedRevision = state.Revision,
+                        AttemptedState = state,
+                        AttemptedSnapshot = snapshot,
+                        Issues = issues.AsReadOnly()
+                    };
+                }
+
+                result = new GameDBWorkingStateResult
+                {
+                    Success = true,
+                    FailureKind = GameDBWorkingStateFailureKind.None,
+                    RevisionBefore = revisionBefore,
+                    RevisionAfter = state.Revision,
+                    AttemptedRevision = state.Revision,
+                    AttemptedState = state,
+                    AttemptedSnapshot = snapshot,
+                    Issues = issues.AsReadOnly()
+                };
+
+                var historyMove = moveHistory;
+                var redo = origin == GameDBDocumentChangeOrigin.Redo;
+                if (historyMove && (m_history == null
+                    || !m_history.CanMove(redo, state.Revision)))
+                {
+                    return WorkingStateFailure(GameDBWorkingStateFailureKind.RevisionConflict,
+                        "Document history changed before publication.", revisionBefore, state,
+                        issues, snapshot);
+                }
+                if (!historyMove && string.Equals(revisionBefore, state.Revision,
+                    StringComparison.OrdinalIgnoreCase))
+                {
+                    if (origin == GameDBDocumentChangeOrigin.RuntimeImport
+                        && m_history != null)
+                    {
+                        m_history = new GameDBDocumentHistory(state);
+                    }
+                    return result;
+                }
+
+                m_model = candidate;
+                m_currentRevision = state.Revision;
+                if (origin == GameDBDocumentChangeOrigin.RuntimeImport && m_history != null)
+                {
+                    m_history = new GameDBDocumentHistory(state);
+                }
+                else if (historyMove)
+                {
+                    m_history.CommitMove(redo);
+                }
+                change = new GameDBDocumentChange(DocumentId, revisionBefore,
+                    state.Revision, Array.Empty<GameDBCommandKind>(), origin);
+                var stateChange = new GameDBDocumentStateChange(MapStateOrigin(origin),
+                    GetQueuedPreviousStateLocked(stateBefore), GetSessionStateLocked());
+                EnqueueChangeLocked(new PendingChange(change, stateChange,
+                    errors => result.NotificationErrors = errors));
+                if (!m_drainingChanges && m_notificationDeferralDepth == 0)
+                {
+                    m_drainingChanges = true;
+                    drainChanges = true;
+                }
+            }
+
+            if (drainChanges)
+            {
+                DrainChanges();
+            }
+
+            return result;
+        }
+
+        internal GameDBDiskRefreshResult RefreshFromDisk(string expectedRevision,
+            bool discardWorkingCopy)
         {
             lock (m_saveGate)
             {
-                return SaveLocked(options ?? new GameDBSaveOptions());
+                GameDBDocumentSessionState before;
+                lock (m_gate)
+                {
+                    before = GetSessionStateLocked();
+                    if (!string.Equals(expectedRevision, before.CurrentRevision,
+                        StringComparison.OrdinalIgnoreCase))
+                    {
+                        return DiskRefresh(GameDBDiskRefreshStatus.RevisionConflict, false,
+                            "The document changed before it could be reloaded.");
+                    }
+                    if (before.HasPendingPostSaveWork)
+                    {
+                        return DiskRefresh(GameDBDiskRefreshStatus.PendingPostSave, false,
+                            "Pending post-save work must complete before reloading from disk.");
+                    }
+                    if (before.PersistenceStateUnknown && !discardWorkingCopy)
+                    {
+                        return DiskRefresh(GameDBDiskRefreshStatus.RecoveryRequired, false,
+                            "Persistence state is unknown; confirm Reload From Disk to recover.");
+                    }
+                }
+
+                GameDBPairRead pair;
+                try
+                {
+                    pair = m_pairStore.Read(AssetPath);
+                }
+                catch (GameDBRecoveryRequiredException exception)
+                {
+                    var failed = DiskRefresh(GameDBDiskRefreshStatus.RecoveryRequired, false,
+                        exception.Message);
+                    failed.RecoveryArtifacts = exception.Artifacts;
+                    return failed;
+                }
+                catch (Exception exception)
+                {
+                    return DiskRefresh(GameDBDiskRefreshStatus.ReadFailed, false,
+                        exception.Message);
+                }
+                if (!pair.Token.DataExists || !pair.Token.SchemaExists)
+                {
+                    return DiskRefresh(GameDBDiskRefreshStatus.MissingOrIncomplete, false,
+                        "Database data and schema files are missing or incomplete.", pair.Token);
+                }
+
+                GameDB candidate;
+                GameDBSerializedState state;
+                GameDBSnapshot snapshot;
+                try
+                {
+                    candidate = GameDBModelCodec.Import(
+                        GameDBFilePairStore.Decode(pair.DataBytes),
+                        GameDBFilePairStore.Decode(pair.SchemaBytes), pair.Path.RelativePath);
+                    state = GameDBModelCodec.Serialize(candidate);
+                    var issues = GameDBModelOperations.Validate(candidate);
+                    if (issues.Count > 0)
+                    {
+                        return DiskRefresh(GameDBDiskRefreshStatus.InvalidContent, false,
+                            $"Disk reload blocked by {issues.Count} validation issue(s).", pair.Token);
+                    }
+                    snapshot = GameDBModelCodec.CreateSnapshot(
+                        AssetPath, SchemaAssetPath, candidate);
+                }
+                catch (Exception exception)
+                {
+                    return DiskRefresh(GameDBDiskRefreshStatus.InvalidContent, false,
+                        exception.Message, pair.Token);
+                }
+
+                GameDBDocumentChange change = null;
+                GameDBDiskRefreshResult result = null;
+                var drainChanges = false;
+                lock (m_gate)
+                {
+                    var current = GetSessionStateLocked();
+                    if (!string.Equals(expectedRevision, current.CurrentRevision,
+                        StringComparison.OrdinalIgnoreCase))
+                    {
+                        return DiskRefresh(GameDBDiskRefreshStatus.RevisionConflict, false,
+                            "The document changed before disk reload publication.", pair.Token);
+                    }
+                    if (!discardWorkingCopy && current.IsDirty && pair.Token != m_baselineDiskToken)
+                    {
+                        return DiskRefresh(GameDBDiskRefreshStatus.Conflict, false,
+                            "Database files changed while this document has unsaved changes.",
+                            pair.Token);
+                    }
+                    if (!discardWorkingCopy && pair.Token == m_baselineDiskToken)
+                    {
+                        return DiskRefresh(GameDBDiskRefreshStatus.NoChange, true,
+                            "Database files match the document baseline.", pair.Token);
+                    }
+
+                    var revisionBefore = current.CurrentRevision;
+                    m_model = candidate;
+                    m_currentRevision = state.Revision;
+                    m_baselineRevision = state.Revision;
+                    m_baselineDiskToken = pair.Token;
+                    m_pendingPostSave = null;
+                    m_persistenceStateUnknown = false;
+                    if (m_history != null)
+                    {
+                        if (string.Equals(revisionBefore, state.Revision,
+                            StringComparison.OrdinalIgnoreCase) && !current.IsDirty)
+                        {
+                            m_history.SynchronizeCurrent(state);
+                        }
+                        else
+                        {
+                            m_history = new GameDBDocumentHistory(state);
+                        }
+                    }
+                    change = new GameDBDocumentChange(DocumentId, revisionBefore,
+                        state.Revision, Array.Empty<GameDBCommandKind>(),
+                        GameDBDocumentChangeOrigin.Recovery);
+                    var stateChange = new GameDBDocumentStateChange(
+                        GameDBDocumentStateChangeOrigin.Recovery,
+                        GetQueuedPreviousStateLocked(before), GetSessionStateLocked());
+                    result = DiskRefresh(GameDBDiskRefreshStatus.Refreshed, true,
+                        "Database reloaded from disk.", pair.Token, snapshot);
+                    EnqueueChangeLocked(new PendingChange(change, stateChange,
+                        errors => result.NotificationErrors = errors));
+                    if (!m_drainingChanges && m_notificationDeferralDepth == 0)
+                    {
+                        m_drainingChanges = true;
+                        drainChanges = true;
+                    }
+                }
+                if (drainChanges)
+                {
+                    DrainChanges();
+                }
+                return result;
             }
+        }
+
+        internal GameDBDiskStateResult ProbeDiskState()
+        {
+            lock (m_saveGate)
+            {
+                GameDBDiskToken baselineToken;
+                lock (m_gate)
+                {
+                    baselineToken = m_baselineDiskToken;
+                    if (m_persistenceStateUnknown)
+                    {
+                        return new GameDBDiskStateResult
+                        {
+                            State = GameDBDiskState.RecoveryRequired,
+                            Message = "Persistence state is unknown; reload or recover the database.",
+                            BaselineToken = baselineToken
+                        };
+                    }
+                }
+
+                GameDBPairRead pair;
+                try
+                {
+                    pair = m_pairStore.Read(AssetPath);
+                }
+                catch (GameDBRecoveryRequiredException exception)
+                {
+                    return new GameDBDiskStateResult
+                    {
+                        State = GameDBDiskState.RecoveryRequired,
+                        Message = exception.Message,
+                        BaselineToken = baselineToken,
+                        RecoveryArtifacts = exception.Artifacts
+                    };
+                }
+                catch (Exception exception)
+                {
+                    return new GameDBDiskStateResult
+                    {
+                        State = GameDBDiskState.ReadFailed,
+                        Message = exception.Message,
+                        BaselineToken = baselineToken
+                    };
+                }
+
+                var pairIsComplete = pair.Token.DataExists && pair.Token.SchemaExists;
+                var pairIsAbsent = !pair.Token.DataExists && !pair.Token.SchemaExists;
+                if (pair.Token == baselineToken && (pairIsComplete || pairIsAbsent))
+                {
+                    return new GameDBDiskStateResult
+                    {
+                        State = GameDBDiskState.Unchanged,
+                        Message = "Database files match the document baseline.",
+                        BaselineToken = baselineToken,
+                        ObservedToken = pair.Token
+                    };
+                }
+
+                if (!pairIsComplete)
+                {
+                    return new GameDBDiskStateResult
+                    {
+                        State = GameDBDiskState.MissingOrIncomplete,
+                        Message = "Database data and schema files are missing or incomplete.",
+                        BaselineToken = baselineToken,
+                        ObservedToken = pair.Token
+                    };
+                }
+
+                return new GameDBDiskStateResult
+                {
+                    State = GameDBDiskState.Modified,
+                    Message = "Database files differ from the document baseline.",
+                    BaselineToken = baselineToken,
+                    ObservedToken = pair.Token
+                };
+            }
+        }
+
+        internal GameDBSaveOutcome Save(GameDBSaveOptions options = null)
+        {
+            GameDBSaveOutcome outcome;
+            GameDBDocumentSessionState stateBefore;
+            var drainChanges = false;
+            lock (m_gate)
+            {
+                stateBefore = GetSessionStateLocked();
+                if (m_saveInProgress || m_drainingChanges)
+                {
+                    return Outcome(GameDBSaveStatus.SaveInProgress, false,
+                        "A save or document notification is already in progress.", false,
+                        m_baselineRevision, null, stateBefore.CurrentRevision,
+                        m_baselineDiskToken, m_baselineDiskToken);
+                }
+                else
+                {
+                    m_saveInProgress = true;
+                    m_notificationDeferralDepth++;
+                    outcome = null;
+                }
+            }
+
+            if (outcome == null)
+            {
+                lock (m_saveGate)
+                {
+                    try
+                    {
+                        outcome = SaveLocked(options ?? new GameDBSaveOptions());
+                    }
+                    catch
+                    {
+                        lock (m_gate)
+                        {
+                            m_saveInProgress = false;
+                            m_notificationDeferralDepth--;
+                            if (!m_drainingChanges && m_notificationDeferralDepth == 0
+                                && m_pendingChanges.Count > 0)
+                            {
+                                m_drainingChanges = true;
+                                drainChanges = true;
+                            }
+                        }
+
+                        if (drainChanges)
+                        {
+                            DrainChanges();
+                        }
+                        throw;
+                    }
+
+                    lock (m_gate)
+                    {
+                        m_saveInProgress = false;
+                        m_notificationDeferralDepth--;
+                        EnqueueSaveStateChangeLocked(stateBefore, outcome, out drainChanges);
+                    }
+                }
+            }
+
+            if (drainChanges)
+            {
+                DrainChanges();
+            }
+
+            return outcome;
         }
 
         private GameDBSaveOutcome SaveLocked(GameDBSaveOptions options)
@@ -530,6 +1095,11 @@ namespace GameDBEditorLibrary.Documents
                 }
                 catch (GameDBRecoveryRequiredException exception)
                 {
+                    lock (m_gate)
+                    {
+                        m_persistenceStateUnknown = true;
+                    }
+
                     var recovery = Outcome(GameDBSaveStatus.PersistenceStateUnknown, false,
                         exception.Message, false, revisionBefore, null, CurrentRevision,
                         baselineToken, baselineToken);
@@ -603,6 +1173,7 @@ namespace GameDBEditorLibrary.Documents
                 {
                     m_model = candidate;
                     m_currentRevision = state.Revision;
+                    m_history?.SynchronizeCurrent(state);
                 }
 
                 m_baselineRevision = state.Revision;
@@ -653,11 +1224,27 @@ namespace GameDBEditorLibrary.Documents
             {
                 pair = m_pairStore.Read(AssetPath);
             }
+            catch (GameDBRecoveryRequiredException exception)
+            {
+                lock (m_gate)
+                {
+                    m_persistenceStateUnknown = true;
+                    m_pendingPostSave = null;
+                }
+
+                var recovery = Outcome(GameDBSaveStatus.PersistenceStateUnknown, false,
+                    exception.Message, true, baselineRevision, baselineRevision,
+                    CurrentRevision, baselineToken, baselineToken, false,
+                    new[] { exception.Message });
+                recovery.RecoveryArtifacts = exception.Artifacts;
+                return recovery;
+            }
             catch (Exception exception)
             {
-                return Outcome(GameDBSaveStatus.Conflict, false, exception.Message, true,
-                    baselineRevision, baselineRevision, CurrentRevision,
-                    baselineToken, baselineToken, true, new[] { exception.Message });
+                return Outcome(GameDBSaveStatus.PersistenceFailed, false,
+                    exception.Message, true, baselineRevision, baselineRevision,
+                    CurrentRevision, baselineToken, baselineToken, true,
+                    new[] { exception.Message });
             }
 
             if (pair.Token != baselineToken)
@@ -727,6 +1314,20 @@ namespace GameDBEditorLibrary.Documents
                 baselineToken, baselineToken, false, errors);
         }
 
+        private GameDBDiskRefreshResult DiskRefresh(GameDBDiskRefreshStatus status,
+            bool success, string message, GameDBDiskToken? observedToken = null,
+            GameDBSnapshot snapshot = null)
+        {
+            return new GameDBDiskRefreshResult
+            {
+                Status = status,
+                Success = success,
+                Message = message,
+                Snapshot = snapshot ?? CreateSnapshot(),
+                ObservedToken = observedToken
+            };
+        }
+
         private GameDBSaveOutcome Outcome(GameDBSaveStatus status, bool success,
             string message, bool filesCommitted, string revisionBefore, string revisionSaved,
             string revisionCurrent, GameDBDiskToken tokenBefore, GameDBDiskToken tokenAfter,
@@ -760,12 +1361,22 @@ namespace GameDBEditorLibrary.Documents
 
             lock (m_gate)
             {
+                var stateBefore = GetSessionStateLocked();
                 options = options ?? new GameDBTransactionOptions();
                 result = ApplyTransactionLocked(commands, options, out change);
                 if (change != null)
                 {
-                    m_pendingChanges.Enqueue(new PendingChange(change, result));
-                    if (!m_drainingChanges)
+                    var stateChange = new GameDBDocumentStateChange(
+                        GameDBDocumentStateChangeOrigin.Transaction,
+                        GetQueuedPreviousStateLocked(stateBefore), GetSessionStateLocked());
+                    var notificationsDeferred = m_drainingChanges
+                        || m_notificationDeferralDepth > 0;
+                    result.NotificationErrorsDeferred = notificationsDeferred;
+                    EnqueueChangeLocked(new PendingChange(change, stateChange,
+                        notificationsDeferred
+                            ? (Action<IReadOnlyList<string>>)null
+                            : errors => result.NotificationErrors = errors));
+                    if (!m_drainingChanges && m_notificationDeferralDepth == 0)
                     {
                         m_drainingChanges = true;
                         drainChanges = true;
@@ -821,12 +1432,31 @@ namespace GameDBEditorLibrary.Documents
                 }
             }
 
-            var allowed = options.AllowedDestructiveOperations == null
+            HashSet<GameDBCommandKind> allowedOperations = null;
+            if (options.AllowedOperations != null)
+            {
+                allowedOperations = new HashSet<GameDBCommandKind>(options.AllowedOperations);
+            }
+            var allowedDestructiveOperations = options.AllowedDestructiveOperations == null
                 ? new HashSet<GameDBCommandKind>()
                 : new HashSet<GameDBCommandKind>(options.AllowedDestructiveOperations);
             for (var index = 0; index < descriptors.Length; index++)
             {
-                if (descriptors[index].IsDestructive && !allowed.Contains(descriptors[index].Kind))
+                if (allowedOperations != null
+                    && !allowedOperations.Contains(descriptors[index].Kind))
+                {
+                    return new GameDBTransactionResult
+                    {
+                        Success = false,
+                        FailureKind = GameDBTransactionFailureKind.AuthorizationDenied,
+                        DeniedCommandIndex = index,
+                        DeniedCommandKind = descriptors[index].Kind,
+                        RevisionBefore = revisionBefore,
+                        Message = $"Command is not authorized in the current editing mode: {descriptors[index].Kind}."
+                    };
+                }
+                if (descriptors[index].IsDestructive
+                    && !allowedDestructiveOperations.Contains(descriptors[index].Kind))
                 {
                     return new GameDBTransactionResult
                     {
@@ -1019,9 +1649,56 @@ namespace GameDBEditorLibrary.Documents
 
             m_model = committedModel;
             m_currentRevision = attemptedState.Revision;
+            m_history?.Record(attemptedState, BuildHistoryLabel(descriptors));
             change = new GameDBDocumentChange(DocumentId, revisionBefore,
                 attemptedState.Revision, changes);
             return result;
+        }
+
+        private GameDBHistoryResult MoveHistory(bool redo)
+        {
+            GameDBSerializedState target;
+            string expectedRevision;
+            lock (m_gate)
+            {
+                target = redo ? m_history?.PeekRedo() : m_history?.PeekUndo();
+                expectedRevision = GetCurrentRevisionLocked();
+            }
+            if (target == null)
+            {
+                return new GameDBHistoryResult
+                {
+                    Success = false,
+                    FailureKind = GameDBWorkingStateFailureKind.InvalidRequest,
+                    Message = redo ? "Nothing to redo." : "Nothing to undo.",
+                    Snapshot = CreateSnapshot()
+                };
+            }
+            var replaced = ReplaceWorkingState(target.DataJson, target.SchemaJson,
+                expectedRevision, redo
+                    ? GameDBDocumentChangeOrigin.Redo
+                    : GameDBDocumentChangeOrigin.Undo, true);
+            return new GameDBHistoryResult
+            {
+                Success = replaced.Success,
+                FailureKind = replaced.FailureKind,
+                Message = replaced.Message,
+                Snapshot = replaced.AttemptedSnapshot ?? CreateSnapshot(),
+                NotificationErrors = replaced.NotificationErrors
+            };
+        }
+
+        private static string BuildHistoryLabel(IEnumerable<CommandDescriptor> descriptors)
+        {
+            var kinds = descriptors.Select(descriptor => descriptor.Kind).Distinct().ToArray();
+            return kinds.Length == 1 ? HumanizeCommand(kinds[0]) : "Edit GameDB";
+        }
+
+        private static string HumanizeCommand(GameDBCommandKind kind)
+        {
+            var name = kind.ToString();
+            return string.Concat(name.Select((character, index) =>
+                index > 0 && char.IsUpper(character) ? " " + character : character.ToString()));
         }
 
         private GameDBTransactionResult CaptureAttempt(GameDB stage, string revisionBefore)
@@ -1057,23 +1734,30 @@ namespace GameDBEditorLibrary.Documents
             while (true)
             {
                 PendingChange pending;
-                Action<GameDBDocumentChange> subscribers;
+                Action<GameDBDocumentChange> contentSubscribers;
+                Action<GameDBDocumentStateChange> stateSubscribers;
                 lock (m_gate)
                 {
-                    if (m_pendingChanges.Count == 0)
+                    if (m_pendingChanges.Count == 0 || m_notificationDeferralDepth > 0)
                     {
                         m_drainingChanges = false;
+                        if (m_pendingChanges.Count == 0)
+                        {
+                            m_lastQueuedSessionState = null;
+                        }
                         return;
                     }
 
                     pending = m_pendingChanges.Dequeue();
-                    subscribers = m_changed;
+                    contentSubscribers = m_changed;
+                    stateSubscribers = m_stateChanged;
                 }
 
                 var errors = new List<string>();
-                if (subscribers != null)
+                if (pending.Change != null && contentSubscribers != null)
                 {
-                    foreach (Action<GameDBDocumentChange> subscriber in subscribers.GetInvocationList())
+                    foreach (Action<GameDBDocumentChange> subscriber
+                        in contentSubscribers.GetInvocationList())
                     {
                         try
                         {
@@ -1086,8 +1770,66 @@ namespace GameDBEditorLibrary.Documents
                     }
                 }
 
-                pending.Result.NotificationErrors = errors.AsReadOnly();
+                if (pending.StateChange != null && stateSubscribers != null)
+                {
+                    foreach (Action<GameDBDocumentStateChange> subscriber
+                        in stateSubscribers.GetInvocationList())
+                    {
+                        try
+                        {
+                            subscriber(pending.StateChange);
+                        }
+                        catch (Exception exception)
+                        {
+                            errors.Add(exception.Message);
+                        }
+                    }
+                }
+
+                pending.SetNotificationErrors?.Invoke(errors.AsReadOnly());
             }
+        }
+
+        private void EnqueueSaveStateChangeLocked(GameDBDocumentSessionState stateBefore,
+            GameDBSaveOutcome outcome, out bool drainChanges)
+        {
+            var stateChange = new GameDBDocumentStateChange(
+                GameDBDocumentStateChangeOrigin.Save,
+                GetQueuedPreviousStateLocked(stateBefore), GetSessionStateLocked(), outcome);
+            var notificationsDeferred = m_drainingChanges || m_notificationDeferralDepth > 0;
+            outcome.NotificationErrorsDeferred = notificationsDeferred;
+            EnqueueChangeLocked(new PendingChange(null, stateChange,
+                notificationsDeferred
+                    ? (Action<IReadOnlyList<string>>)null
+                    : errors => outcome.NotificationErrors = errors));
+            drainChanges = !m_drainingChanges && m_notificationDeferralDepth == 0;
+            if (drainChanges)
+            {
+                m_drainingChanges = true;
+            }
+        }
+
+        private GameDBDocumentSessionState GetQueuedPreviousStateLocked(
+            GameDBDocumentSessionState fallback)
+        {
+            return m_lastQueuedSessionState ?? fallback;
+        }
+
+        private void EnqueueChangeLocked(PendingChange pending)
+        {
+            m_pendingChanges.Enqueue(pending);
+            if (pending.StateChange != null)
+            {
+                m_lastQueuedSessionState = pending.StateChange.Current;
+            }
+        }
+
+        private GameDBDocumentSessionState GetSessionStateLocked()
+        {
+            return new GameDBDocumentSessionState(DocumentId, GetCurrentRevisionLocked(),
+                m_baselineRevision, m_baselineDiskToken,
+                m_pendingPostSave != null && m_pendingPostSave.HasPendingWork,
+                m_persistenceStateUnknown);
         }
 
         private string GetCurrentRevisionLocked()
@@ -1104,6 +1846,7 @@ namespace GameDBEditorLibrary.Documents
         {
             return new Dictionary<Type, CommandDescriptor>
             {
+                { typeof(SetDatabaseMetadataCommand), new CommandDescriptor(GameDBCommandKind.SetDatabaseMetadata, false) },
                 { typeof(AddTableCommand), new CommandDescriptor(GameDBCommandKind.AddTable, false) },
                 { typeof(RenameTableCommand), new CommandDescriptor(GameDBCommandKind.RenameTable, true) },
                 { typeof(DeleteTableCommand), new CommandDescriptor(GameDBCommandKind.DeleteTable, true) },
@@ -1118,6 +1861,44 @@ namespace GameDBEditorLibrary.Documents
                 { typeof(DeleteRowCommand), new CommandDescriptor(GameDBCommandKind.DeleteRow, true) },
                 { typeof(UpsertTableRowsCommand), new CommandDescriptor(GameDBCommandKind.UpsertTableRows, false) },
                 { typeof(ReplaceTableRowsCommand), new CommandDescriptor(GameDBCommandKind.ReplaceTableRows, true) }
+            };
+        }
+
+        private static GameDBDocumentStateChangeOrigin MapStateOrigin(
+            GameDBDocumentChangeOrigin origin)
+        {
+            switch (origin)
+            {
+                case GameDBDocumentChangeOrigin.Undo:
+                    return GameDBDocumentStateChangeOrigin.Undo;
+                case GameDBDocumentChangeOrigin.Redo:
+                    return GameDBDocumentStateChangeOrigin.Redo;
+                case GameDBDocumentChangeOrigin.Recovery:
+                    return GameDBDocumentStateChangeOrigin.Recovery;
+                case GameDBDocumentChangeOrigin.RuntimeImport:
+                    return GameDBDocumentStateChangeOrigin.RuntimeImport;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(origin), origin,
+                        "Unsupported working-state origin.");
+            }
+        }
+
+        private static GameDBWorkingStateResult WorkingStateFailure(
+            GameDBWorkingStateFailureKind kind, string message, string revisionBefore,
+            GameDBSerializedState state = null, IReadOnlyList<GameDBValidationIssue> issues = null,
+            GameDBSnapshot snapshot = null)
+        {
+            return new GameDBWorkingStateResult
+            {
+                Success = false,
+                FailureKind = kind,
+                Message = message,
+                RevisionBefore = revisionBefore,
+                RevisionAfter = revisionBefore,
+                AttemptedRevision = state?.Revision,
+                AttemptedState = state,
+                AttemptedSnapshot = snapshot,
+                Issues = issues ?? Array.Empty<GameDBValidationIssue>()
             };
         }
 
@@ -1148,12 +1929,16 @@ namespace GameDBEditorLibrary.Documents
         private sealed class PendingChange
         {
             internal GameDBDocumentChange Change { get; }
-            internal GameDBTransactionResult Result { get; }
+            internal GameDBDocumentStateChange StateChange { get; }
+            internal Action<IReadOnlyList<string>> SetNotificationErrors { get; }
 
-            internal PendingChange(GameDBDocumentChange change, GameDBTransactionResult result)
+            internal PendingChange(GameDBDocumentChange change,
+                GameDBDocumentStateChange stateChange,
+                Action<IReadOnlyList<string>> setNotificationErrors)
             {
                 Change = change;
-                Result = result;
+                StateChange = stateChange;
+                SetNotificationErrors = setNotificationErrors;
             }
         }
 

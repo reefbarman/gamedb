@@ -1,7 +1,8 @@
-﻿using GameDBLibrary;
+﻿using GameDBEditorLibrary.Workspace;
+using GameDBLibrary;
 using System;
 using System.Collections.Generic;
-using UnityEditor;
+using System.Linq;
 
 namespace GameDBEditorLibrary
 {
@@ -16,8 +17,6 @@ namespace GameDBEditorLibrary
     /// </summary>
     public class GameDBEditor
     {
-        private static EditorComponent m_editorComponent = null;
-
         internal static Action<string> OnGameDBSaved = null;
 
         /// <summary>
@@ -28,14 +27,7 @@ namespace GameDBEditorLibrary
         public
                 static bool LoadGameDB(string gameDBPath)
         {
-            var success = GameDB.Instance.Load(gameDBPath);
-
-            if (success)
-            {
-                EventSystem.Instance.TriggerEvent(Events.GAMEDB_LOADED);
-            }
-
-            return success;
+            return GameDBEditorDomainServices.FacadeRouter.LoadGameDB(gameDBPath);
         }
 
         /// <summary>
@@ -45,7 +37,7 @@ namespace GameDBEditorLibrary
         public
                 static bool SaveGameDB()
         {
-            return GameDB.Instance.Save();
+            return GameDBEditorDomainServices.FacadeRouter.SaveGameDB();
         }
 
         /// <summary>
@@ -79,8 +71,7 @@ namespace GameDBEditorLibrary
         public
                 static void AddRowToTable(string table, string key, Dictionary<string, object> data)
         {
-            GameDB.Instance.AddRowToTable(table, key, data);
-            EventSystem.Instance.TriggerEvent(Events.GAMEDB_LOADED);
+            GameDBEditorDomainServices.FacadeRouter.AddRowToTable(table, key, data);
         }
 
         /// <summary>
@@ -105,28 +96,12 @@ namespace GameDBEditorLibrary
 
         public static void AddRuntimeDB(GameDBBase runtimeDB)
         {
-            GameDB.RuntimeDBs.Add(runtimeDB);
+            GameDBEditorDomainServices.RuntimeRegistry.Register(runtimeDB);
+            if (!GameDB.RuntimeDBs.Any(existing => ReferenceEquals(existing, runtimeDB)))
+            {
+                GameDB.RuntimeDBs.Add(runtimeDB);
+            }
         }
 
-        public static void Init(EditorWindow window)
-        {
-            m_editorComponent = new EditorComponent("Editor", window);
-            AssemblyExplorer.Instance.Load();
-            Settings.Instance.Load();
-
-            m_editorComponent.Init();
-        }
-
-        public static void OnGUI()
-        {
-            ControlHandler.Instance.Update();
-            m_editorComponent.Render();
-        }
-
-        public static void Update()
-        {
-            m_editorComponent.Update();
-            Updater.Instance.Update();
-        }
     }
 }

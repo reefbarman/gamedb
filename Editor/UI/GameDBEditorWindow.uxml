@@ -1,0 +1,128 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements">
+    <ui:VisualElement name="gamedb-editor-root" class="gamedb-editor">
+        <uie:Toolbar name="global-toolbar" class="gamedb-editor__toolbar gamedb-editor__toolbar--global">
+            <uie:ToolbarButton name="create-database-button" text="Create" />
+            <uie:ToolbarButton name="open-database-button" text="Open" />
+            <ui:VisualElement class="gamedb-editor__toolbar-spacer" />
+            <ui:Label name="global-status-label" text="GameDB workspace" class="gamedb-editor__status" />
+            <uie:ToolbarButton name="settings-button" text="Settings" />
+        </uie:Toolbar>
+        <ui:VisualElement name="document-tab-strip" class="gamedb-editor__tabs" />
+        <ui:VisualElement name="workspace-state-host" class="gamedb-editor__workspace-state">
+            <ui:Label text="Open a GameDB database to begin." class="gamedb-editor__empty-message" />
+        </ui:VisualElement>
+        <ui:VisualElement name="document-shell" class="gamedb-editor__document-shell">
+            <ui:VisualElement name="document-status-host" class="gamedb-editor__document-status">
+                <ui:Label name="active-document-path-label" class="gamedb-editor__document-path" />
+                <ui:Label name="active-document-summary-label" class="gamedb-editor__document-summary" />
+                <ui:VisualElement name="document-warning-host" />
+            </ui:VisualElement>
+            <ui:VisualElement name="play-mode-toolbar" class="gamedb-editor__play-mode-toolbar">
+                <ui:Label text="Runtime GameDB" class="gamedb-editor__play-mode-label" />
+                <ui:DropdownField name="runtime-target-field" class="gamedb-editor__runtime-target" />
+                <ui:Button name="load-runtime-button" text="Load Runtime Data" enabled="false" />
+                <ui:Button name="reload-in-game-button" text="Reload In-Game" enabled="false" />
+                <ui:Label name="play-mode-status-label" class="gamedb-editor__play-mode-status" />
+            </ui:VisualElement>
+            <uie:Toolbar name="document-toolbar" class="gamedb-editor__toolbar gamedb-editor__toolbar--document">
+                <uie:ToolbarButton name="undo-button" text="Undo" enabled="false" />
+                <uie:ToolbarButton name="redo-button" text="Redo" enabled="false" />
+                <uie:ToolbarButton name="save-button" text="Save" enabled="false" />
+                <uie:ToolbarButton name="reload-button" text="Reload" enabled="false" />
+                <uie:ToolbarButton name="generate-button" text="Generate" enabled="false" />
+                <uie:ToolbarButton name="build-button" text="Build" enabled="false" />
+            </uie:Toolbar>
+            <ui:VisualElement name="workspace-content" class="gamedb-editor__content">
+                <ui:VisualElement name="table-navigation-host" class="gamedb-editor__navigation">
+                    <ui:Label text="Tables" class="gamedb-editor__pane-title" />
+                    <ui:ListView name="table-navigation-list" fixed-item-height="22" virtualization-method="FixedHeight" selection-type="Single" reorderable="false" class="gamedb-editor__table-navigation-list" />
+                </ui:VisualElement>
+                <ui:VisualElement name="table-surface-host" class="gamedb-editor__surface">
+                    <uie:ToolbarSearchField name="table-search-field" class="gamedb-editor__table-search" />
+                    <ui:Label name="active-document-placeholder" class="gamedb-editor__placeholder" />
+                    <ui:MultiColumnListView name="table-row-grid" fixed-item-height="22" virtualization-method="FixedHeight" selection-type="Single" sorting-mode="Custom" reorderable="false" horizontal-scrolling="true" class="gamedb-editor__table-grid" />
+                </ui:VisualElement>
+                <ui:VisualElement name="inspector-host" class="gamedb-editor__inspector">
+                    <ui:ScrollView name="schema-action-scroll" class="gamedb-editor__inspector-scroll">
+                        <ui:Label text="Database" class="gamedb-editor__pane-title" />
+                        <ui:TextField name="database-scope-field" label="Scope" />
+                        <ui:Toggle name="database-localization-toggle" label="Localization database" />
+                        <ui:Button name="apply-database-metadata-button" text="Apply Metadata" />
+                        <ui:VisualElement class="gamedb-editor__inspector-section">
+                            <ui:Label text="Table" class="gamedb-editor__pane-title" />
+                            <ui:Label name="selected-table-label" text="No table selected" />
+                            <ui:TextField name="table-name-field" label="Name" />
+                            <ui:DropdownField name="table-key-type-field" label="Key type" />
+                            <ui:TextField name="table-key-type-argument-field" label="Enum type" tooltip="Fully qualified public enum type name" />
+                            <ui:VisualElement class="gamedb-editor__inspector-actions">
+                                <ui:Button name="add-table-button" text="Add" />
+                                <ui:Button name="rename-table-button" text="Rename" />
+                                <ui:Button name="delete-table-button" text="Delete" class="gamedb-editor__destructive-action" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+                        <ui:VisualElement class="gamedb-editor__inspector-section">
+                            <ui:Label text="Fields" class="gamedb-editor__pane-title" />
+                            <ui:ListView name="field-navigation-list" fixed-item-height="22" virtualization-method="FixedHeight" selection-type="Single" reorderable="false" class="gamedb-editor__field-navigation-list" />
+                            <ui:Label name="selected-field-type-label" />
+                            <ui:Label name="field-collection-note" text="Edit array and dictionary values from their table cells." class="gamedb-editor__scope-note" />
+                            <ui:TextField name="field-name-field" label="Name" />
+                            <ui:DropdownField name="field-type-field" label="Type" />
+                            <ui:TextField name="field-enum-type-argument-field" label="Enum type" tooltip="Fully qualified public enum type name" />
+                            <ui:DropdownField name="field-table-reference-argument-field" label="Referenced table" />
+                            <ui:VisualElement class="gamedb-editor__inspector-actions">
+                                <ui:Button name="add-field-button" text="Add" />
+                                <ui:Button name="rename-field-button" text="Rename" />
+                                <ui:Button name="replace-field-button" text="Replace Type" />
+                                <ui:Button name="delete-field-button" text="Delete" class="gamedb-editor__destructive-action" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+                        <ui:VisualElement class="gamedb-editor__inspector-section">
+                            <ui:Label text="Row" class="gamedb-editor__pane-title" />
+                            <ui:Label name="selected-row-label" text="No row selected" />
+                            <ui:TextField name="row-key-field" label="Key" />
+                            <ui:VisualElement class="gamedb-editor__inspector-actions">
+                                <ui:Button name="add-row-button" text="Add" />
+                                <ui:Button name="rename-row-button" text="Rename" />
+                                <ui:Button name="delete-row-button" text="Delete" class="gamedb-editor__destructive-action" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+                        <ui:VisualElement name="editor-action-message-host" />
+                    </ui:ScrollView>
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+        <ui:VisualElement name="modal-host" class="gamedb-editor__modal-host">
+            <ui:VisualElement name="settings-panel" class="gamedb-editor__settings-panel">
+                <ui:Label text="GameDB Project Settings" class="gamedb-editor__settings-title" />
+                <ui:ScrollView class="gamedb-editor__settings-scroll">
+                    <ui:Label name="settings-error-label" class="gamedb-editor__settings-error" />
+                    <ui:Label text="Registered databases" class="gamedb-editor__settings-heading" />
+                    <ui:ScrollView name="registered-database-paths" class="gamedb-editor__registered-paths" />
+                    <ui:Button name="register-database-button" text="Register Database" />
+                    <ui:Label text="Imported enum types" class="gamedb-editor__settings-heading" />
+                    <ui:ListView name="imported-enum-types" fixed-item-height="22" virtualization-method="FixedHeight" selection-type="None" reorderable="false" class="gamedb-editor__imported-enums" />
+                    <ui:TextField name="export-path-field" label="Export path" />
+                    <ui:TextField name="build-path-field" label="Build path" />
+                    <ui:VisualElement name="settings-validation-host" />
+                </ui:ScrollView>
+                <ui:VisualElement class="gamedb-editor__settings-actions">
+                    <ui:Button name="save-settings-button" text="Save Settings" />
+                    <ui:Button name="close-settings-button" text="Close" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:VisualElement name="collection-editor-panel" class="gamedb-editor__collection-panel">
+                <ui:Label name="collection-editor-title" text="Edit Collection" class="gamedb-editor__settings-title" />
+                <ui:Label name="collection-editor-context" class="gamedb-editor__collection-context" />
+                <ui:VisualElement name="collection-editor-error-host" />
+                <ui:ListView name="collection-editor-list" fixed-item-height="30" virtualization-method="FixedHeight" selection-type="None" reorderable="false" class="gamedb-editor__collection-list" />
+                <ui:VisualElement class="gamedb-editor__collection-actions">
+                    <ui:Button name="collection-add-button" text="Add" />
+                    <ui:VisualElement class="gamedb-editor__toolbar-spacer" />
+                    <ui:Button name="collection-reload-button" text="Reload Current" />
+                    <ui:Button name="collection-apply-button" text="Apply" />
+                    <ui:Button name="collection-cancel-button" text="Cancel" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

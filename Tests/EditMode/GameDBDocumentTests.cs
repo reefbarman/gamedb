@@ -171,6 +171,94 @@ namespace GameDBLibrary.Tests
         }
 
         [Test]
+        public void SessionState_InitialBindAndTransactionNotificationsTrackDirtyTransitions()
+        {
+            var document = CreateItemsDocument();
+            var initial = document.GetSessionState();
+            var changes = new List<GameDBDocumentStateChange>();
+            document.StateChanged += changes.Add;
+
+            var noOp = document.ApplyTransaction(new GameDBCommand[]
+            {
+                new SetValueCommand("Items", "Sword", "Power", 12L)
+            });
+            var changed = document.ApplyTransaction(new GameDBCommand[]
+            {
+                new SetValueCommand("Items", "Sword", "Power", 15L)
+            });
+            var restored = document.ApplyTransaction(new GameDBCommand[]
+            {
+                new SetValueCommand("Items", "Sword", "Power", 12L)
+            });
+
+            Assert.That(initial.DocumentId, Is.EqualTo(document.DocumentId));
+            Assert.That(initial.CurrentRevision, Is.EqualTo(initial.BaselineRevision));
+            Assert.That(initial.IsDirty, Is.False);
+            Assert.That(initial.HasPendingPostSaveWork, Is.False);
+            Assert.That(initial.PersistenceStateUnknown, Is.False);
+            Assert.That(noOp.Success, Is.True, noOp.Message);
+            Assert.That(changed.Success, Is.True, changed.Message);
+            Assert.That(restored.Success, Is.True, restored.Message);
+            Assert.That(changes, Has.Count.EqualTo(2));
+            Assert.That(changes.Select(change => change.Origin), Is.EqualTo(new[]
+            {
+                GameDBDocumentStateChangeOrigin.Transaction,
+                GameDBDocumentStateChangeOrigin.Transaction
+            }));
+            Assert.That(changes[0].Previous, Is.EqualTo(initial));
+            Assert.That(changes[0].Current.IsDirty, Is.True);
+            Assert.That(changes[1].Previous, Is.EqualTo(changes[0].Current));
+            Assert.That(changes[1].Current.IsDirty, Is.False);
+            Assert.That(changes[1].Current, Is.EqualTo(document.GetSessionState()));
+            Assert.That(changes.All(change => change.SaveStatus == null), Is.True);
+        }
+
+        [Test]
+        public void StateChanged_CombinedNotificationsPreserveWholeItemFifoAndSubscriberFailures()
+        {
+            var document = CreateEmptyDocument();
+            var observed = new List<string>();
+            var nested = false;
+            GameDBTransactionResult nestedResult = null;
+            document.Changed += change => observed.Add("content:" + change.RevisionAfter);
+            document.StateChanged += change =>
+            {
+                observed.Add("state:" + change.Current.CurrentRevision);
+                if (!nested)
+                {
+                    nested = true;
+                    nestedResult = document.ApplyTransaction(new GameDBCommand[]
+                    {
+                        new AddTableCommand("Second", KeyType.@string, null)
+                    });
+                    Assert.That(nestedResult.Success, Is.True);
+                }
+            };
+            document.StateChanged += change =>
+                throw new InvalidOperationException("state subscriber exploded");
+
+            var result = document.ApplyTransaction(new GameDBCommand[]
+            {
+                new AddTableCommand("First", KeyType.@string, null)
+            });
+
+            Assert.That(result.Success, Is.True, result.Message);
+            Assert.That(result.NotificationErrors,
+                Is.EqualTo(new[] { "state subscriber exploded" }));
+            Assert.That(result.NotificationErrorsDeferred, Is.False);
+            Assert.That(nestedResult, Is.Not.Null);
+            Assert.That(nestedResult.NotificationErrorsDeferred, Is.True);
+            Assert.That(nestedResult.NotificationErrors, Is.Empty);
+            Assert.That(observed, Has.Count.EqualTo(4));
+            Assert.That(observed[0], Does.StartWith("content:"));
+            Assert.That(observed[1], Does.StartWith("state:"));
+            Assert.That(observed[2], Does.StartWith("content:"));
+            Assert.That(observed[3], Does.StartWith("state:"));
+            Assert.That(document.CreateSnapshot().Tables.Select(table => table.Name),
+                Is.EqualTo(new[] { "First", "Second" }));
+        }
+
+        [Test]
         public void DirtyState_NoOpDoesNotNotifyAndReturningToBaselineClearsDirty()
         {
             var document = CreateItemsDocument();
@@ -374,6 +462,289 @@ namespace GameDBLibrary.Tests
             Assert.That(result.Success, Is.True, result.Message);
             Assert.That((IEnumerable<object>)RowValue(document.CreateSnapshot(),
                 "Items", "Sword", "Tags"), Is.EqualTo(new object[] { "melee" }));
+        }
+
+        [Test]
+        public void SetDatabaseMetadata_CommitsScopeAndLocalizationAsOneChange()
+        {
+            var document = CreateItemsDocument();
+            var changes = new List<GameDBDocumentChange>();
+            document.Changed += changes.Add;
+
+            var result = document.ApplyTransaction(new GameDBCommand[]
+            {
+                new SetDatabaseMetadataCommand("LocalizedItems", true)
+            });
+
+            Assert.That(result.Success, Is.True, result.Message);
+            Assert.That(result.Changes, Is.EqualTo(new[]
+            {
+                GameDBCommandKind.SetDatabaseMetadata
+            }));
+            Assert.That(result.AttemptedSnapshot.ScopeName, Is.EqualTo("LocalizedItems"));
+            Assert.That(result.AttemptedSnapshot.LocalizationDatabase, Is.True);
+            Assert.That(document.CurrentRevision, Is.EqualTo(result.AttemptedRevision));
+            Assert.That(document.IsDirty, Is.True);
+            Assert.That(changes, Has.Count.EqualTo(1));
+            Assert.That(changes[0].Commands, Is.EqualTo(result.Changes));
+        }
+
+        [Test]
+        public void SetDatabaseMetadata_NoOpDoesNotNotifyOrDirtyDocument()
+        {
+            var document = CreateItemsDocument();
+            var revisionBefore = document.CurrentRevision;
+            var notifications = 0;
+            document.Changed += change => notifications++;
+
+            var result = document.ApplyTransaction(new GameDBCommand[]
+            {
+                new SetDatabaseMetadataCommand("DocumentTests", false)
+            });
+
+            Assert.That(result.Success, Is.True, result.Message);
+            Assert.That(result.AttemptedRevision, Is.EqualTo(revisionBefore));
+            Assert.That(document.CurrentRevision, Is.EqualTo(revisionBefore));
+            Assert.That(document.IsDirty, Is.False);
+            Assert.That(notifications, Is.Zero);
+        }
+
+        [Test]
+        public void SetDatabaseMetadata_EmptyScopeFailsValidationAndPreservesDocument()
+        {
+            var document = CreateItemsDocument();
+            var revisionBefore = document.CurrentRevision;
+            var snapshotBefore = document.CreateSnapshot();
+
+            var result = document.ApplyTransaction(new GameDBCommand[]
+            {
+                new SetDatabaseMetadataCommand("", true)
+            });
+
+            Assert.That(result.Success, Is.False);
+            Assert.That(result.FailureKind, Is.EqualTo(GameDBTransactionFailureKind.ValidationFailed));
+            Assert.That(result.Issues.Select(issue => issue.Code), Does.Contain("scope.empty"));
+            Assert.That(result.AttemptedSnapshot.ScopeName, Is.Empty);
+            Assert.That(result.AttemptedSnapshot.LocalizationDatabase, Is.True);
+            Assert.That(document.CurrentRevision, Is.EqualTo(revisionBefore));
+            Assert.That(document.CreateSnapshot().ScopeName, Is.EqualTo(snapshotBefore.ScopeName));
+            Assert.That(document.CreateSnapshot().LocalizationDatabase,
+                Is.EqualTo(snapshotBefore.LocalizationDatabase));
+            Assert.That(document.IsDirty, Is.False);
+        }
+
+        [Test]
+        public void ReplaceWorkingState_PublishesCanonicalStateWithOriginAndNotification()
+        {
+            var document = CreateItemsDocument();
+            var target = document.ApplyTransaction(new GameDBCommand[]
+            {
+                new SetValueCommand("Items", "Sword", "Power", 15L)
+            }).AttemptedState;
+            Assert.That(document.ApplyTransaction(new GameDBCommand[]
+            {
+                new SetValueCommand("Items", "Sword", "Power", 20L)
+            }).Success, Is.True);
+            var revisionBefore = document.CurrentRevision;
+            var changes = new List<GameDBDocumentChange>();
+            document.Changed += changes.Add;
+
+            var result = document.ReplaceWorkingState(target.DataJson, target.SchemaJson,
+                revisionBefore, GameDBDocumentChangeOrigin.Undo);
+
+            Assert.That(result.Success, Is.True, result.Message);
+            Assert.That(result.FailureKind, Is.EqualTo(GameDBWorkingStateFailureKind.None));
+            Assert.That(result.RevisionBefore, Is.EqualTo(revisionBefore));
+            Assert.That(result.RevisionAfter, Is.EqualTo(target.Revision));
+            Assert.That(result.AttemptedRevision, Is.EqualTo(target.Revision));
+            Assert.That(result.AttemptedState.Revision, Is.EqualTo(target.Revision));
+            Assert.That(result.AttemptedSnapshot.Revision, Is.EqualTo(target.Revision));
+            Assert.That(RowValue(result.AttemptedSnapshot, "Items", "Sword", "Power"),
+                Is.EqualTo(15L));
+            Assert.That(document.CurrentRevision, Is.EqualTo(target.Revision));
+            Assert.That(changes, Has.Count.EqualTo(1));
+            Assert.That(changes[0].Origin, Is.EqualTo(GameDBDocumentChangeOrigin.Undo));
+            Assert.That(changes[0].Commands, Is.Empty);
+        }
+
+        [Test]
+        public void ReplaceWorkingState_StateNotificationMapsOriginAndSnapshot()
+        {
+            var document = CreateItemsDocument();
+            var target = document.ApplyTransaction(new GameDBCommand[]
+            {
+                new SetValueCommand("Items", "Sword", "Power", 15L)
+            }).AttemptedState;
+            Assert.That(document.ApplyTransaction(new GameDBCommand[]
+            {
+                new SetValueCommand("Items", "Sword", "Power", 20L)
+            }).Success, Is.True);
+            var before = document.GetSessionState();
+            GameDBDocumentStateChange observed = null;
+            document.StateChanged += change => observed = change;
+
+            var result = document.ReplaceWorkingState(target.DataJson, target.SchemaJson,
+                document.CurrentRevision, GameDBDocumentChangeOrigin.Redo);
+
+            Assert.That(result.Success, Is.True, result.Message);
+            Assert.That(observed, Is.Not.Null);
+            Assert.That(observed.Origin, Is.EqualTo(GameDBDocumentStateChangeOrigin.Redo));
+            Assert.That(observed.Previous, Is.EqualTo(before));
+            Assert.That(observed.Current.CurrentRevision, Is.EqualTo(target.Revision));
+            Assert.That(observed.Current, Is.EqualTo(document.GetSessionState()));
+            Assert.That(observed.SaveStatus, Is.Null);
+        }
+
+        [Test]
+        public void ReplaceWorkingState_NoOpDoesNotNotify()
+        {
+            var document = CreateItemsDocument();
+            var current = document.SerializeCurrent();
+            var notifications = 0;
+            var stateNotifications = 0;
+            document.Changed += change => notifications++;
+            document.StateChanged += change => stateNotifications++;
+
+            var result = document.ReplaceWorkingState(current.DataJson, current.SchemaJson,
+                current.Revision, GameDBDocumentChangeOrigin.Recovery);
+
+            Assert.That(result.Success, Is.True, result.Message);
+            Assert.That(result.RevisionAfter, Is.EqualTo(current.Revision));
+            Assert.That(document.IsDirty, Is.False);
+            Assert.That(notifications, Is.Zero);
+            Assert.That(stateNotifications, Is.Zero);
+        }
+
+        [Test]
+        public void ReplaceWorkingState_StaleRevisionAndMalformedJsonPreserveDocument()
+        {
+            var document = CreateItemsDocument();
+            var current = document.SerializeCurrent();
+            var notifications = 0;
+            document.Changed += change => notifications++;
+
+            var missingExpected = document.ReplaceWorkingState(current.DataJson,
+                current.SchemaJson, null, GameDBDocumentChangeOrigin.Undo);
+            var transactionOrigin = document.ReplaceWorkingState(current.DataJson,
+                current.SchemaJson, current.Revision, GameDBDocumentChangeOrigin.Transaction);
+            var missingJson = document.ReplaceWorkingState(null, current.SchemaJson,
+                current.Revision, GameDBDocumentChangeOrigin.Undo);
+            var stale = document.ReplaceWorkingState(current.DataJson, current.SchemaJson,
+                "stale", GameDBDocumentChangeOrigin.Undo);
+            var invalidOrigin = document.ReplaceWorkingState(current.DataJson, current.SchemaJson,
+                current.Revision, (GameDBDocumentChangeOrigin)999);
+            var malformed = document.ReplaceWorkingState("{", current.SchemaJson,
+                current.Revision, GameDBDocumentChangeOrigin.Undo);
+
+            Assert.That(missingExpected.FailureKind,
+                Is.EqualTo(GameDBWorkingStateFailureKind.InvalidRequest));
+            Assert.That(transactionOrigin.FailureKind,
+                Is.EqualTo(GameDBWorkingStateFailureKind.InvalidRequest));
+            Assert.That(missingJson.FailureKind,
+                Is.EqualTo(GameDBWorkingStateFailureKind.InvalidRequest));
+            Assert.That(stale.Success, Is.False);
+            Assert.That(stale.FailureKind,
+                Is.EqualTo(GameDBWorkingStateFailureKind.RevisionConflict));
+            Assert.That(invalidOrigin.Success, Is.False);
+            Assert.That(invalidOrigin.FailureKind,
+                Is.EqualTo(GameDBWorkingStateFailureKind.InvalidRequest));
+            Assert.That(malformed.Success, Is.False);
+            Assert.That(malformed.FailureKind,
+                Is.EqualTo(GameDBWorkingStateFailureKind.ImportFailed));
+            Assert.That(document.CurrentRevision, Is.EqualTo(current.Revision));
+            Assert.That(RowValue(document.CreateSnapshot(), "Items", "Sword", "Power"),
+                Is.EqualTo(12L));
+            Assert.That(notifications, Is.Zero);
+        }
+
+        [Test]
+        public void ReplaceWorkingState_ValidationFailureRetainsAttemptAndPreservesDocument()
+        {
+            var document = CreateItemsDocument();
+            var current = document.SerializeCurrent();
+            var notifications = 0;
+            document.Changed += change => notifications++;
+            var invalid = document.ApplyTransaction(new GameDBCommand[]
+            {
+                new SetDatabaseMetadataCommand("", false)
+            });
+            Assert.That(invalid.FailureKind,
+                Is.EqualTo(GameDBTransactionFailureKind.ValidationFailed));
+
+            var result = document.ReplaceWorkingState(
+                invalid.AttemptedState.DataJson, invalid.AttemptedState.SchemaJson,
+                current.Revision, GameDBDocumentChangeOrigin.Redo);
+
+            Assert.That(result.Success, Is.False);
+            Assert.That(result.FailureKind,
+                Is.EqualTo(GameDBWorkingStateFailureKind.ValidationFailed));
+            Assert.That(result.Issues.Select(issue => issue.Code), Does.Contain("scope.empty"));
+            Assert.That(result.RevisionAfter, Is.EqualTo(current.Revision));
+            Assert.That(result.AttemptedRevision, Is.EqualTo(invalid.AttemptedRevision));
+            Assert.That(result.AttemptedState.Revision, Is.EqualTo(invalid.AttemptedRevision));
+            Assert.That(result.AttemptedSnapshot.ScopeName, Is.Empty);
+            Assert.That(document.CurrentRevision, Is.EqualTo(current.Revision));
+            Assert.That(document.CreateSnapshot().ScopeName, Is.EqualTo("DocumentTests"));
+            Assert.That(document.IsDirty, Is.False);
+            Assert.That(notifications, Is.Zero);
+        }
+
+        [Test]
+        public void Changed_ReentrantWorkingStateReplacementPreservesMixedFifoOrder()
+        {
+            var document = CreateItemsDocument();
+            var target = document.ApplyTransaction(new GameDBCommand[]
+            {
+                new SetValueCommand("Items", "Sword", "Power", 15L)
+            }).AttemptedState;
+            var observed = new List<string>();
+            document.Changed += change =>
+            {
+                observed.Add("first:" + change.Origin);
+                if (change.Origin == GameDBDocumentChangeOrigin.Transaction)
+                {
+                    var nested = document.ReplaceWorkingState(target.DataJson, target.SchemaJson,
+                        change.RevisionAfter, GameDBDocumentChangeOrigin.Undo);
+                    Assert.That(nested.Success, Is.True, nested.Message);
+                }
+            };
+            document.Changed += change => observed.Add("second:" + change.Origin);
+
+            var result = document.ApplyTransaction(new GameDBCommand[]
+            {
+                new SetValueCommand("Items", "Sword", "Power", 20L)
+            });
+
+            Assert.That(result.Success, Is.True, result.Message);
+            Assert.That(observed, Is.EqualTo(new[]
+            {
+                "first:Transaction",
+                "second:Transaction",
+                "first:Undo",
+                "second:Undo"
+            }));
+            Assert.That(document.CurrentRevision, Is.EqualTo(target.Revision));
+        }
+
+        [Test]
+        public void ReplaceWorkingState_SubscriberFailureDoesNotBlockPublication()
+        {
+            var document = CreateItemsDocument();
+            var target = document.ApplyTransaction(new GameDBCommand[]
+            {
+                new SetValueCommand("Items", "Sword", "Power", 15L)
+            }).AttemptedState;
+            Assert.That(document.ApplyTransaction(new GameDBCommand[]
+            {
+                new SetValueCommand("Items", "Sword", "Power", 20L)
+            }).Success, Is.True);
+            document.Changed += change => throw new InvalidOperationException("subscriber exploded");
+
+            var result = document.ReplaceWorkingState(target.DataJson, target.SchemaJson,
+                document.CurrentRevision, GameDBDocumentChangeOrigin.Undo);
+
+            Assert.That(result.Success, Is.True, result.Message);
+            Assert.That(document.CurrentRevision, Is.EqualTo(target.Revision));
         }
 
         [Test]

@@ -6,6 +6,7 @@ namespace GameDBEditorLibrary.Documents
 {
     internal enum GameDBCommandKind
     {
+        SetDatabaseMetadata,
         AddTable,
         RenameTable,
         DeleteTable,
@@ -59,6 +60,28 @@ namespace GameDBEditorLibrary.Documents
         internal abstract GameDBCommandKind Kind { get; }
         internal abstract bool IsDestructive { get; }
         internal abstract GameDBCommandExecution Execute(GameDBCommandContext context);
+    }
+
+    internal sealed class SetDatabaseMetadataCommand : GameDBCommand
+    {
+        private readonly string m_scopeName;
+        private readonly bool m_localizationDatabase;
+
+        internal override GameDBCommandKind Kind => GameDBCommandKind.SetDatabaseMetadata;
+        internal override bool IsDestructive => false;
+
+        internal SetDatabaseMetadataCommand(string scopeName, bool localizationDatabase)
+        {
+            m_scopeName = scopeName;
+            m_localizationDatabase = localizationDatabase;
+        }
+
+        internal override GameDBCommandExecution Execute(GameDBCommandContext context)
+        {
+            context.Model.ScopeName = m_scopeName;
+            context.Model.LocalizationDB = m_localizationDatabase;
+            return GameDBCommandExecution.Succeeded();
+        }
     }
 
     internal sealed class AddTableCommand : GameDBCommand

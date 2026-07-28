@@ -1099,6 +1099,7 @@ namespace GameDBEditorLibrary.Automation
                 case GameDBSaveStatus.PersistenceFailed: return GameDBCsvCommitStatus.PersistenceFailed;
                 case GameDBSaveStatus.PersistenceStateUnknown: return GameDBCsvCommitStatus.PersistenceStateUnknown;
                 case GameDBSaveStatus.PostSavePending: return GameDBCsvCommitStatus.PostSavePending;
+                case GameDBSaveStatus.SaveInProgress: return GameDBCsvCommitStatus.PersistenceFailed;
                 default: throw new ArgumentOutOfRangeException(nameof(status));
             }
         }
@@ -1175,6 +1176,7 @@ namespace GameDBEditorLibrary.Automation
                 case GameDBSaveStatus.PersistenceFailed: return GameDBBatchCommitStatus.PersistenceFailed;
                 case GameDBSaveStatus.PersistenceStateUnknown: return GameDBBatchCommitStatus.PersistenceStateUnknown;
                 case GameDBSaveStatus.PostSavePending: return GameDBBatchCommitStatus.PostSavePending;
+                case GameDBSaveStatus.SaveInProgress: return GameDBBatchCommitStatus.PersistenceFailed;
                 default: throw new ArgumentOutOfRangeException(nameof(status));
             }
         }

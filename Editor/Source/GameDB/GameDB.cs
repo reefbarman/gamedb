@@ -69,8 +69,6 @@ namespace GameDBEditorLibrary
         private Dictionary<string, TableBase> m_tables = null;
         private GameDBDocument m_persistenceDocument;
 
-        private int m_loadedInGameDB = -1;
-
         public Dictionary<string, TableBase> Tables => m_tables;
 
         public string ScopeName { get; set; }
@@ -97,27 +95,6 @@ namespace GameDBEditorLibrary
             }
         }
 
-        public bool LoadRuntimeDB(int selectedInGameDBIndex, string gameDBPath)
-        {
-            try
-            {
-                var schemaJSON = File.ReadAllText(Path.Combine(Application.dataPath, GetSchemaPath(gameDBPath)));
-                var imported = DeserializeSchema(schemaJSON);
-                ImportFromRuntimeDB(imported.Tables,
-                    RuntimeDBs[selectedInGameDBIndex].m_internal);
-                ApplyImportedState(imported);
-                LoadedPath = gameDBPath;
-                m_loadedInGameDB = selectedInGameDBIndex;
-                m_persistenceDocument = null;
-                return true;
-            }
-            catch (Exception e)
-            {
-                Debug.LogError("failed to load gameDB: " + gameDBPath);
-                Debug.LogException(e);
-                return false;
-            }
-        }
 
         public bool Import(string jsonData, string jsonSchema)
         {
@@ -139,7 +116,6 @@ namespace GameDBEditorLibrary
             var imported = DeserializeSchema(jsonSchema);
             GameDBSerializer.DeserializeData(imported.Tables, jsonData);
             ApplyImportedState(imported);
-            m_loadedInGameDB = -1;
         }
 
         public bool AddTable(string tableName, KeyType type, object typeArg = null)
@@ -196,7 +172,6 @@ namespace GameDBEditorLibrary
         {
             ScopeName = string.Empty;
             LocalizationDB = false;
-            m_loadedInGameDB = -1;
             m_persistenceDocument = null;
             LoadedPath = gameDBPath;
             m_tables = new Dictionary<string, TableBase>();
@@ -334,24 +309,6 @@ namespace GameDBEditorLibrary
             return loaded;
         }
 
-        public bool ReloadRuntimeDB()
-        {
-            var loaded = false;
-
-            try
-            {
-                var dataJSON = SerializeData();
-
-                loaded = RuntimeDBs[m_loadedInGameDB].ImportEditorData(dataJSON) == null;
-            }
-            catch (Exception e)
-            {
-                Debug.LogError("failed to reload gameDB");
-                Debug.LogException(e);
-            }
-
-            return loaded;
-        }
 
         public void AddRowToTable(string table, string key, Dictionary<string, object> data)
         {
@@ -438,6 +395,13 @@ namespace GameDBEditorLibrary
             m_tables = imported.Tables;
         }
 
+        private void ApplyImportedModel(GameDB imported)
+        {
+            ScopeName = imported.ScopeName;
+            LocalizationDB = imported.LocalizationDB;
+            m_tables = imported.m_tables;
+        }
+
         internal string SerializeSchema()
         {
             var tableSchemas = new Dictionary<string, object>();
@@ -481,6 +445,27 @@ namespace GameDBEditorLibrary
             var imported = DeserializeSchema(state.SchemaJson);
             GameDBSerializer.DeserializeData(imported.Tables, state.DataJson);
             ApplyImportedState(imported);
+        }
+
+        internal static GameDB CreateFromRuntimeDB(string schemaJson, GameDBBase runtimeTarget)
+        {
+            return CreateFromRuntimeDB(schemaJson, () => runtimeTarget);
+        }
+
+        private static GameDB CreateFromRuntimeDB(string schemaJson,
+            Func<GameDBBase> resolveRuntimeTarget)
+        {
+            var imported = DeserializeSchema(schemaJson);
+            var runtimeTarget = resolveRuntimeTarget?.Invoke();
+            if (runtimeTarget == null)
+            {
+                throw new ArgumentNullException(nameof(runtimeTarget));
+            }
+            ImportFromRuntimeDB(imported.Tables, runtimeTarget.m_internal);
+            var model = new GameDB();
+            model.CreateInMemory(string.Empty);
+            model.ApplyImportedState(imported);
+            return model;
         }
 
         private static void ImportFromRuntimeDB(Dictionary<string, TableBase> tables,

@@ -21,8 +21,7 @@ UserSettings/
 
 # IDE-generated files
 .vs/
-**/.vscode/*
-!/.vscode/settings.json
+.vscode/
 .idea/
 /gamedb*.csproj
 /gamedb.sln
@@ -57,4 +56,3 @@ Thumbs.db
 
 plans/
 /plans.meta
-.vscode/

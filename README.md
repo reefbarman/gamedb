@@ -20,7 +20,7 @@ https://github.com/reefbarman/gamedb.git
 For reproducible builds, install a release tag once published:
 
 ```text
-https://github.com/reefbarman/gamedb.git#v1.0.0-preview.3
+https://github.com/reefbarman/gamedb.git#v1.0.0-preview.4
 ```
 
 You can also add the dependency directly to your project's `Packages/manifest.json`:
@@ -28,7 +28,7 @@ You can also add the dependency directly to your project's `Packages/manifest.js
 ```json
 {
   "dependencies": {
-    "com.reefbarman.gamedb": "https://github.com/reefbarman/gamedb.git#v1.0.0-preview.3"
+    "com.reefbarman.gamedb": "https://github.com/reefbarman/gamedb.git#v1.0.0-preview.4"
   }
 }
 ```

@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.0.0-preview.4] - 2026-07-28
+
+### Fixed
+
+- Fixed fresh database creation when editor integrations load multiple in-memory assemblies with the same simple name; GameDB now groups duplicate names and resolves project assemblies against Unity's editor compilation output before enum discovery.
+
 ## [1.0.0-preview.3] - 2026-07-28
 
 ### Added
@@ -59,6 +65,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Legacy Free/Pro feature split, old project files, vendored promise/JSON sources, binary/encrypted build output, and the unshipped legacy deployment server workflow.
 
-[Unreleased]: https://github.com/reefbarman/gamedb/compare/v1.0.0-preview.3...HEAD
+[Unreleased]: https://github.com/reefbarman/gamedb/compare/v1.0.0-preview.4...HEAD
+[1.0.0-preview.4]: https://github.com/reefbarman/gamedb/compare/v1.0.0-preview.3...v1.0.0-preview.4
 [1.0.0-preview.3]: https://github.com/reefbarman/gamedb/compare/v1.0.0-preview.1...v1.0.0-preview.3
 [1.0.0-preview.1]: https://github.com/reefbarman/gamedb/releases/tag/v1.0.0-preview.1

@@ -115,6 +115,12 @@ namespace GameDBLibrary.Tests
                 DataJson = dataJson,
                 SchemaJson = "{\"formatVersion\":4,\"tables\":\"invalid\"}"
             });
+            var missingTableKey = GameDBAutomationService.Save(new GameDBSaveRequest
+            {
+                DatabasePath = m_databasePath,
+                DataJson = dataJson,
+                SchemaJson = "{\"formatVersion\":4,\"tables\":{\"Items\":{\"fields\":{}}},\"scope\":\"Replacement\",\"localizationDB\":false}"
+            });
 
             Assert.That(missingVersion.Success, Is.False);
             Assert.That(missingVersion.Message, Does.Contain("missing required 'formatVersion'"));
@@ -123,6 +129,10 @@ namespace GameDBLibrary.Tests
             Assert.That(malformedSchema.Message,
                 Is.EqualTo("DataJson or SchemaJson could not be imported."));
             AssertGenericFailure(malformedSchema);
+            Assert.That(missingTableKey.Success, Is.False);
+            Assert.That(missingTableKey.Message,
+                Does.Contain("required 'key' object"));
+            AssertGenericFailure(missingTableKey);
             Assert.That(File.Exists(m_databaseAbsolutePath), Is.False);
             Assert.That(File.Exists(m_schemaAbsolutePath), Is.False);
         }
@@ -146,6 +156,58 @@ namespace GameDBLibrary.Tests
             Assert.That(result.Snapshot.ScopeName, Is.EqualTo("CharacterizationDatabase"));
             Assert.That(result.Snapshot.LocalizationDatabase, Is.True);
             AssertChangedDatabasePaths(result);
+            Assert.That(InspectRevision(), Is.EqualTo(result.RevisionAfter));
+        }
+
+        [Test]
+        public void CreateDryRun_ReturnsProspectiveRevisionWithoutCreatingFiles()
+        {
+            var result = GameDBAutomationService.Create(new GameDBCreateRequest
+            {
+                DatabasePath = m_databasePath,
+                ScopeName = "CharacterizationDatabase",
+                Options = new GameDBOperationOptions { DryRun = true }
+            });
+
+            Assert.That(result.Success, Is.True, result.Message);
+            Assert.That(result.Operation, Is.EqualTo("create"));
+            Assert.That(result.DryRun, Is.True);
+            Assert.That(result.RevisionBefore, Is.Null);
+            Assert.That(result.RevisionAfter, Is.EqualTo(result.Snapshot.Revision));
+            Assert.That(result.RevisionAfter, Does.Match("^[0-9a-f]{64}$"));
+            AssertChangedDatabasePaths(result);
+            Assert.That(File.Exists(m_databaseAbsolutePath), Is.False);
+            Assert.That(File.Exists(m_schemaAbsolutePath), Is.False);
+
+            var created = GameDBAutomationService.Create(new GameDBCreateRequest
+            {
+                DatabasePath = m_databasePath,
+                ScopeName = "CharacterizationDatabase"
+            });
+
+            Assert.That(created.Success, Is.True, created.Message);
+            Assert.That(created.RevisionAfter, Is.EqualTo(result.RevisionAfter));
+            Assert.That(InspectRevision(), Is.EqualTo(result.RevisionAfter));
+        }
+
+        [Test]
+        public void CreateOverwrite_ReportsReplacedAndReplacementRevisions()
+        {
+            CreateDatabase();
+            var revisionBefore = InspectRevision();
+
+            var result = GameDBAutomationService.Create(new GameDBCreateRequest
+            {
+                DatabasePath = m_databasePath,
+                ScopeName = "Replacement",
+                Overwrite = true,
+                Options = new GameDBOperationOptions { AllowDestructive = true }
+            });
+
+            Assert.That(result.Success, Is.True, result.Message);
+            Assert.That(result.RevisionBefore, Is.EqualTo(revisionBefore));
+            Assert.That(result.RevisionAfter, Is.EqualTo(result.Snapshot.Revision));
+            Assert.That(result.RevisionAfter, Is.Not.EqualTo(revisionBefore));
             Assert.That(InspectRevision(), Is.EqualTo(result.RevisionAfter));
         }
 

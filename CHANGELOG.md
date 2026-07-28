@@ -29,15 +29,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Replaced path-string Unity-object values with strict `{guid,path}` references. Real editor saves refresh paths from GUID identity for scalar, array, and dictionary values and accept any loadable main project asset under `Assets`; synchronous object projections remain Resources-only.
 - Expanded generated Unity-object scalar and array APIs with value, GUID, and path projections in every output plus object projections in Unity-enabled output; dictionary values remain accessor objects.
 - Made generated arrays, dictionaries, and table row maps recursively read-only and reference-stable within each atomic publication. Retained rows and table references now resolve against their original snapshot after reload, and runtime import validates direct, array, and dictionary row references before publication.
-
-### Deprecated
-
-- Marked the unsupported legacy remote/deployment runtime APIs obsolete, with removal planned for GameDB `1.0.0`.
+- Format version `4` table schemas now require the table-level `key` object; missing or malformed keys fail validation instead of falling back to string-key defaults.
 
 ### Removed
 
 - Removed the legacy server-management, upload, retrieval, and revision-promotion editor UI.
 - Removed the legacy Google Sheets editor workflow, settings, Apps Script, and documentation after CSV replaced it.
+- Removed the unsupported legacy remote/deployment runtime client APIs (`Remote`, `RequestUpdater`, `WebRequestHelper`, `ServerResponse`, `IDownloadHandler`, `RequestMethod`, `UnityForm`, `GameDBBase.ImportFromServer`, and `Utils.GetChecksum`) and the no-op `GameDBEditor.RegisterRevisionPromotionCallback`. Generated local/custom-loader and Resources load paths are unchanged.
+- Removed the direct `com.unity.modules.imgui` and `com.unity.modules.unitywebrequest` package dependencies; UIElements remains the only direct Unity module dependency.
 
 ## [1.0.0-preview.1] - 2026-07-24
 

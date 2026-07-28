@@ -64,8 +64,6 @@ namespace GameDBEditorLibrary
 
     internal class GameDB : Singleton<GameDB>
     {
-        internal static List<GameDBBase> RuntimeDBs = new List<GameDBBase>();
-
         private Dictionary<string, TableBase> m_tables = null;
         private GameDBDocument m_persistenceDocument;
 

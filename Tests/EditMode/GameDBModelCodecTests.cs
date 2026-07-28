@@ -82,6 +82,22 @@ namespace GameDBLibrary.Tests
                     .And.Contain("version 4"));
         }
 
+        [TestCase("{\"fields\":{}}", "key")]
+        [TestCase("{\"fields\":{},\"key\":\"string\"}", "key")]
+        [TestCase("{\"fields\":{},\"key\":{}}", "key.type")]
+        [TestCase("{\"fields\":{},\"key\":{\"type\":3}}", "key.type")]
+        [TestCase("{\"fields\":{},\"key\":{\"type\":\"guid\"}}", "key.type")]
+        public void Import_RejectsMissingOrMalformedTableKey(string tableSchema,
+            string expectedMessage)
+        {
+            var schemaJson = $"{{\"formatVersion\":4,\"tables\":{{\"Items\":{tableSchema}}},\"scope\":\"Test\",\"localizationDB\":false}}";
+
+            var exception = Assert.Throws<GameDBSchemaFormatException>(() =>
+                GameDBModelCodec.Import("{\"tables\":{}}", schemaJson));
+
+            Assert.That(exception.Message, Does.Contain(expectedMessage));
+        }
+
         [Test]
         public void Import_CurrentFormatVersionRoundTripsCanonically()
         {

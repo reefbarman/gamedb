@@ -1,6 +1,6 @@
 # GameDB API reference
 
-This is a curated reference for the supported public C# surface in the current GameDB package for Unity 6.5. It distinguishes hand-written runtime APIs, schema-generated APIs, and editor-only APIs. A C# declaration being `public` does not by itself make it a supported consumer contract; implementation scaffolding and retained compatibility types are identified separately below.
+This is a curated reference for the supported public C# surface in the current GameDB package for Unity 6.5. It distinguishes hand-written runtime APIs, schema-generated APIs, and editor-only APIs. A C# declaration being `public` does not by itself make it a supported consumer contract; implementation scaffolding is identified separately below.
 
 ## Assemblies and namespaces
 
@@ -341,7 +341,7 @@ Query request types are `GameDBQueryRequest`, `GameDBQueryTableProjection`, `Gam
 
 Request types are `GameDBCsvExportRequest`, `GameDBCsvImportRequest`, and `GameDBCsvImportMode`. Result types are `GameDBCsvExportResult`, `GameDBCsvImportResult`, `GameDBCsvError`, `GameDBCsvFailureKind`, and `GameDBCsvCommitStatus`. Import uses `GameDBOperationOptions` for dry runs, revision guards, and replace authorization. See the [CSV import and export contract](automation.md#csv-import-and-export) for the dialect, scalar/empty-cell matrix, transaction behavior, formula escaping, and 1-based error coordinates.
 
-Single mutations support `DryRun`, `ExpectedRevision`, and `AllowDestructive` through `GameDBOperationOptions`. Results report operation/path/message, before/after revisions, a snapshot, validation issues, and changed paths. Result and snapshot properties have public getters with `internal` setters and are service-produced values. They are not deeply immutable: exposed lists/dictionaries remain mutable, row-value snapshots are shallow, and values may use runtime CLR objects rather than the original JSON wire representation.
+Single mutations support `DryRun`, `ExpectedRevision`, and `AllowDestructive` through `GameDBOperationOptions`. `GameDBAutomationResult` exposes `Success`, `DryRun`, `Operation`, `DatabasePath`, `Message`, `RevisionBefore`, `RevisionAfter`, `Snapshot`, validation `Issues`, and `ChangedPaths`; the revision members are not named `BeforeRevision` or `AfterRevision`. For `Create`, `RevisionBefore` is `null` when no database existed and is the replaced database's revision during an overwrite. `RevisionAfter` equals `Snapshot.Revision` and is the prospective revision during a dry run. Result and snapshot properties have public getters with `internal` setters and are service-produced values. They are not deeply immutable: exposed lists/dictionaries remain mutable, row-value snapshots are shallow, and values may use runtime CLR objects rather than the original JSON wire representation.
 
 `ApplyBatch` uses `GameDBBatchRequest` and `GameDBBatchOptions` to apply ordered `GameDBBatchOperation` values with one database load, revision check, whole-model validation, and save. `GameDBBatchOperationKind` is the discriminant for table, rename, delete, field, row, and value payload DTOs. `AllowedDestructiveOperations` is an explicit kind allowlist. `GameDBBatchResult` adds `FailureKind`, `FailedOperationIndex`, `DeniedOperationKind`, `CommitStatus`, and structured file/post-save/recovery state so callers do not need to parse messages or blindly retry a partially published save.
 
@@ -395,42 +395,16 @@ public static void RegisterSavedGameDBCallback(Action<string> onSaved);
 - `AddRowToTable` requires a database to be loaded first. Invalid field/value data can throw; it does not save automatically.
 - `RegisterSavedGameDBCallback` adds a callback and exposes no matching unregister method. The callback receives the saved scope name.
 
-`GameDBEditor.AddRuntimeDB`, `Init`, `OnGUI`, and `Update` are public for generated/editor-window plumbing and are not supported application entry points.
-
-## Retained legacy remote client APIs
-
-The following runtime surface remains public for source compatibility but is **unsupported for new production use** in this Unity 6.5 package:
-
-```csharp
-GameDBBase.ImportFromServer(...);
-Remote.GetLatestDeployment(...);
-RequestUpdater.OnUpdate;
-RequestUpdater.Update();
-WebRequestHelper.StartRequest(...);
-WebRequestHelper.StartPostRequest(...);
-WebRequestHelper.CreateForm();
-RequestMethod;              // POST, GET
-IDownloadHandler;
-ServerResponse.HandleBasicResponse(...);
-GameDBLibraryUnity.UnityForm;
-Utils.GetChecksum(...);
-GameDBEditor.RegisterRevisionPromotionCallback(...);
-```
-
-The package does not provide, host, authenticate, or validate the historical Go/AWS GameDB deployment server. These APIs assume its response and JSON-patch protocol. `ImportFromServer` falls back to importing the built-in JSON after a remote error and reports through its callback/logging; callers must repeatedly call the returned `RequestUpdater.Update()` from an update loop to advance Unity web requests. Cache and patch operations perform local file I/O and can return or log network, parsing, reflection, or file errors.
-
-Each type or member listed above is marked with warning-only `[Obsolete]` and is planned for removal in GameDB `1.0.0`. The internal `GameDBLibraryUnity.UnityWebRequestTransport` implementation is obsolete on the same schedule. `GameDBEditor.RegisterRevisionPromotionCallback` remains only as a no-op source-compatibility shim because the revision-promotion UI was removed. A separately secured and tested protocol-compatible service is the caller's responsibility.
-
-`Utils.UrlCombine(...)` and `JsonPatch.Patch(...)` remain non-obsolete generic helpers. They are not part of the deprecated remote client contract.
+`GameDBEditor.AddRuntimeDB` is public for generated/editor-window plumbing and is not a supported application entry point.
 
 ## Public declarations that are not supported consumer contracts
 
-The runtime/editor assemblies expose additional declarations because generated code, serialization, reflection, UI components, or legacy internals need them. They are not documented as stable application APIs:
+The runtime/editor assemblies expose additional declarations because generated code, serialization, reflection, or UI components need them. They are not documented as stable application APIs:
 
 - generated-code infrastructure such as `FieldBase`, `DictionaryType`, `IDataAccessor`, `DataAccessor<T>`, scalar accessor classes, and `DictionaryAccessor<,>`; generated files depend on this ABI, but applications should use generated typed properties instead of constructing these types directly;
 - exposed infrastructure such as `IGameDB`, `Singleton<T>`, and `GameDBEditorInvoker`; these are not recommended consumer extension points (`GameDBEditorInvoker` is a reflection bridge used by Unity-enabled generated constructors);
-- generic helpers such as `JsonHelper`, most of `Utils`, and constructors/protected storage on row/table bases; `Utils.UrlCombine` and `JsonPatch.Patch` are retained non-obsolete helpers, while `Utils.GetChecksum` is part of the deprecated remote surface;
-- editor model, data-source, component, settings, exporter, request, and UI helper types;
+- generic helpers such as `JsonHelper`, most of `Utils` (including `Utils.UrlCombine`), `JsonPatch`, and constructors/protected storage on row/table bases;
+- editor model, data-source, component, settings, exporter, and UI helper types;
 - `GameDBEditorWindow.ShowWindow`, which is primarily the implementation of **Window > GameDB > Open Editor**.
 
 Some of these declarations may remain binary/source compatible incidentally, but the package currently has no API marker attributes or explicit compatibility policy that makes them supported. If external consumers already depend on one, treat that dependency as an ambiguity to resolve before changing the declaration.
@@ -438,7 +412,6 @@ Some of these declarations may remain binary/source compatible incidentally, but
 ## Known ambiguities and caveats
 
 - Support intent is inferred from generated templates, package documentation, XML comments, tests, and usage; it is not enforced by a dedicated public-API analyzer or assembly facade.
-- The unsupported legacy remote client types and members are compiler-deprecated with warning-only `[Obsolete]` and are planned for removal in GameDB `1.0.0`.
 - `Row` and `GameDBEditorWindow` are public in the global namespace, while most APIs use explicit GameDB namespaces.
 - Generated-code infrastructure is a required compile-time ABI for generated files even where it is not a recommended direct consumer API.
 - Generated schema string members are `const`; enum-key members are `static readonly`. Generated database, table, and row classes are `partial`, while schema classes remain static.

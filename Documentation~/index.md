@@ -44,8 +44,6 @@ Debug.Log(automation.Content);
 
 Stable document IDs are returned by `ListDocuments()`. `ReadDocument()` only accepts IDs from that catalog and cannot read arbitrary project or package files.
 
-## Legacy documentation coverage
+## Documentation coverage
 
-The supported workflows from the former GameDB 1.6 documentation have been rewritten for this Unity 6.5 package rather than copied verbatim. The editor, generated runtime API, Play Mode hot reload, localization, settings, CSV interchange, and supported public APIs are covered by the guides above.
-
-The old Free/Pro split, dedicated prefab type, binary/encrypted output, and Go/AWS deployment-server instructions are intentionally not carried forward. The editor server controls were removed; warning-only obsolete runtime remote clients remain temporarily for source compatibility, but this package does not ship or support the old hosted backend. The **Build** data-only JSON command remains available in the UI Toolkit document toolbar and is documented in [Editor authoring](editor-authoring.md#build-data-only-json).
+The editor, generated runtime API, Play Mode hot reload, localization, settings, CSV interchange, and supported public APIs are covered by the guides above. The **Build** data-only JSON command is available in the UI Toolkit document toolbar and is documented in [Editor authoring](editor-authoring.md#build-data-only-json).

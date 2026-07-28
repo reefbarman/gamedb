@@ -2,7 +2,6 @@
 using GameDBLibrary;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace GameDBEditorLibrary
 {
@@ -85,22 +84,9 @@ namespace GameDBEditorLibrary
             OnGameDBSaved += onSaved;
         }
 
-        /// <summary>
-        /// Retained for source compatibility with the removed deployment-server workflow.
-        /// </summary>
-        /// <param name="onPromotion">Ignored. Revision promotion callbacks are no longer raised.</param>
-        [Obsolete("The legacy deployment-server workflow is unsupported, and revision-promotion callbacks will be removed in GameDB 1.0.0. This callback is no longer raised. See Documentation~/api-reference.md#retained-legacy-remote-client-apis.")]
-        public static void RegisterRevisionPromotionCallback(Action<string, string, int> onPromotion)
-        {
-        }
-
         public static void AddRuntimeDB(GameDBBase runtimeDB)
         {
             GameDBEditorDomainServices.RuntimeRegistry.Register(runtimeDB);
-            if (!GameDB.RuntimeDBs.Any(existing => ReferenceEquals(existing, runtimeDB)))
-            {
-                GameDB.RuntimeDBs.Add(runtimeDB);
-            }
         }
 
     }

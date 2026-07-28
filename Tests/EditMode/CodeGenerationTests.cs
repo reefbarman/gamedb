@@ -653,7 +653,8 @@ namespace GameDBLibrary.Tests
                     "$\"Failed to load GameDB {Name} at path: {path}\""));
                 Assert.That(generatedCode, Does.Not.Contain("{{Name}}"));
                 Assert.That(generatedCode, Does.Not.Contain("BinaryGameDB"));
-                Assert.That(generatedCode, Does.Not.Contain("WebRequestHelper.Request"));
+                Assert.That(generatedCode, Does.Not.Contain("WebRequestHelper"));
+                Assert.That(generatedCode, Does.Not.Contain("ImportFromServer"));
             }
             finally
             {

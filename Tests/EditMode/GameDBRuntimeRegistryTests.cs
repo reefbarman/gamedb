@@ -11,12 +11,9 @@ namespace GameDBLibrary.Tests
 {
     public class GameDBRuntimeRegistryTests
     {
-        private GameDBBase[] m_previousLegacyTargets;
-
         [SetUp]
         public void SetUp()
         {
-            m_previousLegacyTargets = GameDB.RuntimeDBs.ToArray();
             GameDBEditorDomainServices.BeginPlaySession();
         }
 
@@ -24,8 +21,6 @@ namespace GameDBLibrary.Tests
         public void TearDown()
         {
             GameDBEditorDomainServices.BeginPlaySession();
-            GameDB.RuntimeDBs.AddRange(m_previousLegacyTargets);
-            m_previousLegacyTargets = null;
         }
 
         [Test]
@@ -124,7 +119,7 @@ namespace GameDBLibrary.Tests
         }
 
         [Test]
-        public void DomainTransition_ClearsRegistryAndLegacyMirror()
+        public void DomainTransition_ClearsRegistry()
         {
             var target = new TestRuntimeDB("Items", "Game");
             GameDBEditor.AddRuntimeDB(target);
@@ -134,7 +129,6 @@ namespace GameDBLibrary.Tests
 
             Assert.That(cleared.Snapshot.Epoch, Is.EqualTo(registered.Epoch + 1));
             Assert.That(cleared.Snapshot.Targets, Is.Empty);
-            Assert.That(GameDB.RuntimeDBs, Is.Empty);
             Assert.That(GameDBEditorDomainServices.RuntimeRegistry.TryResolve(
                 registered.Targets[0].TargetId, out _), Is.False);
         }
@@ -188,7 +182,7 @@ namespace GameDBLibrary.Tests
         }
 
         [Test]
-        public void AddRuntimeDB_PreservesBridgeAndMirrorsUniqueLegacyTarget()
+        public void AddRuntimeDB_PreservesBridgeAndRegistersUniqueTarget()
         {
             var target = new TestRuntimeDB("Items", "Game");
 
@@ -200,7 +194,6 @@ namespace GameDBLibrary.Tests
             Assert.That(GameDBEditorDomainServices.RuntimeRegistry.TryResolve(
                 snapshot.Targets[0].TargetId, out var resolved), Is.True);
             Assert.That(resolved, Is.SameAs(target));
-            Assert.That(GameDB.RuntimeDBs, Is.EqualTo(new[] { target }));
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]

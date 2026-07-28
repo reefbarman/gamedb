@@ -294,7 +294,6 @@ namespace GameDBEditorLibrary.Workspace
 
         internal static GameDBRuntimeRegistryResult BeginPlaySession()
         {
-            GameDB.RuntimeDBs.Clear();
             return RuntimeRegistry.BeginPlaySession();
         }
 

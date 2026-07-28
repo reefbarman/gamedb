@@ -61,6 +61,50 @@ namespace GameDBLibrary.Tests
         }
 
         [Test]
+        public void EditorAssembly_RemovesServerUiButKeepsDataBuild()
+        {
+            var editorAssembly = typeof(GameDBEditor).Assembly;
+
+            Assert.That(editorAssembly.GetType("GameDBEditorLibrary.BuildComponent"), Is.Null);
+            Assert.That(typeof(GameDBEditorOutputService).GetMethod("Build",
+                BindingFlags.Instance | BindingFlags.Public), Is.Not.Null);
+            Assert.That(editorAssembly.GetType("GameDBEditorLibrary.DeploymentComponent"), Is.Null);
+            Assert.That(editorAssembly.GetType("GameDBEditorLibrary.DeploymentPickerComponent"), Is.Null);
+            Assert.That(editorAssembly.GetType("GameDBEditorLibrary.ServerManagementComponent"), Is.Null);
+            Assert.That(editorAssembly.GetType("GameDBEditorLibrary.ServerDeploymentsDataSource"), Is.Null);
+            Assert.That(editorAssembly.GetType("GameDBEditorLibrary.DownloadHelper"), Is.Null);
+        }
+
+        [TestCase("GameDBLibrary.Remote")]
+        [TestCase("GameDBLibrary.RequestUpdater")]
+        [TestCase("GameDBLibrary.WebRequestHelper")]
+        [TestCase("GameDBLibrary.ServerResponse")]
+        [TestCase("GameDBLibrary.IDownloadHandler")]
+        [TestCase("GameDBLibrary.RequestMethod")]
+        [TestCase("GameDBLibraryUnity.UnityForm")]
+        [TestCase("GameDBLibraryUnity.UnityWebRequestTransport")]
+        [TestCase("GameDBLibraryUnity.UnityDownloadHandler")]
+        public void LegacyRemoteTypes_AreRemoved(string typeName)
+        {
+            var runtimeAssembly = typeof(GameDBBase).Assembly;
+
+            Assert.That(runtimeAssembly.GetType(typeof(GameDBBase).FullName),
+                Is.EqualTo(typeof(GameDBBase)));
+            Assert.That(runtimeAssembly.GetType(typeName), Is.Null, typeName);
+        }
+
+        [Test]
+        public void LegacyRemoteMembers_AreRemoved()
+        {
+            Assert.That(typeof(GameDBBase).GetMethod("ImportFromServer",
+                BindingFlags.Instance | BindingFlags.Public), Is.Null);
+            Assert.That(typeof(Utils).GetMethod("GetChecksum",
+                BindingFlags.Static | BindingFlags.Public), Is.Null);
+            Assert.That(typeof(GameDBEditor).GetMethod("RegisterRevisionPromotionCallback",
+                BindingFlags.Static | BindingFlags.Public), Is.Null);
+        }
+
+        [Test]
         public void AddRuntimeDB_PreservesGeneratedReflectionBridgeSignature()
         {
             Assert.That(typeof(GameDBEditor).Assembly.GetName().Name,

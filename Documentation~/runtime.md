@@ -280,6 +280,4 @@ Core-only generation includes the language-aware `Import` API and metadata but n
 The supported generated Unity runtime path is JSON text loaded from `Resources`, acquired through an explicit `IGameDBDataLoader`, or supplied to `Import`.
 
 - Binary, compressed, and encrypted GameDB build/load output was removed. Current generation emits no `BinaryGameDB` API.
-- This package does not provide, host, or validate the old remote deployment server. The editor deployment UI was removed. Residual runtime remote-update client APIs remain only as warning-only obsolete source-compatibility shims and will be removed in GameDB 1.0.0; they are not a supported publishing/runtime workflow for new projects.
 - GameDB provides synchronous object loading only through Unity-enabled `ObjectVal`/`GetObject()` Resources projections. Core-only output exposes value, GUID, and path data without a `UnityEngine.Object` API; the separately installed [optional Addressables adapter](addressables.md) loads valid non-Resources references and GameDB JSON asynchronously.
-- The warning-only obsolete `ImportFromServer` remote/deployment shim is outside the supported async-loading concurrency contract. Its eventual callback uses atomic `Import`, but an outstanding unsupported remote request has no freshness guarantee against newer supported loads. Do not use it for new projects.

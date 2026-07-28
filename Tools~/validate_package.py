@@ -67,9 +67,7 @@ def validate_package_contract():
     require(
         package.get("dependencies")
         == {
-            "com.unity.modules.imgui": "1.0.0",
             "com.unity.modules.uielements": "1.0.0",
-            "com.unity.modules.unitywebrequest": "1.0.0",
             "com.unity.nuget.newtonsoft-json": "3.2.2",
         },
         "Unexpected package dependency contract",

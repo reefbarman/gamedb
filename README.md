@@ -172,10 +172,6 @@ Use `DryRun` to validate a prospective change without writing. Renames, deletes,
 
 Use `GameDBAutomationService.ExportCsv` and `ImportCsv` for supported one-table spreadsheet interchange. The RFC 4180 dialect uses a reserved `__key` column, invariant scalar and enum values, exact signed Int64 text, finite `G17` Double text, compact canonical JSON for Unity-object cells, reversible formula-injection protection, explicit `Replace`/`Upsert` modes, revision guards, and transactional validation. Tables containing array or dictionary fields remain unsupported because the dialect has no collection-cell encoding. See the [CSV contract](Documentation~/automation.md#csv-import-and-export).
 
-## Legacy-compatible remote client APIs
-
-The old editor upload, retrieval, and revision-promotion controls were removed. The runtime still contains warning-only obsolete remote-update client APIs for source compatibility, but this preview does not provide, host, or validate the old Go/AWS deployment server. Do not use this surface for new production work; it is planned for removal in GameDB `1.0.0`.
-
 ## Development
 
 `TestProject~/` is the Unity 6.5 development project. The package is referenced locally from the repository root. EditMode tests live in `Tests/EditMode`.

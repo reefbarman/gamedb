@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Security.Cryptography;
-using System.Text;
 
 namespace GameDBLibrary
 {
@@ -15,27 +13,6 @@ namespace GameDBLibrary
             T[] result = new T[length];
             Array.Copy(data, index, result, 0, length);
             return result;
-        }
-
-        /// <summary>
-        /// Gets the MD5 checksum of a byte array.
-        /// </summary>
-        /// <param name="input">The byte array to generate a checksum for.</param>
-        /// <returns>A MD5 checksum string</returns>
-        [Obsolete(LegacyRemoteApi.Message)]
-        public static string GetChecksum(byte[] input)
-        {
-            var sb = new StringBuilder();
-
-            MD5 md5 = new MD5CryptoServiceProvider();
-            var hashBytes = md5.ComputeHash(input);
-
-            foreach (byte bt in hashBytes)
-            {
-                sb.Append(bt.ToString("x2"));
-            }
-
-            return sb.ToString();
         }
 
         /// <summary>

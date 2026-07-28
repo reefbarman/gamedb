@@ -41,6 +41,17 @@ Every schema root requires a positive JSON integer `formatVersion`. The current 
 
 GameDB validates this value before hydrating tables or data. Missing, null, string, fractional, non-positive, out-of-range, older, and newer values are rejected. These failures leave both database files unchanged and produce actionable load messages through Inspect/Validate/general mutations, `LoadFailed` through Batch/Query/CSV, or a failed raw Save result. Runtime loading of non-Resources Unity-object references is documented separately in the [optional Addressables guide](addressables.md); automation continues to exchange the transport-neutral `{guid,path}` value.
 
+Each table entry inside `tables` requires a `fields` object and a `key` object describing the row-key type; a missing or malformed `key` is rejected without falling back to a default:
+
+```json
+{
+  "Items": {
+    "fields": { "Power": { "type": "int", "isArray": false, "typeArg": null } },
+    "key": { "type": "string", "typeArg": null }
+  }
+}
+```
+
 `GameDBSaveRequest.SchemaJson` must include `"formatVersion": 4`, including for new files and dry runs. Supplying unversioned schema JSON is an error. `ExportJson` returns canonical versioned schema JSON suitable for a later guarded Save.
 
 ## Read operations
@@ -240,6 +251,8 @@ GameDBAutomationResult GenerateCSharp(GameDBGenerateRequest request);
 ```
 
 Every operation is path-addressed and loads an isolated model. It does not depend on whichever database is selected in the GameDB editor window. A real editor save normalizes scalar, array, and dictionary Unity-object paths from their GUIDs before persistence; read operations and dry runs remain pure and do not resolve assets or refresh paths.
+
+`GameDBAutomationResult` exposes revision metadata as `RevisionBefore` and `RevisionAfter`. For `Create`, `RevisionBefore` is `null` when no database existed and is the replaced database's revision during an overwrite. `RevisionAfter` equals `Snapshot.Revision`; in a dry run this is the prospective revision and is not persisted.
 
 ## Operation options
 

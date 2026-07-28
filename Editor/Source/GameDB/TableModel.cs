@@ -179,25 +179,30 @@ namespace GameDBEditorLibrary
 
             MutableFields = fields;
 
-            //Backwards compatible
-            if (tableSchema.ContainsKey("key"))
+            if (!tableSchema.TryGetValue("key", out var keySchemaObj)
+                || !(keySchemaObj is IDictionary<string, object> keySchema))
             {
-                if (!(tableSchema["key"] is IDictionary<string, object> keySchema))
-                {
-                    throw new FormatException("key object is not a dictionary");
-                }
+                throw new GameDBSchemaFormatException(
+                    "Table schema is missing the required 'key' object or it is not a dictionary.");
+            }
+            if (!keySchema.TryGetValue("type", out var keyTypeObj)
+                || !(keyTypeObj is string keyTypeName)
+                || !Enum.TryParse(keyTypeName, out KeyType keyType))
+            {
+                throw new GameDBSchemaFormatException(
+                    "Table schema 'key.type' must name a supported key type.");
+            }
 
-                m_tableKey.KeyType = (KeyType)Convert.ChangeType(Enum.Parse(typeof(KeyType), keySchema["type"] as string), typeof(KeyType));
+            m_tableKey.KeyType = keyType;
 
-                switch (m_tableKey.KeyType)
-                {
-                    case KeyType.@enum:
-                        m_tableKey.TypeArg = AssemblyExplorer.Instance.GetType(keySchema["typeArg"] as string);
-                        break;
-                    case KeyType.@string:
-                        m_tableKey.TypeArg = null;
-                        break;
-                }
+            switch (m_tableKey.KeyType)
+            {
+                case KeyType.@enum:
+                    m_tableKey.TypeArg = AssemblyExplorer.Instance.GetType(keySchema["typeArg"] as string);
+                    break;
+                case KeyType.@string:
+                    m_tableKey.TypeArg = null;
+                    break;
             }
         }
 

@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.0.0-preview.3] - 2026-07-28
+
 ### Added
 
 - Added atomic editor-automation batches with ordered mutation operations, whole-batch dry runs and validation, revision guards, explicit destructive-operation allowlists, indexed failures, and structured commit outcomes.
@@ -30,6 +32,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Expanded generated Unity-object scalar and array APIs with value, GUID, and path projections in every output plus object projections in Unity-enabled output; dictionary values remain accessor objects.
 - Made generated arrays, dictionaries, and table row maps recursively read-only and reference-stable within each atomic publication. Retained rows and table references now resolve against their original snapshot after reload, and runtime import validates direct, array, and dictionary row references before publication.
 - Format version `4` table schemas now require the table-level `key` object; missing or malformed keys fail validation instead of falling back to string-key defaults.
+- Made editor automation report structured commit status, committed paths, pending post-save work, persistence errors, and recovery artifacts consistently across create, save, and command mutations.
 
 ### Removed
 
@@ -56,5 +59,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Legacy Free/Pro feature split, old project files, vendored promise/JSON sources, binary/encrypted build output, and the unshipped legacy deployment server workflow.
 
-[Unreleased]: https://github.com/reefbarman/gamedb/compare/v1.0.0-preview.1...HEAD
+[Unreleased]: https://github.com/reefbarman/gamedb/compare/v1.0.0-preview.3...HEAD
+[1.0.0-preview.3]: https://github.com/reefbarman/gamedb/compare/v1.0.0-preview.1...v1.0.0-preview.3
 [1.0.0-preview.1]: https://github.com/reefbarman/gamedb/releases/tag/v1.0.0-preview.1

@@ -191,10 +191,25 @@ namespace GameDBEditorLibrary.Automation
         public List<string> RecoveryArtifacts { get; internal set; } = new List<string>();
     }
 
+    public enum GameDBCommitStatus
+    {
+        NotAttempted,
+        DryRun,
+        Saved,
+        NoChanges,
+        SerializationFailed,
+        ValidationFailed,
+        Conflict,
+        PersistenceFailed,
+        PersistenceStateUnknown,
+        PostSavePending
+    }
+
     public sealed class GameDBAutomationResult
     {
         public bool Success { get; internal set; }
         public bool DryRun { get; internal set; }
+        public GameDBCommitStatus CommitStatus { get; internal set; }
         public string Operation { get; internal set; }
         public string DatabasePath { get; internal set; }
         public string Message { get; internal set; }
@@ -203,6 +218,10 @@ namespace GameDBEditorLibrary.Automation
         public GameDBSnapshot Snapshot { get; internal set; }
         public List<GameDBValidationIssue> Issues { get; internal set; } = new List<GameDBValidationIssue>();
         public List<string> ChangedPaths { get; internal set; } = new List<string>();
+        public bool FilesCommitted { get; internal set; }
+        public bool PostSavePending { get; internal set; }
+        public List<string> PostSaveErrors { get; internal set; } = new List<string>();
+        public List<string> RecoveryArtifacts { get; internal set; } = new List<string>();
     }
 
     public sealed class GameDBExportResult

@@ -1,6 +1,6 @@
 {
   "name": "com.reefbarman.gamedb",
-  "version": "1.0.0-preview.2",
+  "version": "1.0.0-preview.3",
   "displayName": "GameDB",
   "description": "A Unity game-data editor and runtime library with schema-driven C# code generation.",
   "unity": "6000.5",

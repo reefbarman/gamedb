@@ -191,6 +191,46 @@ namespace GameDBLibrary.Tests
         }
 
         [Test]
+        public void CreateDryRun_EquivalentCommitCreatesMissingParentDirectories()
+        {
+            var nestedDatabasePath = $"{m_assetFolderPath}/Data/Resources/GameDB/gameplay.json";
+            var nestedDatabaseAbsolutePath = Path.Combine(
+                m_assetFolderAbsolutePath, "Data", "Resources", "GameDB", "gameplay.json");
+            var nestedSchemaAbsolutePath = Path.ChangeExtension(nestedDatabaseAbsolutePath, ".schema.json");
+            Directory.Delete(m_assetFolderAbsolutePath, true);
+
+            var preview = GameDBAutomationService.Create(new GameDBCreateRequest
+            {
+                DatabasePath = nestedDatabasePath,
+                ScopeName = "Gameplay",
+                Options = new GameDBOperationOptions { DryRun = true }
+            });
+
+            Assert.That(preview.Success, Is.True, preview.Message);
+            Assert.That(preview.CommitStatus, Is.EqualTo(GameDBCommitStatus.DryRun));
+            Assert.That(preview.FilesCommitted, Is.False);
+            Assert.That(Directory.Exists(m_assetFolderAbsolutePath), Is.False);
+
+            var created = GameDBAutomationService.Create(new GameDBCreateRequest
+            {
+                DatabasePath = nestedDatabasePath,
+                ScopeName = "Gameplay"
+            });
+
+            Assert.That(created.Success, Is.True, created.Message);
+            Assert.That(created.CommitStatus, Is.EqualTo(GameDBCommitStatus.Saved));
+            Assert.That(created.FilesCommitted, Is.True);
+            Assert.That(created.RevisionAfter, Is.EqualTo(preview.RevisionAfter));
+            Assert.That(created.ChangedPaths, Is.EqualTo(new[]
+            {
+                nestedDatabasePath,
+                Path.ChangeExtension(nestedDatabasePath, ".schema.json")
+            }));
+            Assert.That(File.Exists(nestedDatabaseAbsolutePath), Is.True);
+            Assert.That(File.Exists(nestedSchemaAbsolutePath), Is.True);
+        }
+
+        [Test]
         public void CreateOverwrite_ReportsReplacedAndReplacementRevisions()
         {
             CreateDatabase();
@@ -413,7 +453,7 @@ namespace GameDBLibrary.Tests
         }
 
         [Test]
-        public void PostSaveCallbackFailure_ReturnsGenericFailureAfterFilesCommit()
+        public void PostSaveCallbackFailure_ReturnsPersistenceDetailsAfterFilesCommit()
         {
             CreateDatabase();
             GameDBEditor.OnGameDBSaved = _ => throw new InvalidOperationException("callback failed");
@@ -430,8 +470,15 @@ namespace GameDBLibrary.Tests
             Assert.That(result.Success, Is.False);
             Assert.That(result.Operation, Is.EqualTo("addTable"));
             Assert.That(result.DatabasePath, Is.EqualTo(m_databasePath));
-            Assert.That(result.Message, Is.EqualTo("Database could not be saved."));
-            AssertGenericFailure(result);
+            Assert.That(result.Message, Is.EqualTo("Database files were saved, but post-save work is still pending."));
+            Assert.That(result.CommitStatus, Is.EqualTo(GameDBCommitStatus.PostSavePending));
+            Assert.That(result.FilesCommitted, Is.True);
+            Assert.That(result.PostSavePending, Is.True);
+            Assert.That(result.PostSaveErrors, Has.Some.Contains("callback failed"));
+            Assert.That(result.RecoveryArtifacts, Is.Empty);
+            Assert.That(result.RevisionBefore, Is.Not.Null);
+            Assert.That(result.RevisionAfter, Is.EqualTo(result.Snapshot.Revision));
+            AssertChangedDatabasePaths(result);
             Assert.That(persisted.Success, Is.True, persisted.Message);
             Assert.That(persisted.Snapshot.Tables.Select(table => table.Name), Does.Contain("Items"));
         }

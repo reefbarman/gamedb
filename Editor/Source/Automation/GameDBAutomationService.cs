@@ -1221,11 +1221,8 @@ namespace GameDBEditorLibrary.Automation
                 var result = TransactionSuccess(operation, path, options.DryRun, transaction);
                 if (!options.DryRun)
                 {
-                    var save = document.Save(new GameDBSaveOptions { ForceWrite = true });
-                    if (!save.Success)
-                    {
-                        return Failure(operation, path.AssetPath, "Database could not be saved.");
-                    }
+                    ApplySaveOutcome(result,
+                        document.Save(new GameDBSaveOptions { ForceWrite = true }));
                 }
 
                 return result;
@@ -1245,6 +1242,7 @@ namespace GameDBEditorLibrary.Automation
                 Operation = operation,
                 DatabasePath = path.AssetPath,
                 DryRun = dryRun,
+                CommitStatus = dryRun ? GameDBCommitStatus.DryRun : GameDBCommitStatus.NotAttempted,
                 Message = dryRun ? "Mutation validated; no files were written." : "Mutation saved.",
                 RevisionBefore = transaction.RevisionBefore,
                 RevisionAfter = transaction.AttemptedRevision,
@@ -1311,6 +1309,7 @@ namespace GameDBEditorLibrary.Automation
                 Operation = operation,
                 DatabasePath = path.AssetPath,
                 DryRun = dryRun,
+                CommitStatus = dryRun ? GameDBCommitStatus.DryRun : GameDBCommitStatus.NotAttempted,
                 Message = message,
                 RevisionBefore = revisionBefore,
                 RevisionAfter = document.CurrentRevision,
@@ -1327,14 +1326,42 @@ namespace GameDBEditorLibrary.Automation
 
             if (!dryRun)
             {
-                var save = document.Save(new GameDBSaveOptions { ForceWrite = true });
-                if (!save.Success)
-                {
-                    return Failure(operation, path.AssetPath, "Database could not be saved.");
-                }
+                ApplySaveOutcome(result,
+                    document.Save(new GameDBSaveOptions { ForceWrite = true }));
             }
 
             return result;
+        }
+
+        private static void ApplySaveOutcome(GameDBAutomationResult result, GameDBSaveOutcome save)
+        {
+            result.Success = save.Success;
+            result.CommitStatus = ToCommitStatus(save.Status);
+            if (!save.Success)
+            {
+                result.Message = save.Message;
+            }
+            result.FilesCommitted = save.FilesCommitted;
+            result.PostSavePending = save.PostSavePending;
+            result.PostSaveErrors = save.PostSaveErrors.ToList();
+            result.RecoveryArtifacts = save.RecoveryArtifacts.ToList();
+            result.ChangedPaths = save.ChangedPaths.ToList();
+        }
+
+        private static GameDBCommitStatus ToCommitStatus(GameDBSaveStatus status)
+        {
+            switch (status)
+            {
+                case GameDBSaveStatus.Saved: return GameDBCommitStatus.Saved;
+                case GameDBSaveStatus.NoChanges: return GameDBCommitStatus.NoChanges;
+                case GameDBSaveStatus.SerializationFailed: return GameDBCommitStatus.SerializationFailed;
+                case GameDBSaveStatus.ValidationFailed: return GameDBCommitStatus.ValidationFailed;
+                case GameDBSaveStatus.Conflict: return GameDBCommitStatus.Conflict;
+                case GameDBSaveStatus.PersistenceFailed: return GameDBCommitStatus.PersistenceFailed;
+                case GameDBSaveStatus.PersistenceStateUnknown: return GameDBCommitStatus.PersistenceStateUnknown;
+                case GameDBSaveStatus.PostSavePending: return GameDBCommitStatus.PostSavePending;
+                default: throw new ArgumentOutOfRangeException(nameof(status));
+            }
         }
 
         private static GameDBAutomationResult ReadSuccess(string operation, string databasePath,

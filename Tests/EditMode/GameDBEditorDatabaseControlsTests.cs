@@ -311,6 +311,14 @@ namespace GameDBLibrary.Tests
                 availableEnumTypes: () => new[] { "Z.Available", "A.Available" }))
             {
                 var enums = root.Q<ListView>("imported-enum-types");
+                Assert.That(enums.tooltip,
+                    Does.Contain("Checked enum types are available"));
+                Assert.That(root.Q<Button>("register-database-button").tooltip,
+                    Does.Contain("project-wide operations"));
+                Assert.That(root.Q<TextField>("export-path-field").tooltip,
+                    Does.Contain("Generate toolbar action"));
+                Assert.That(root.Q<TextField>("build-path-field").tooltip,
+                    Does.Contain("Build toolbar action"));
                 Assert.That(enums.itemsSource.Cast<string>(), Is.EqualTo(new[]
                 {
                     "A.Available", "Missing.Enum", "Z.Available"
@@ -363,6 +371,12 @@ namespace GameDBLibrary.Tests
                 projectSettings: settings, databaseDialogs: new RecordingDialogs()))
             {
                 controller.OpenSettings();
+                var registeredPaths = root.Q<ScrollView>("registered-database-paths");
+                var registeredPathsEmpty = root.Q<Label>("registered-database-empty-label");
+                Assert.That(registeredPaths.style.display.value,
+                    Is.EqualTo(DisplayStyle.None));
+                Assert.That(registeredPathsEmpty.style.display.value,
+                    Is.EqualTo(DisplayStyle.Flex));
                 root.Q<TextField>("export-path-field").value = "Draft/Generated";
                 Assert.That(controller.RegisterDatabase(FirstPath).Changed, Is.True);
                 Assert.That(controller.RegisterDatabase(" Assets/DatabaseControls/first.json ")
@@ -390,12 +404,19 @@ namespace GameDBLibrary.Tests
                     "External", "ExternalBuild");
                 Assert.That(root.Q<TextField>("export-path-field").value,
                     Is.EqualTo("Generated"), "External refresh must preserve the open modal draft.");
-                Assert.That(root.Q<ScrollView>("registered-database-paths")
+                Assert.That(registeredPaths
                     .Query<Label>(className: "gamedb-editor__registered-path-label")
                     .ToList().Single().text, Is.EqualTo("external.json"));
+                Assert.That(registeredPaths.style.display.value,
+                    Is.EqualTo(DisplayStyle.Flex));
+                Assert.That(registeredPathsEmpty.style.display.value,
+                    Is.EqualTo(DisplayStyle.None));
                 Assert.That(controller.UnregisterDatabase("external.json").Success, Is.True);
-                Assert.That(root.Q<ScrollView>("registered-database-paths").childCount,
-                    Is.Zero);
+                Assert.That(registeredPaths.childCount, Is.Zero);
+                Assert.That(registeredPaths.style.display.value,
+                    Is.EqualTo(DisplayStyle.None));
+                Assert.That(registeredPathsEmpty.style.display.value,
+                    Is.EqualTo(DisplayStyle.Flex));
             }
             workspace.Dispose();
         }

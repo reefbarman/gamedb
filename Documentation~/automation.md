@@ -55,6 +55,22 @@ GameDBAutomationResult Validate(string databasePath);
 GameDBExportResult ExportJson(string databasePath);
 ```
 
+`ListDatabases` returns a `GameDBListResult` with readable `Success`, `Message`, and `DatabasePaths` properties. `DatabasePaths` contains the matching database asset paths in ordinal order.
+
+```csharp
+var result = GameDBAutomationService.ListDatabases("Assets");
+if (!result.Success)
+{
+    Debug.LogError(result.Message);
+    return;
+}
+
+foreach (var databasePath in result.DatabasePaths)
+{
+    Debug.Log(databasePath);
+}
+```
+
 `Load` is an alias for `Inspect`. Their results include a stable snapshot of tables, fields, rows, validation issues, and a SHA-256 revision token.
 
 ### Query API

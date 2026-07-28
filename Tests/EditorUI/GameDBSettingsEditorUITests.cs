@@ -32,6 +32,20 @@ namespace GameDBLibrary.EditorUITests
             Assert.That(window.SettingsPanel.worldBound.height,
                 Is.LessThanOrEqualTo(window.Root.worldBound.height + 1f));
             Assert.That(window.SettingsScroll.worldBound.height, Is.GreaterThan(0f));
+            Assert.That(window.SettingsPanel.resolvedStyle.backgroundColor.a,
+                Is.EqualTo(1f).Within(0.01f));
+            Assert.That(window.RegisteredDatabasePaths.resolvedStyle.display,
+                Is.EqualTo(DisplayStyle.None));
+            Assert.That(window.RegisteredDatabaseEmpty.resolvedStyle.display,
+                Is.EqualTo(DisplayStyle.Flex));
+            window.PopulateRegisteredDatabases();
+            simulate.FrameUpdate();
+            Assert.That(window.RegisteredDatabasePaths.resolvedStyle.display,
+                Is.EqualTo(DisplayStyle.Flex));
+            Assert.That(window.RegisteredDatabasePaths.worldBound.height,
+                Is.GreaterThanOrEqualTo(80f));
+            Assert.That(window.RegisteredDatabaseEmpty.resolvedStyle.display,
+                Is.EqualTo(DisplayStyle.None));
             Assert.That(window.SettingsScroll.contentContainer.layout.height,
                 Is.GreaterThan(window.SettingsScroll.contentViewport.layout.height));
             Assert.That(window.SaveSettings.worldBound.yMax,
@@ -58,6 +72,7 @@ namespace GameDBLibrary.EditorUITests
         internal const string UnresolvedEnum = "Missing.LegacyEnum";
         private GameDBEditorWorkspace m_workspace;
         private GameDBEditorWindowController m_controller;
+        private GameDBProjectSettingsService m_settings;
 
         internal VisualElement Root => rootVisualElement.Q<VisualElement>(
             "gamedb-editor-root");
@@ -69,12 +84,22 @@ namespace GameDBLibrary.EditorUITests
         internal ScrollView SettingsScroll => SettingsPanel.Q<ScrollView>(
             className: "gamedb-editor__settings-scroll");
         internal ListView EnumList => rootVisualElement.Q<ListView>("imported-enum-types");
+        internal ScrollView RegisteredDatabasePaths => rootVisualElement.Q<ScrollView>(
+            "registered-database-paths");
+        internal Label RegisteredDatabaseEmpty => rootVisualElement.Q<Label>(
+            "registered-database-empty-label");
         internal Button SaveSettings => rootVisualElement.Q<Button>("save-settings-button");
         internal Button CloseSettings => rootVisualElement.Q<Button>("close-settings-button");
 
         internal void OpenSettings()
         {
             m_controller.OpenSettings();
+        }
+
+        internal void PopulateRegisteredDatabases()
+        {
+            m_settings.Update(new[] { "registered.json" }, new[] { UnresolvedEnum },
+                "Generated", "Build");
         }
 
         public void CreateGUI()
@@ -90,14 +115,14 @@ namespace GameDBLibrary.EditorUITests
             m_workspace = new GameDBEditorWorkspace(
                 new GameDBDocumentLeaseRegistry(GameDBFilePairStore.Instance),
                 recovery, new GameDBActiveWorkspaceHub());
-            var settings = new GameDBProjectSettingsService(new MemorySettingsStore(),
+            m_settings = new GameDBProjectSettingsService(new MemorySettingsStore(),
                 _ => true, name => name != UnresolvedEnum);
-            settings.Update(Array.Empty<string>(), new[] { UnresolvedEnum },
+            m_settings.Update(Array.Empty<string>(), new[] { UnresolvedEnum },
                 "Generated", "Build");
             var enums = Enumerable.Range(0, 40)
                 .Select(index => $"Game.Enums.Enum{index:00}").ToArray();
             m_controller = new GameDBEditorWindowController(rootVisualElement, m_workspace,
-                projectSettings: settings, availableEnumTypes: () => enums);
+                projectSettings: m_settings, availableEnumTypes: () => enums);
         }
 
         private void OnDisable()
@@ -106,6 +131,7 @@ namespace GameDBLibrary.EditorUITests
             m_controller = null;
             m_workspace?.Dispose();
             m_workspace = null;
+            m_settings = null;
         }
 
         private sealed class MemoryRecoveryStore : IGameDBWorkspaceRecoveryStore

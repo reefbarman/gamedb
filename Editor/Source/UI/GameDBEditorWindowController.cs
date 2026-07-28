@@ -119,6 +119,7 @@ namespace GameDBEditorLibrary.UI
         private readonly VisualElement m_modalHost;
         private readonly VisualElement m_settingsPanel;
         private readonly Label m_settingsError;
+        private readonly Label m_registeredPathsEmpty;
         private readonly ScrollView m_registeredPaths;
         private readonly Button m_registerButton;
         private readonly ListView m_importedEnumTypes;
@@ -210,6 +211,7 @@ namespace GameDBEditorLibrary.UI
             m_modalHost = root.Q<VisualElement>("modal-host");
             m_settingsPanel = root.Q<VisualElement>("settings-panel");
             m_settingsError = root.Q<Label>("settings-error-label");
+            m_registeredPathsEmpty = root.Q<Label>("registered-database-empty-label");
             m_registeredPaths = root.Q<ScrollView>("registered-database-paths");
             m_registerButton = root.Q<Button>("register-database-button");
             m_importedEnumTypes = root.Q<ListView>("imported-enum-types");
@@ -1013,6 +1015,8 @@ namespace GameDBEditorLibrary.UI
                 m_importedEnumTypes.itemsSource = null;
                 m_exportPath.SetValueWithoutNotify(string.Empty);
                 m_buildPath.SetValueWithoutNotify(string.Empty);
+                m_registeredPathsEmpty.style.display = DisplayStyle.Flex;
+                m_registeredPaths.style.display = DisplayStyle.None;
                 return;
             }
 
@@ -1048,6 +1052,11 @@ namespace GameDBEditorLibrary.UI
                 ? draftExportPath : snapshot.ExportPath);
             m_buildPath.SetValueWithoutNotify(preserveDraft
                 ? draftBuildPath : snapshot.BuildPath);
+            var hasRegisteredDatabases = snapshot.RegisteredDatabasePaths.Count > 0;
+            m_registeredPathsEmpty.style.display = hasRegisteredDatabases
+                ? DisplayStyle.None : DisplayStyle.Flex;
+            m_registeredPaths.style.display = hasRegisteredDatabases
+                ? DisplayStyle.Flex : DisplayStyle.None;
             foreach (var path in snapshot.RegisteredDatabasePaths)
             {
                 var capturedPath = path;

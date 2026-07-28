@@ -81,6 +81,7 @@ namespace GameDBEditorLibrary.UI
                 { "modal-host", typeof(VisualElement) },
                 { "settings-panel", typeof(VisualElement) },
                 { "settings-error-label", typeof(Label) },
+                { "registered-database-empty-label", typeof(Label) },
                 { "registered-database-paths", typeof(ScrollView) },
                 { "register-database-button", typeof(Button) },
                 { "imported-enum-types", typeof(ListView) },

@@ -64,6 +64,7 @@ namespace GameDBLibrary.Tests
                 { "collection-apply-button", typeof(Button) },
                 { "collection-cancel-button", typeof(Button) },
                 { "settings-error-label", typeof(Label) },
+                { "registered-database-empty-label", typeof(Label) },
                 { "registered-database-paths", typeof(ScrollView) },
                 { "register-database-button", typeof(Button) },
                 { "imported-enum-types", typeof(ListView) },

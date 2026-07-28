@@ -2,7 +2,7 @@
   "dotnet.defaultSolution": "TestProject~/TestProject~.slnx",
   "agentlink.modeReasoningEffortPreferences": {
     "architect": "xhigh",
-    "code": "xhigh"
+    "code": "medium"
   },
   "agentlink.agentModel": "gpt-5.6-sol",
   "agentlink.modeModelPreferences": {

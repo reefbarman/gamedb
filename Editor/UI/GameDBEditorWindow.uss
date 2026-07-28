@@ -255,7 +255,7 @@
     max-width: 90%;
     max-height: 90%;
     padding: var(--gamedb-space-md);
-    background-color: var(--gamedb-panel-color);
+    background-color: var(--gamedb-dialog-color);
     border-width: 1px;
     border-color: var(--gamedb-border-color);
 }
@@ -346,12 +346,28 @@
     margin-top: var(--gamedb-space-sm);
 }
 
+.gamedb-editor__settings-help,
+.gamedb-editor__settings-empty {
+    color: var(--gamedb-muted-text-color);
+    white-space: normal;
+}
+
+.gamedb-editor__settings-help {
+    margin-bottom: var(--gamedb-space-xs);
+}
+
+.gamedb-editor__settings-empty {
+    margin-top: var(--gamedb-space-xs);
+    margin-bottom: var(--gamedb-space-xs);
+}
+
 .gamedb-editor__settings-error {
     color: #d9534f;
     white-space: normal;
 }
 
 .gamedb-editor__registered-paths {
+    display: none;
     min-height: 80px;
     max-height: 180px;
     margin-top: var(--gamedb-space-xs);

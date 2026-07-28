@@ -97,12 +97,15 @@
                 <ui:ScrollView class="gamedb-editor__settings-scroll">
                     <ui:Label name="settings-error-label" class="gamedb-editor__settings-error" />
                     <ui:Label text="Registered databases" class="gamedb-editor__settings-heading" />
+                    <ui:Label text="Databases included in project-wide generation and build operations." class="gamedb-editor__settings-help" />
+                    <ui:Label name="registered-database-empty-label" text="No databases registered." class="gamedb-editor__settings-empty" />
                     <ui:ScrollView name="registered-database-paths" class="gamedb-editor__registered-paths" />
-                    <ui:Button name="register-database-button" text="Register Database" />
+                    <ui:Button name="register-database-button" text="Register Database" tooltip="Choose a GameDB data file to include in project-wide operations." />
                     <ui:Label text="Imported enum types" class="gamedb-editor__settings-heading" />
-                    <ui:ListView name="imported-enum-types" fixed-item-height="22" virtualization-method="FixedHeight" selection-type="None" reorderable="false" class="gamedb-editor__imported-enums" />
-                    <ui:TextField name="export-path-field" label="Export path" />
-                    <ui:TextField name="build-path-field" label="Build path" />
+                    <ui:Label text="Select public enums that GameDB schemas may reference." class="gamedb-editor__settings-help" />
+                    <ui:ListView name="imported-enum-types" fixed-item-height="22" virtualization-method="FixedHeight" selection-type="None" reorderable="false" class="gamedb-editor__imported-enums" tooltip="Checked enum types are available when defining enum-backed keys and fields." />
+                    <ui:TextField name="export-path-field" label="Export path" tooltip="Project-relative folder used by the Generate toolbar action." />
+                    <ui:TextField name="build-path-field" label="Build path" tooltip="Project-relative folder used by the Build toolbar action." />
                     <ui:VisualElement name="settings-validation-host" />
                 </ui:ScrollView>
                 <ui:VisualElement class="gamedb-editor__settings-actions">

@@ -363,10 +363,11 @@ public static class GameDBDocumentationService
 
 `ListDocuments` returns copies of entries from a fixed package catalog. `ReadDocument` is case-insensitive by ID, resolves the installed package root through Unity Package Manager, and reads only catalogued package-relative paths. Missing/unknown IDs, package resolution failures, path containment failures, and file errors return `Success == false` with `Message` rather than escaping as exceptions.
 
-Returned DTOs are read-only to consumers (`internal` setters):
+These discovery DTOs are read-only to consumers (`internal` setters):
 
 | Type                         | Readable properties                                                    |
 | ---------------------------- | ---------------------------------------------------------------------- |
+| `GameDBListResult`           | `Success`, `Message`, `DatabasePaths`                                  |
 | `GameDBDocumentationCatalog` | `Success`, `Message`, `Documents`                                      |
 | `GameDBDocumentationEntry`   | `Id`, `Title`, `RelativePath`                                          |
 | `GameDBDocumentationResult`  | `Success`, `DocumentId`, `Title`, `RelativePath`, `Content`, `Message` |

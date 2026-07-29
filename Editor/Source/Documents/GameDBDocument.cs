@@ -484,6 +484,16 @@ namespace GameDBEditorLibrary.Documents
             }
         }
 
+        internal GameDBRowReferenceImpact GetRowReferenceImpact(
+            string tableName, string rowKey)
+        {
+            lock (m_gate)
+            {
+                return GameDBModelOperations.GetRowReferenceImpact(
+                    m_model, tableName, rowKey);
+            }
+        }
+
         internal IReadOnlyList<GameDBValidationIssue> Validate()
         {
             lock (m_gate)

@@ -195,6 +195,13 @@ namespace GameDBEditorLibrary.Workspace
             return UseDocument(document => document.SerializeCurrent());
         }
 
+        internal GameDBRowReferenceImpact GetRowReferenceImpact(
+            string tableName, string rowKey)
+        {
+            return UseDocument(document => document.GetRowReferenceImpact(
+                tableName, rowKey));
+        }
+
         internal GameDBDocumentState CaptureState()
         {
             return UseDocument(document => document.CaptureState());

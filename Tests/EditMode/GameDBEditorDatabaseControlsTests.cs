@@ -174,6 +174,85 @@ namespace GameDBLibrary.Tests
         }
 
         [Test]
+        public void Controller_RegistersCurrentDocumentAndSupportsExactEditablePath()
+        {
+            var pairStore = new MemoryPairStore();
+            Seed(pairStore, FirstPath, "First");
+            var workspace = CreateWorkspace(new GameDBDocumentLeaseRegistry(pairStore),
+                new RecoveryStore());
+            var settings = CreateSettings(new SettingsStore());
+            var root = BuildRoot();
+            using (var controller = new GameDBEditorWindowController(root, workspace,
+                projectSettings: settings, databaseDialogs: new RecordingDialogs()))
+            {
+                var registrationPath = root.Q<TextField>("registration-path-field");
+                var registerPath = root.Q<Button>("register-database-button");
+                var registerCurrent = root.Q<Button>("register-current-database-button");
+                Assert.That(registrationPath.tooltip, Does.Contain("beginning with Assets/"));
+                Assert.That(registerPath.text, Is.EqualTo("Register Path"));
+                Assert.That(registerCurrent.enabledSelf, Is.False);
+                Assert.That(controller.RegisterCurrentDatabase(), Is.Null);
+                var empty = controller.RegisterEnteredDatabase();
+                Assert.That(empty.Success, Is.False);
+                Assert.That(root.Q<Label>("settings-error-label").text,
+                    Does.Contain("beginning with Assets/"));
+
+                registrationPath.value = FirstPath;
+                var typed = controller.RegisterEnteredDatabase();
+                Assert.That(typed.Success, Is.True, typed.Error);
+                Assert.That(registrationPath.value, Is.Empty);
+                Assert.That(controller.UnregisterDatabase("DatabaseControls/first.json").Success,
+                    Is.True);
+
+                Assert.That(workspace.TryOpenDatabase(FirstPath).Success, Is.True);
+                controller.OpenSettings();
+                Assert.That(registerCurrent.enabledSelf, Is.True);
+                var registered = controller.RegisterCurrentDatabase();
+
+                Assert.That(registered.Success, Is.True, registered.Error);
+                Assert.That(registered.Snapshot.RegisteredDatabasePaths,
+                    Is.EqualTo(new[] { "DatabaseControls/first.json" }));
+                Assert.That(root.Q<ScrollView>("registered-database-paths")
+                    .Query<Label>(className: "gamedb-editor__registered-path-label")
+                    .ToList().Single().text,
+                    Is.EqualTo("DatabaseControls/first.json"));
+            }
+            workspace.Dispose();
+        }
+
+        [Test]
+        public void Controller_RegisterDatabasePreservesSettingsChangedExternally()
+        {
+            var workspace = CreateWorkspace(new GameDBDocumentLeaseRegistry(
+                new MemoryPairStore()), new RecoveryStore());
+            var store = new SettingsStore();
+            var settings = CreateSettings(store);
+            var root = BuildRoot();
+            using (var controller = new GameDBEditorWindowController(root, workspace,
+                projectSettings: settings, databaseDialogs: new RecordingDialogs()))
+            {
+                store.ReplaceContents(JsonSerialization.Serialize(new Dictionary<string, object>
+                {
+                    { "gameDBPaths", new[] { "external.json" } },
+                    { "exportPath", "External/Generated" },
+                    { "importedEnums", new[] { "External.GameEnum" } },
+                    { "buildPath", "External/Build" }
+                }));
+
+                var registered = controller.RegisterDatabase(FirstPath);
+
+                Assert.That(registered.Success, Is.True, registered.Error);
+                Assert.That(registered.Snapshot.RegisteredDatabasePaths,
+                    Is.EqualTo(new[] { "external.json", "DatabaseControls/first.json" }));
+                Assert.That(registered.Snapshot.ImportedEnumTypeNames,
+                    Is.EqualTo(new[] { "External.GameEnum" }));
+                Assert.That(registered.Snapshot.ExportPath, Is.EqualTo("External/Generated"));
+                Assert.That(registered.Snapshot.BuildPath, Is.EqualTo("External/Build"));
+            }
+            workspace.Dispose();
+        }
+
+        [Test]
         public void Controller_BindsRegisteredPathsSeparatelyFromOpenTabsAndUpdatesOutputs()
         {
             var workspace = CreateWorkspace(new GameDBDocumentLeaseRegistry(
@@ -314,7 +393,9 @@ namespace GameDBLibrary.Tests
                 Assert.That(enums.tooltip,
                     Does.Contain("Checked enum types are available"));
                 Assert.That(root.Q<Button>("register-database-button").tooltip,
-                    Does.Contain("project-wide operations"));
+                    Does.Contain("exact project-relative"));
+                Assert.That(root.Q<Button>("register-current-database-button").tooltip,
+                    Does.Contain("currently active GameDB document"));
                 Assert.That(root.Q<TextField>("export-path-field").tooltip,
                     Does.Contain("Generate toolbar action"));
                 Assert.That(root.Q<TextField>("build-path-field").tooltip,
@@ -575,6 +656,11 @@ namespace GameDBLibrary.Tests
                 {
                     throw WriteException;
                 }
+                Contents = contents;
+            }
+
+            internal void ReplaceContents(string contents)
+            {
                 Contents = contents;
             }
         }

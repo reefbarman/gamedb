@@ -224,6 +224,53 @@ Empty numeric, boolean, enum, color, and vector cells are invalid. Double negati
 
 `GameDBCsvExportResult` reports `Revision`, `CsvText`, `RowCount`, validation `Issues`, structured `Errors`, and recovery artifacts. `GameDBCsvImportResult` additionally reports the mode, dry-run flag, before/after revisions, prospective snapshot, imported row count, `GameDBCsvCommitStatus`, file/post-save/recovery facts, and `GameDBCsvFailureKind`. Each `GameDBCsvError` can identify `Code`, `Message`, 1-based `RecordNumber`/`LineNumber`/`ColumnNumber`, `ColumnName`, `RowKey`, and `FieldName`; coordinates are `-1` when an error is not tied to one CSV cell.
 
+## Project settings automation
+
+Use the supported settings API instead of editing `ProjectSettings/GameDBSettings.json` directly:
+
+```csharp
+GameDBProjectSettingsResult InspectProjectSettings();
+GameDBProjectSettingsResult UpdateProjectSettings(GameDBProjectSettingsRequest request);
+```
+
+`GameDBProjectSettingsRequest` is a full replacement of the four settings collections/values. `RegisteredDatabasePaths`, `ImportedEnumTypeNames`, `ExportPath`, and `BuildPath` are all required so an omitted member cannot silently clear existing state. Supply the complete desired lists on every update. Use an empty list to clear registrations or imported enums and `string.Empty` to clear Export or Build. Public paths use canonical `Assets/...` form even though the existing settings JSON stores paths relative to the `Assets` directory.
+
+```csharp
+var current = GameDBAutomationService.InspectProjectSettings();
+var request = new GameDBProjectSettingsRequest
+{
+    RegisteredDatabasePaths = new List<string>
+    {
+        "Assets/Data/Resources/GameDB/gameplay.json"
+    },
+    ImportedEnumTypeNames = new List<string>(),
+    ExportPath = "Assets/Generated/GameDB",
+    BuildPath = string.Empty,
+    Options = new GameDBProjectSettingsOptions
+    {
+        DryRun = true,
+        ExpectedRevision = current.Snapshot.Revision
+    }
+};
+
+var preview = GameDBAutomationService.UpdateProjectSettings(request);
+if (preview.Success)
+{
+    request.Options.DryRun = false;
+    request.Options.ExpectedRevision =
+        GameDBAutomationService.InspectProjectSettings().Snapshot.Revision;
+    var committed = GameDBAutomationService.UpdateProjectSettings(request);
+}
+```
+
+Settings revisions are SHA-256 tokens computed from normalized semantic values, so JSON formatting and equivalent `.`/`..` path segments do not create false conflicts. A changing dry run returns the prospective snapshot and revision without creating or writing the settings file. The equivalent guarded commit returns the same `RevisionAfter`. A dry run or commit that already matches returns `NoChanges` without writing.
+
+`GameDBProjectSettingsOptions.RequireValid` defaults to `true`. Registered database paths must identify an existing data file and adjacent `.schema.json`; imported enum type names must resolve to compiled enums. Output paths must identify child directories under `Assets`; `Assets` itself is rejected because an empty path already means disabled. Set `RequireValid = false` only to preserve unresolved database or enum values that still satisfy the supported path/type-name shape while repairing other settings. Rooted paths, traversal outside `Assets`, schema paths, and non-JSON database paths remain invalid.
+
+`GameDBProjectSettingsResult` exposes `CommitStatus`, before/after revisions, the current or prospective snapshot, `SnapshotIsProspective`, structured issues, changed paths, and file/post-save/recovery state. `SnapshotIsProspective` is true for a changing dry run or validation that reached the normalized proposed settings; request/path-shape failures return the current snapshot with it false. `PostSavePending` with `FilesCommitted == true` means `ProjectSettings/GameDBSettings.json` was committed but a settings listener failed; inspect the committed snapshot and do not blindly replay the write. Conflict, validation, and persistence failures have `FilesCommitted == false`.
+
+Issue kinds are `InvalidDatabasePath`, `MissingDatabase`, `InvalidExportPath`, `InvalidBuildPath`, and `UnresolvedImportedEnumType`.
+
 ## Write operations
 
 ```csharp

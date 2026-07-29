@@ -205,6 +205,52 @@ namespace GameDBEditorLibrary.Automation
         PostSavePending
     }
 
+    public enum GameDBProjectSettingsIssueKind
+    {
+        InvalidDatabasePath,
+        MissingDatabase,
+        InvalidExportPath,
+        InvalidBuildPath,
+        UnresolvedImportedEnumType
+    }
+
+    public sealed class GameDBProjectSettingsIssue
+    {
+        public GameDBProjectSettingsIssueKind Kind { get; internal set; }
+        public string Value { get; internal set; }
+        public string Message { get; internal set; }
+    }
+
+    public sealed class GameDBProjectSettingsSnapshot
+    {
+        public string Revision { get; internal set; }
+        public List<string> RegisteredDatabasePaths { get; internal set; }
+            = new List<string>();
+        public List<string> ImportedEnumTypeNames { get; internal set; }
+            = new List<string>();
+        public string ExportPath { get; internal set; }
+        public string BuildPath { get; internal set; }
+    }
+
+    public sealed class GameDBProjectSettingsResult
+    {
+        public bool Success { get; internal set; }
+        public bool DryRun { get; internal set; }
+        public GameDBCommitStatus CommitStatus { get; internal set; }
+        public string Message { get; internal set; }
+        public string RevisionBefore { get; internal set; }
+        public string RevisionAfter { get; internal set; }
+        public GameDBProjectSettingsSnapshot Snapshot { get; internal set; }
+        public bool SnapshotIsProspective { get; internal set; }
+        public List<GameDBProjectSettingsIssue> Issues { get; internal set; }
+            = new List<GameDBProjectSettingsIssue>();
+        public List<string> ChangedPaths { get; internal set; } = new List<string>();
+        public bool FilesCommitted { get; internal set; }
+        public bool PostSavePending { get; internal set; }
+        public List<string> PostSaveErrors { get; internal set; } = new List<string>();
+        public List<string> RecoveryArtifacts { get; internal set; } = new List<string>();
+    }
+
     public sealed class GameDBAutomationResult
     {
         public bool Success { get; internal set; }

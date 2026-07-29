@@ -82,6 +82,144 @@ namespace GameDBLibrary.EditorUITests
         }
 
         [Test]
+        public void RowKeyCell_DoubleClickCommitsCancelsFocusCommitsAndRecyclesSafely()
+        {
+            panelSize = new UnityEngine.Vector2(1200f, 700f);
+            window.Grid.ScrollToItem(0);
+            simulate.FrameUpdate();
+
+            var cell = window.FindKeyCell("Row0000");
+            Assert.That(cell, Is.Not.Null);
+            simulate.DoubleClick(cell);
+            simulate.FrameUpdate();
+            Assert.That(cell.IsEditing, Is.True);
+            var field = (TextField)cell.Control;
+            Assert.That(field.hasFocusPseudoState, Is.True);
+            field.SelectAll();
+            simulate.TypingText("RenamedByEnter");
+            simulate.KeyPress(KeyCode.Return);
+            simulate.FrameUpdate();
+            Assert.That(window.HasRow("RenamedByEnter"), Is.True);
+            Assert.That(window.RenameCount, Is.EqualTo(1));
+
+            cell = window.FindKeyCell("Row0001");
+            simulate.DoubleClick(cell);
+            simulate.FrameUpdate();
+            field = (TextField)cell.Control;
+            field.SelectAll();
+            simulate.TypingText("CancelledDraft");
+            simulate.KeyPress(KeyCode.Escape);
+            simulate.FrameUpdate();
+            Assert.That(window.HasRow("Row0001"), Is.True);
+            Assert.That(window.HasRow("CancelledDraft"), Is.False);
+            Assert.That(window.RenameCount, Is.EqualTo(1));
+
+            cell = window.FindKeyCell("Row0002");
+            simulate.DoubleClick(cell);
+            simulate.FrameUpdate();
+            field = (TextField)cell.Control;
+            field.SelectAll();
+            simulate.TypingText("RenamedByFocus");
+            window.Grid.Focus();
+            simulate.FrameUpdate();
+            Assert.That(window.HasRow("RenamedByFocus"), Is.True);
+            Assert.That(window.RenameCount, Is.EqualTo(2));
+
+            cell = window.FindKeyCell("Row0003");
+            simulate.DoubleClick(cell);
+            simulate.FrameUpdate();
+            field = (TextField)cell.Control;
+            field.SelectAll();
+            simulate.TypingText("RecycledDraft");
+            window.Grid.ScrollToItem(GameDBRepresentativeFixture.DefaultRowsPerTable - 1);
+            simulate.FrameUpdate();
+            Assert.That(cell.IsEditing, Is.False);
+            Assert.That(window.HasRow("Row0003"), Is.True);
+            Assert.That(window.HasRow("RecycledDraft"), Is.False);
+            Assert.That(window.RenameCount, Is.EqualTo(2));
+        }
+
+        [Test]
+        public void ColumnResizeBorder_DoubleClickBestFitsAndPersistsWidth()
+        {
+            panelSize = new UnityEngine.Vector2(1200f, 700f);
+            simulate.FrameUpdate();
+
+            const string resizeDragAreaClass =
+                "unity-multi-column-header__column-resize-handle__drag-area";
+            var handles = window.Grid.Query<VisualElement>(
+                className: resizeDragAreaClass).ToList();
+            Assert.That(handles, Has.Count.EqualTo(window.Grid.columns.Count));
+            var keyColumn = window.Grid.columns[GameDBTableViewProjection.KeyFieldId];
+            var initialWidth = keyColumn.width.value;
+
+            simulate.DoubleClick(handles[0]);
+            simulate.FrameUpdate();
+
+            Assert.That(keyColumn.width.value, Is.LessThan(initialWidth));
+            Assert.That(keyColumn.width.value, Is.GreaterThanOrEqualTo(48f));
+            Assert.That(window.PersistedColumnWidth(
+                GameDBTableViewProjection.KeyFieldId), Is.EqualTo(keyColumn.width.value));
+        }
+
+        [Test]
+        public void EmptyDatabase_PlacesEmptyStateBelowTableToolbar()
+        {
+            panelSize = new UnityEngine.Vector2(720f, 400f);
+            window.ShowEmptyDatabase();
+            simulate.FrameUpdate();
+
+            Assert.That(window.EmptyState.resolvedStyle.display, Is.EqualTo(DisplayStyle.Flex));
+            Assert.That(window.EmptyState.worldBound.yMin,
+                Is.GreaterThanOrEqualTo(window.Toolbar.worldBound.yMax - 1f));
+        }
+
+        [Test]
+        public void CompactInspector_OpensAsModalDrawerAndSupportsAllDismissalPaths()
+        {
+            panelSize = new UnityEngine.Vector2(420f, 500f);
+            simulate.FrameUpdate();
+
+            Assert.That(window.Root.ClassListContains(
+                GameDBEditorResponsiveLayout.CompactClass), Is.True);
+            Assert.That(window.Inspector.resolvedStyle.display, Is.EqualTo(DisplayStyle.None));
+            Assert.That(window.InspectorScrim.resolvedStyle.display,
+                Is.EqualTo(DisplayStyle.None));
+            Assert.That(window.Surface.enabledSelf, Is.True);
+
+            simulate.Click(window.InspectorToggle);
+            simulate.FrameUpdate();
+            Assert.That(window.Root.ClassListContains(
+                GameDBEditorResponsiveLayout.InspectorOpenClass), Is.True);
+            Assert.That(window.Inspector.resolvedStyle.display, Is.EqualTo(DisplayStyle.Flex));
+            Assert.That(window.InspectorScrim.resolvedStyle.display,
+                Is.EqualTo(DisplayStyle.Flex));
+            Assert.That(window.Surface.enabledSelf, Is.False);
+            Assert.That(window.Inspector.Contains((VisualElement)window.Root.panel
+                .focusController.focusedElement), Is.True);
+
+            simulate.KeyPress(KeyCode.Escape);
+            simulate.FrameUpdate();
+            Assert.That(window.Inspector.resolvedStyle.display, Is.EqualTo(DisplayStyle.None));
+            Assert.That(window.Surface.enabledSelf, Is.True);
+            Assert.That(window.InspectorToggle.hasFocusPseudoState, Is.True);
+
+            simulate.Click(window.InspectorToggle);
+            simulate.FrameUpdate();
+            simulate.Click(window.InspectorClose);
+            simulate.FrameUpdate();
+            Assert.That(window.Inspector.resolvedStyle.display, Is.EqualTo(DisplayStyle.None));
+            Assert.That(window.InspectorToggle.hasFocusPseudoState, Is.True);
+
+            simulate.Click(window.InspectorToggle);
+            simulate.FrameUpdate();
+            simulate.Click(window.InspectorScrim);
+            simulate.FrameUpdate();
+            Assert.That(window.Inspector.resolvedStyle.display, Is.EqualTo(DisplayStyle.None));
+            Assert.That(window.InspectorToggle.hasFocusPseudoState, Is.True);
+        }
+
+        [Test]
         public void RepresentativeGrid_HandlesResizeFocusNavigationAndRecycling()
         {
             panelSize = new UnityEngine.Vector2(1200f, 700f);
@@ -153,8 +291,7 @@ namespace GameDBLibrary.EditorUITests
         private static HashSet<VisualElement> RealizedRows(MultiColumnListView grid)
         {
             var rows = new HashSet<VisualElement>();
-            foreach (var cell in grid.Query<Label>(
-                className: "gamedb-editor__table-cell").ToList())
+            foreach (var cell in grid.Query<GameDBRowKeyEditorCell>().ToList())
             {
                 var row = cell.parent;
                 while (row != null && row.parent != grid.contentContainer
@@ -180,18 +317,55 @@ namespace GameDBLibrary.EditorUITests
         private GameDBWorkspaceTabViewState m_viewState;
 
         internal int CommitCount { get; private set; }
+        internal int RenameCount { get; private set; }
 
         internal VisualElement Root => rootVisualElement.Q<VisualElement>(
             "gamedb-editor-root");
         internal VisualElement Surface => rootVisualElement.Q<VisualElement>(
             "table-surface-host");
+        internal Button InspectorToggle => rootVisualElement.Q<Button>(
+            "table-inspector-toggle-button");
+        internal VisualElement Inspector => rootVisualElement.Q<VisualElement>(
+            "inspector-host");
+        internal VisualElement InspectorScrim => rootVisualElement.Q<VisualElement>(
+            "inspector-scrim");
+        internal Button InspectorClose => rootVisualElement.Q<Button>(
+            "inspector-close-button");
+        internal UnityEditor.UIElements.Toolbar Toolbar =>
+            rootVisualElement.Q<UnityEditor.UIElements.Toolbar>("table-toolbar");
+        internal VisualElement EmptyState => rootVisualElement.Q<VisualElement>(
+            "table-empty-state");
         internal MultiColumnListView Grid => rootVisualElement.Q<MultiColumnListView>(
             "table-row-grid");
+
+        internal void ShowEmptyDatabase()
+        {
+            m_viewState = m_controller.Bind(new GameDBWorkspaceTabViewState(),
+                new GameDBSnapshot());
+        }
 
         internal GameDBValueEditorCell FindTextCell(string rowKey)
         {
             return Grid.Query<GameDBValueEditorCell>().ToList().FirstOrDefault(cell =>
                 Equals(cell.userData, rowKey) && cell.Control is TextField);
+        }
+
+        internal GameDBRowKeyEditorCell FindKeyCell(string rowKey)
+        {
+            return Grid.Query<GameDBRowKeyEditorCell>().ToList().FirstOrDefault(cell =>
+                Equals(cell.userData, rowKey));
+        }
+
+        internal bool HasRow(string rowKey)
+        {
+            return m_session.CreateSnapshot().Tables.Single(table => table.Name == "Table00")
+                .Rows.Any(row => row.Key == rowKey);
+        }
+
+        internal float PersistedColumnWidth(string fieldId)
+        {
+            return m_viewState.Columns.Single(column => column.TableId == "Table00"
+                && column.FieldId == fieldId).Width;
         }
 
         internal object Value(string rowKey, string fieldName)
@@ -209,20 +383,41 @@ namespace GameDBLibrary.EditorUITests
                 new GameDBDocumentLeaseRegistry(GameDBFilePairStore.Instance),
                 document.CaptureState(), "editor-ui");
             m_session = opened.Session;
-            var placeholder = rootVisualElement.Q<Label>(
-                "active-document-placeholder");
+            var emptyState = rootVisualElement.Q<VisualElement>("table-empty-state");
+            var emptyMessage = rootVisualElement.Q<Label>("table-empty-message");
+            var emptyAction = rootVisualElement.Q<Button>("table-empty-action");
             rootVisualElement.Q<VisualElement>("workspace-state-host")
                 .style.display = DisplayStyle.None;
             rootVisualElement.Q<VisualElement>("document-shell")
                 .style.display = DisplayStyle.Flex;
             m_responsiveLayout = new GameDBEditorResponsiveLayout(Root);
             m_controller = new GameDBTableViewController(
+                rootVisualElement.Q<UnityEditor.UIElements.ToolbarButton>(
+                    "table-add-row-button"),
+                rootVisualElement.Q<UnityEditor.UIElements.ToolbarButton>(
+                    "table-delete-row-button"),
+                rootVisualElement.Q<UnityEditor.UIElements.ToolbarButton>(
+                    "table-columns-button"),
                 rootVisualElement.Q<UnityEditor.UIElements.ToolbarSearchField>(
                     "table-search-field"),
-                rootVisualElement.Q<ListView>("table-navigation-list"),
-                Grid, placeholder, state => m_viewState = state, EditValue);
+                rootVisualElement.Q<ListView>("table-navigation-list"), Grid,
+                rootVisualElement.Q<VisualElement>("table-action-message-host"),
+                emptyState, emptyMessage, emptyAction,
+                state => m_viewState = state, renameRow: RenameRow,
+                editValue: EditValue);
             m_viewState = new GameDBWorkspaceTabViewState("Table00", "Row0000");
             m_controller.Bind(m_viewState, m_session.CreateSnapshot());
+        }
+
+        private GameDBRowMutationResult RenameRow(GameDBRowRenameIntent intent)
+        {
+            RenameCount++;
+            var result = new GameDBEditorCommandService().Execute(m_session,
+                new RenameRowCommand(intent.TableName, intent.CurrentKey, intent.NewKey?.Trim()),
+                intent.ExpectedRevision, destructiveConfirmed: true);
+            return new GameDBRowMutationResult(result.Success, result.Message,
+                result.Snapshot, result.Success ? intent.NewKey?.Trim() : intent.CurrentKey,
+                GameDBRowReferenceImpact.None);
         }
 
         private GameDBValueEditResult EditValue(GameDBValueEditIntent intent)

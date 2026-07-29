@@ -160,9 +160,15 @@ namespace GameDBLibrary.EditorUITests
             m_collection = new GameDBCollectionEditorController(rootVisualElement,
                 m_workspace, ApplyAndRebind);
             m_table = new GameDBTableViewController(
+                rootVisualElement.Q<ToolbarButton>("table-add-row-button"),
+                rootVisualElement.Q<ToolbarButton>("table-delete-row-button"),
+                rootVisualElement.Q<ToolbarButton>("table-columns-button"),
                 rootVisualElement.Q<ToolbarSearchField>("table-search-field"),
                 rootVisualElement.Q<ListView>("table-navigation-list"), Grid,
-                rootVisualElement.Q<Label>("active-document-placeholder"),
+                rootVisualElement.Q<VisualElement>("table-action-message-host"),
+                rootVisualElement.Q<VisualElement>("table-empty-state"),
+                rootVisualElement.Q<Label>("table-empty-message"),
+                rootVisualElement.Q<Button>("table-empty-action"),
                 state => m_viewState = state, editCollection: OpenCollection);
             m_viewState = new GameDBWorkspaceTabViewState("Items", "Item");
             Rebind();

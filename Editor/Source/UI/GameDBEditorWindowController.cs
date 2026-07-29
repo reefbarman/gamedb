@@ -1,5 +1,6 @@
 using GameDBEditorLibrary.Documents;
 using GameDBEditorLibrary.Workspace;
+using GameDBLibrary;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -88,7 +89,9 @@ namespace GameDBEditorLibrary.UI
         private readonly Label m_globalStatus;
         private readonly Label m_documentPath;
         private readonly Label m_documentSummary;
-        private readonly Label m_documentPlaceholder;
+        private readonly VisualElement m_tableEmptyState;
+        private readonly Label m_tableEmptyMessage;
+        private readonly Button m_tableEmptyAction;
         private readonly ToolbarSearchField m_tableSearch;
         private readonly ListView m_tableNavigation;
         private readonly MultiColumnListView m_tableGrid;
@@ -116,12 +119,21 @@ namespace GameDBEditorLibrary.UI
         private readonly Button m_loadRuntimeButton;
         private readonly Button m_reloadInGameButton;
         private readonly Label m_playModeStatus;
+        private readonly VisualElement m_popoverLayer;
+        private readonly VisualElement m_addRowPopover;
+        private readonly Label m_addRowTitle;
+        private readonly VisualElement m_addRowKeyControlHost;
+        private readonly Label m_addRowValidation;
+        private readonly Button m_addRowCancel;
+        private readonly Button m_addRowConfirm;
         private readonly VisualElement m_modalHost;
         private readonly VisualElement m_settingsPanel;
         private readonly Label m_settingsError;
         private readonly Label m_registeredPathsEmpty;
         private readonly ScrollView m_registeredPaths;
+        private readonly TextField m_registrationPath;
         private readonly Button m_registerButton;
+        private readonly Button m_registerCurrentButton;
         private readonly ListView m_importedEnumTypes;
         private readonly TextField m_exportPath;
         private readonly TextField m_buildPath;
@@ -141,6 +153,11 @@ namespace GameDBEditorLibrary.UI
         private string m_outputMessage;
         private bool m_outputSucceeded;
         private bool m_restoringPrePlayModeState;
+        private IVisualElementScheduledItem m_renderAfterEdit;
+        private GameDBAddRowRequest m_addRowRequest;
+        private GameDBAssetSession m_addRowSession;
+        private VisualElement m_addRowFocusTarget;
+        private string m_addRowDraft;
         private bool m_disposed;
 
         internal GameDBEditorWindowController(VisualElement root,
@@ -183,14 +200,24 @@ namespace GameDBEditorLibrary.UI
             m_globalStatus = root.Q<Label>("global-status-label");
             m_documentPath = root.Q<Label>("active-document-path-label");
             m_documentSummary = root.Q<Label>("active-document-summary-label");
-            m_documentPlaceholder = root.Q<Label>("active-document-placeholder");
+            m_tableEmptyState = root.Q<VisualElement>("table-empty-state");
+            m_tableEmptyMessage = root.Q<Label>("table-empty-message");
+            m_tableEmptyAction = root.Q<Button>("table-empty-action");
             m_tableSearch = root.Q<ToolbarSearchField>("table-search-field");
             m_tableNavigation = root.Q<ListView>("table-navigation-list");
             m_tableGrid = root.Q<MultiColumnListView>("table-row-grid");
             m_commandService = new GameDBEditorCommandService();
-            m_tableView = new GameDBTableViewController(m_tableSearch,
-                m_tableNavigation, m_tableGrid, m_documentPlaceholder,
-                SetTableViewState, SetValue, OpenCollectionEditor);
+            m_tableView = new GameDBTableViewController(
+                root.Q<ToolbarButton>("table-add-row-button"),
+                root.Q<ToolbarButton>("table-delete-row-button"),
+                root.Q<ToolbarButton>("table-columns-button"),
+                m_tableSearch, m_tableNavigation, m_tableGrid,
+                root.Q<VisualElement>("table-action-message-host"),
+                m_tableEmptyState, m_tableEmptyMessage, m_tableEmptyAction,
+                SetTableViewState, addRowRequested: OpenAddRow,
+                createRow: CreateRow, renameRow: RenameRow,
+                deleteRowIntent: DeleteRow, editValue: SetValue,
+                editCollection: OpenCollectionEditor);
             m_schemaControls = new GameDBSchemaControlsController(root,
                 m_workspace, m_destructivePolicy, Render, IsDataOnlyEditing);
             m_collectionEditor = new GameDBCollectionEditorController(root,
@@ -208,12 +235,21 @@ namespace GameDBEditorLibrary.UI
             m_loadRuntimeButton = root.Q<Button>("load-runtime-button");
             m_reloadInGameButton = root.Q<Button>("reload-in-game-button");
             m_playModeStatus = root.Q<Label>("play-mode-status-label");
+            m_popoverLayer = root.Q<VisualElement>("popover-layer");
+            m_addRowPopover = root.Q<VisualElement>("add-row-popover");
+            m_addRowTitle = root.Q<Label>("add-row-popover-title");
+            m_addRowKeyControlHost = root.Q<VisualElement>("add-row-key-control-host");
+            m_addRowValidation = root.Q<Label>("add-row-validation-message");
+            m_addRowCancel = root.Q<Button>("add-row-cancel-button");
+            m_addRowConfirm = root.Q<Button>("add-row-confirm-button");
             m_modalHost = root.Q<VisualElement>("modal-host");
             m_settingsPanel = root.Q<VisualElement>("settings-panel");
             m_settingsError = root.Q<Label>("settings-error-label");
             m_registeredPathsEmpty = root.Q<Label>("registered-database-empty-label");
             m_registeredPaths = root.Q<ScrollView>("registered-database-paths");
+            m_registrationPath = root.Q<TextField>("registration-path-field");
             m_registerButton = root.Q<Button>("register-database-button");
+            m_registerCurrentButton = root.Q<Button>("register-current-database-button");
             m_importedEnumTypes = root.Q<ListView>("imported-enum-types");
             m_importedEnumTypes.makeItem = CreateImportedEnumToggle;
             m_importedEnumTypes.bindItem = BindImportedEnum;
@@ -236,14 +272,20 @@ namespace GameDBEditorLibrary.UI
             m_reloadInGameButton.clicked += ReloadInGame;
             m_runtimeRegistry.Changed += OnRuntimeRegistryChanged;
             EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
-            m_registerButton.clicked += RegisterSelectedDatabase;
+            m_registerButton.clicked += OnRegisterEnteredDatabase;
+            m_registerCurrentButton.clicked += OnRegisterCurrentDatabase;
             m_saveSettingsButton.clicked += SaveSettings;
             m_closeSettingsButton.clicked += CloseSettings;
+            m_addRowCancel.clicked += CancelAddRow;
+            m_addRowConfirm.clicked += RequestSubmitAddRow;
+            m_popoverLayer.RegisterCallback<PointerDownEvent>(OnPopoverLayerPointerDown);
+            m_popoverLayer.RegisterCallback<GeometryChangedEvent>(OnPopoverLayerGeometryChanged);
             m_root.RegisterCallback<KeyDownEvent>(OnKeyDown, TrickleDown.TrickleDown);
             m_workspace.StateChanged += Render;
             m_projectSettings.Changed += OnProjectSettingsChanged;
             try
             {
+                ClosePopoverLayer();
                 CloseSettings();
                 RenderSettings(m_projectSettings.Load());
                 Render();
@@ -270,7 +312,9 @@ namespace GameDBEditorLibrary.UI
             ClearRecoveryMessages(m_workspaceState);
             m_documentWarningHost.Clear();
             var active = m_workspace.ActiveTab;
+            ReconcileOpenAddRow(active);
             var hasActiveDocument = active != null;
+            m_registerCurrentButton.SetEnabled(hasActiveDocument);
             var playing = m_isPlaying();
             foreach (var tab in m_workspace.Tabs)
             {
@@ -443,13 +487,26 @@ namespace GameDBEditorLibrary.UI
                 : m_workspace.TryOpenDatabase(assetPath);
         }
 
+        internal GameDBProjectSettingsResult RegisterCurrentDatabase()
+        {
+            return m_disposed || m_workspace.ActiveTab == null
+                ? null
+                : RegisterDatabase(m_workspace.ActiveTab.Session.AssetPath);
+        }
+
         internal GameDBProjectSettingsResult RegisterDatabase(string assetPath)
         {
             if (m_disposed || string.IsNullOrWhiteSpace(assetPath))
             {
                 return null;
             }
-            var snapshot = m_projectSettings.GetSnapshot();
+            var refreshed = m_projectSettings.Refresh();
+            var snapshot = refreshed.Snapshot;
+            if (!refreshed.Success)
+            {
+                RenderSettings(refreshed, true);
+                return refreshed;
+            }
             if (!m_workspace.TryGetRegisteredDatabasePath(assetPath,
                 out var registeredPath, out var error))
             {
@@ -461,7 +518,8 @@ namespace GameDBEditorLibrary.UI
 
             var paths = snapshot.RegisteredDatabasePaths.Concat(new[] { registeredPath });
             var result = m_projectSettings.Update(paths,
-                snapshot.ImportedEnumTypeNames, snapshot.ExportPath, snapshot.BuildPath);
+                snapshot.ImportedEnumTypeNames, snapshot.ExportPath, snapshot.BuildPath,
+                false, snapshot.Revision, false);
             RenderSettings(result, true);
             return result;
         }
@@ -472,11 +530,18 @@ namespace GameDBEditorLibrary.UI
             {
                 return null;
             }
-            var snapshot = m_projectSettings.GetSnapshot();
+            var refreshed = m_projectSettings.Refresh();
+            var snapshot = refreshed.Snapshot;
+            if (!refreshed.Success)
+            {
+                RenderSettings(refreshed, true);
+                return refreshed;
+            }
             var paths = snapshot.RegisteredDatabasePaths.Where(path =>
                 !string.Equals(path, registeredPath, StringComparison.Ordinal));
             var result = m_projectSettings.Update(paths,
-                snapshot.ImportedEnumTypeNames, snapshot.ExportPath, snapshot.BuildPath);
+                snapshot.ImportedEnumTypeNames, snapshot.ExportPath, snapshot.BuildPath,
+                false, snapshot.Revision, false);
             RenderSettings(result, true);
             return result;
         }
@@ -489,10 +554,17 @@ namespace GameDBEditorLibrary.UI
             {
                 return null;
             }
-            var snapshot = m_projectSettings.GetSnapshot();
+            var enumTypeNames = importedEnumTypeNames?.ToArray();
+            var refreshed = m_projectSettings.Refresh();
+            var snapshot = refreshed.Snapshot;
+            if (!refreshed.Success)
+            {
+                RenderSettings(refreshed, true);
+                return refreshed;
+            }
             var result = m_projectSettings.Update(snapshot.RegisteredDatabasePaths,
-                importedEnumTypeNames ?? snapshot.ImportedEnumTypeNames,
-                exportPath, buildPath);
+                enumTypeNames ?? snapshot.ImportedEnumTypeNames,
+                exportPath, buildPath, false, snapshot.Revision, false);
             RenderSettings(result, !result.Success);
             return result;
         }
@@ -503,8 +575,9 @@ namespace GameDBEditorLibrary.UI
             {
                 return;
             }
+            ClosePopoverLayer();
             m_collectionEditor.Cancel();
-            RenderSettings(m_projectSettings.Load());
+            RenderSettings(m_projectSettings.Refresh());
             m_settingsPanel.style.display = DisplayStyle.Flex;
             m_modalHost.style.display = DisplayStyle.Flex;
             m_modalHost.pickingMode = PickingMode.Position;
@@ -548,6 +621,8 @@ namespace GameDBEditorLibrary.UI
             m_projectSettings.Changed -= OnProjectSettingsChanged;
             m_runtimeRegistry.Changed -= OnRuntimeRegistryChanged;
             EditorApplication.delayCall -= RenderFromRuntimeRegistry;
+            m_renderAfterEdit?.Pause();
+            m_renderAfterEdit = null;
             EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
             m_createButton.clicked -= CreateDatabase;
             m_openButton.clicked -= OpenDatabase;
@@ -561,10 +636,16 @@ namespace GameDBEditorLibrary.UI
             m_runtimeTarget.UnregisterValueChangedCallback(OnRuntimeTargetChanged);
             m_loadRuntimeButton.clicked -= LoadRuntimeData;
             m_reloadInGameButton.clicked -= ReloadInGame;
-            m_registerButton.clicked -= RegisterSelectedDatabase;
+            m_registerButton.clicked -= OnRegisterEnteredDatabase;
+            m_registerCurrentButton.clicked -= OnRegisterCurrentDatabase;
             m_saveSettingsButton.clicked -= SaveSettings;
             m_closeSettingsButton.clicked -= CloseSettings;
+            m_addRowCancel.clicked -= CancelAddRow;
+            m_addRowConfirm.clicked -= RequestSubmitAddRow;
+            m_popoverLayer.UnregisterCallback<PointerDownEvent>(OnPopoverLayerPointerDown);
+            m_popoverLayer.UnregisterCallback<GeometryChangedEvent>(OnPopoverLayerGeometryChanged);
             m_root.UnregisterCallback<KeyDownEvent>(OnKeyDown, TrickleDown.TrickleDown);
+            ClosePopoverLayer();
             CloseSettings();
             ClearTabBindings();
             ClearSettingsPathBindings();
@@ -572,8 +653,444 @@ namespace GameDBEditorLibrary.UI
 
         private void OpenCollectionEditor(GameDBCollectionEditRequest request)
         {
+            ClosePopoverLayer();
             CloseSettings();
             m_collectionEditor.Open(request);
+        }
+
+        internal bool OpenAddRow(GameDBAddRowRequest request)
+        {
+            if (m_disposed || request?.Snapshot == null || request.Table == null)
+            {
+                return false;
+            }
+            var active = m_workspace.ActiveTab;
+            var session = active?.Session;
+            if (session == null || session.IsDisposed)
+            {
+                return false;
+            }
+            var snapshot = session.CreateSnapshot();
+            var table = snapshot.Tables.FirstOrDefault(candidate =>
+                candidate.Name == request.Table.Name);
+            if (table == null)
+            {
+                return false;
+            }
+            request = new GameDBAddRowRequest(snapshot, table,
+                snapshot.Revision, request.FocusTarget);
+
+            CloseSettings();
+            m_collectionEditor.Cancel();
+            ClosePopoverLayer();
+            m_addRowRequest = request;
+            m_addRowSession = session;
+            m_addRowFocusTarget = request.FocusTarget;
+            m_addRowDraft = null;
+            m_addRowTitle.text = $"Add Row to {request.Table.Name}";
+            m_addRowKeyControlHost.Clear();
+
+            VisualElement control;
+            if (request.Table.KeyType == KeyType.@enum)
+            {
+                var enumNames = string.IsNullOrWhiteSpace(request.Table.KeyTypeArgument)
+                    ? Array.Empty<string>()
+                    : GameDBScalarDraftAdapter.EnumNames(
+                        new GameDBScalarDraftDescriptor(FieldType.@enum,
+                            request.Table.KeyTypeArgument, request.Snapshot));
+                var usedKeys = new HashSet<string>(request.Table.Rows.Select(row => row.Key),
+                    StringComparer.Ordinal);
+                var choices = enumNames.Where(name => !usedKeys.Contains(name)).ToList();
+                if (choices.Count == 0)
+                {
+                    control = new Label("No members are available for this enum key type.");
+                }
+                else
+                {
+                    m_addRowDraft = choices[0];
+                    control = new PopupField<string>(choices, 0);
+                    ((PopupField<string>)control).RegisterValueChangedCallback(evt =>
+                    {
+                        m_addRowDraft = evt.newValue;
+                        ValidateAddRowDraft();
+                    });
+                }
+            }
+            else
+            {
+                var field = new TextField("Key");
+                field.RegisterCallback<KeyDownEvent>(OnAddRowKeyDown);
+                field.RegisterValueChangedCallback(evt =>
+                {
+                    m_addRowDraft = evt.newValue;
+                    ValidateAddRowDraft();
+                });
+                control = field;
+            }
+            control.AddToClassList("gamedb-editor__add-row-key-control");
+            m_addRowKeyControlHost.Add(control);
+            m_popoverLayer.style.display = DisplayStyle.Flex;
+            m_popoverLayer.pickingMode = PickingMode.Position;
+            m_addRowPopover.style.display = DisplayStyle.Flex;
+            m_addRowPopover.style.visibility = Visibility.Hidden;
+            m_addRowPopover.schedule.Execute(() =>
+            {
+                PositionAddRowPopover();
+                if (m_addRowRequest != null)
+                {
+                    m_addRowPopover.style.visibility = Visibility.Visible;
+                }
+            });
+            ValidateAddRowDraft();
+            var focusControl = control is Label ? m_addRowCancel : control;
+            focusControl.schedule.Execute(focusControl.Focus);
+            return true;
+        }
+
+        private void RequestSubmitAddRow()
+        {
+            m_addRowPopover.schedule.Execute(SubmitAddRow);
+        }
+
+        private void OnAddRowKeyDown(KeyDownEvent evt)
+        {
+            if (evt.keyCode != KeyCode.Return && evt.keyCode != KeyCode.KeypadEnter)
+            {
+                return;
+            }
+            RequestSubmitAddRow();
+            evt.StopImmediatePropagation();
+        }
+
+        internal void SubmitAddRow()
+        {
+            if (m_disposed || m_addRowRequest == null)
+            {
+                return;
+            }
+            if (!ReferenceEquals(m_workspace.ActiveTab?.Session, m_addRowSession)
+                || m_addRowSession.IsDisposed)
+            {
+                ClosePopoverLayer(true);
+                return;
+            }
+            if (!RefreshAddRowRequest(out var revisionChanged))
+            {
+                ClosePopoverLayer(true);
+                return;
+            }
+            if (!ValidateAddRowDraft())
+            {
+                return;
+            }
+            if (revisionChanged)
+            {
+                ShowAddRowValidation(
+                    "The GameDB document changed. Review the key and submit again.");
+                return;
+            }
+
+            var rowKey = m_addRowDraft?.Trim();
+            var result = CreateRow(new GameDBRowCreateIntent(
+                m_addRowRequest.Table.Name, rowKey, m_addRowRequest.Revision),
+                m_addRowSession);
+            if (result?.Success == true)
+            {
+                if (ReferenceEquals(m_addRowFocusTarget, m_tableEmptyAction))
+                {
+                    m_addRowFocusTarget = m_root.Q<ToolbarButton>("table-add-row-button");
+                }
+                ClosePopoverLayer(true);
+            }
+            else
+            {
+                ShowAddRowValidation(result?.Message ?? "The row could not be added.");
+            }
+        }
+
+        internal void CancelAddRow()
+        {
+            ClosePopoverLayer(true);
+        }
+
+        private bool ValidateAddRowDraft()
+        {
+            if (m_addRowRequest == null)
+            {
+                m_addRowConfirm.SetEnabled(false);
+                return false;
+            }
+            var rowKey = m_addRowDraft?.Trim();
+            string message = null;
+            if (string.IsNullOrWhiteSpace(rowKey))
+            {
+                message = m_addRowRequest.Table.KeyType == KeyType.@enum
+                    ? "This enum key type has no available members."
+                    : "Enter a row key.";
+            }
+            else if (rowKey == FieldBase.NullRefToken)
+            {
+                message = $"{FieldBase.NullRefToken} is reserved for null table references.";
+            }
+            else if (m_addRowRequest.Table.Rows.Any(row =>
+                string.Equals(row.Key, rowKey, StringComparison.Ordinal)))
+            {
+                message = $"A row with key '{rowKey}' already exists.";
+            }
+            ShowAddRowValidation(message);
+            m_addRowConfirm.SetEnabled(message == null);
+            return message == null;
+        }
+
+        private void ShowAddRowValidation(string message)
+        {
+            m_addRowValidation.text = message ?? string.Empty;
+            m_addRowValidation.style.display = string.IsNullOrWhiteSpace(message)
+                ? DisplayStyle.None : DisplayStyle.Flex;
+        }
+
+        private void PositionAddRowPopover()
+        {
+            if (m_addRowRequest == null)
+            {
+                return;
+            }
+            var anchor = m_addRowRequest.FocusTarget?.worldBound ?? m_root.worldBound;
+            var anchorPosition = m_popoverLayer.WorldToLocal(
+                new UnityEngine.Vector2(anchor.xMin, anchor.yMax));
+            var layerBounds = m_popoverLayer.contentRect;
+            var width = m_addRowPopover.resolvedStyle.width > 0f
+                ? m_addRowPopover.resolvedStyle.width : 300f;
+            var height = m_addRowPopover.resolvedStyle.height > 0f
+                ? m_addRowPopover.resolvedStyle.height : 120f;
+            var left = Math.Max(0f, Math.Min(anchorPosition.x,
+                Math.Max(0f, layerBounds.width - width)));
+            var top = Math.Max(0f, Math.Min(anchorPosition.y,
+                Math.Max(0f, layerBounds.height - height)));
+            m_addRowPopover.style.left = left;
+            m_addRowPopover.style.top = top;
+        }
+
+        private void OnPopoverLayerGeometryChanged(GeometryChangedEvent evt)
+        {
+            PositionAddRowPopover();
+        }
+
+        private void OnPopoverLayerPointerDown(PointerDownEvent evt)
+        {
+            if (ReferenceEquals(evt.target, m_popoverLayer))
+            {
+                ClosePopoverLayer(true);
+                evt.StopPropagation();
+            }
+        }
+
+        private void ClosePopoverLayer(bool restoreFocus = false)
+        {
+            var focusTarget = m_addRowFocusTarget;
+            m_addRowRequest = null;
+            m_addRowSession = null;
+            m_addRowFocusTarget = null;
+            m_addRowDraft = null;
+            m_addRowKeyControlHost.Clear();
+            m_addRowConfirm.SetEnabled(false);
+            ShowAddRowValidation(null);
+            m_addRowPopover.style.visibility = Visibility.Visible;
+            m_addRowPopover.style.display = DisplayStyle.None;
+            m_popoverLayer.style.display = DisplayStyle.None;
+            m_popoverLayer.pickingMode = PickingMode.Ignore;
+            if (restoreFocus)
+            {
+                var target = focusTarget != null && focusTarget.resolvedStyle.display
+                        != DisplayStyle.None && focusTarget.enabledInHierarchy
+                    ? focusTarget
+                    : m_root.Q<ToolbarButton>("table-add-row-button");
+                if (target?.panel != null)
+                {
+                    target.Focus();
+                }
+            }
+        }
+
+        private void ReconcileOpenAddRow(GameDBEditorWorkspaceTab active)
+        {
+            if (m_addRowRequest == null)
+            {
+                return;
+            }
+            if (!ReferenceEquals(active?.Session, m_addRowSession)
+                || m_addRowSession.IsDisposed || !RefreshAddRowRequest(out _))
+            {
+                ClosePopoverLayer();
+                return;
+            }
+            ValidateAddRowDraft();
+            m_addRowPopover.schedule.Execute(PositionAddRowPopover);
+        }
+
+        private bool RefreshAddRowRequest(out bool revisionChanged)
+        {
+            revisionChanged = false;
+            if (m_addRowSession == null || m_addRowSession.IsDisposed)
+            {
+                return false;
+            }
+            var snapshot = m_addRowSession.CreateSnapshot();
+            var table = snapshot.Tables.FirstOrDefault(candidate =>
+                candidate.Name == m_addRowRequest.Table.Name);
+            if (table == null || table.KeyType != m_addRowRequest.Table.KeyType
+                || table.KeyTypeArgument != m_addRowRequest.Table.KeyTypeArgument)
+            {
+                return false;
+            }
+            revisionChanged = !string.Equals(snapshot.Revision,
+                m_addRowRequest.Revision, StringComparison.OrdinalIgnoreCase);
+            m_addRowRequest = new GameDBAddRowRequest(snapshot, table,
+                snapshot.Revision, m_addRowFocusTarget);
+            return true;
+        }
+
+        internal GameDBRowMutationResult CreateRow(GameDBRowCreateIntent intent)
+        {
+            return CreateRow(intent, null);
+        }
+
+        private GameDBRowMutationResult CreateRow(GameDBRowCreateIntent intent,
+            GameDBAssetSession expectedSession)
+        {
+            if (!TryGetRowMutationSession(intent?.TableName, intent?.ExpectedRevision,
+                out var session, out var snapshot, out var error))
+            {
+                return new GameDBRowMutationResult(false, error, snapshot,
+                    null, GameDBRowReferenceImpact.None);
+            }
+            if (expectedSession != null && !ReferenceEquals(session, expectedSession))
+            {
+                return new GameDBRowMutationResult(false,
+                    "The active GameDB document changed. Close this popover and try again.",
+                    snapshot, null, GameDBRowReferenceImpact.None);
+            }
+
+            var rowKey = intent.RowKey?.Trim();
+            var result = m_commandService.Execute(session,
+                new AddRowCommand(intent.TableName, rowKey,
+                    new Dictionary<string, object>()), intent.ExpectedRevision,
+                allowedOperations: IsDataOnlyEditing()
+                    ? GameDBEditorCommandService.DataOnlyOperations : null);
+            if (result.Success)
+            {
+                SetSelectedRow(intent.TableName, rowKey, clearSearch: true);
+                ScheduleRenderAfterEdit();
+            }
+            return RowMutationResult(result, result.Success ? rowKey : null,
+                GameDBRowReferenceImpact.None);
+        }
+
+        internal GameDBRowMutationResult RenameRow(GameDBRowRenameIntent intent)
+        {
+            if (!TryGetRowMutationSession(intent?.TableName, intent?.ExpectedRevision,
+                out var session, out var snapshot, out var error))
+            {
+                return new GameDBRowMutationResult(false, error, snapshot,
+                    intent?.CurrentKey, GameDBRowReferenceImpact.None);
+            }
+
+            if (!string.IsNullOrWhiteSpace(intent.ExpectedDatabasePath)
+                && !string.Equals(session.AssetPath, intent.ExpectedDatabasePath,
+                    StringComparison.Ordinal))
+            {
+                return new GameDBRowMutationResult(false,
+                    "The active GameDB document changed. Retry the row action.",
+                    snapshot, intent.CurrentKey, GameDBRowReferenceImpact.None);
+            }
+
+            var currentKey = intent.CurrentKey;
+            var newKey = intent.NewKey?.Trim();
+            var sourceRowExists = snapshot.Tables.FirstOrDefault(table =>
+                table.Name == intent.TableName)?.Rows.Any(row =>
+                    row.Key == currentKey) == true;
+            if (sourceRowExists
+                && string.Equals(currentKey, newKey, StringComparison.Ordinal))
+            {
+                return new GameDBRowMutationResult(true, null, snapshot,
+                    currentKey, GameDBRowReferenceImpact.None);
+            }
+
+            var impact = session.GetRowReferenceImpact(intent.TableName, currentKey);
+            if (impact.HasRewrites)
+            {
+                var confirmed = m_destructivePolicy.Confirm(
+                    new GameDBDestructiveActionRequest(GameDBCommandKind.RenameRow,
+                        session.AssetPath, "Rename Row",
+                        $"Rename row '{intent.TableName}[{currentKey}]' to '{newKey}'? "
+                        + $"This will update {impact.RewriteOccurrenceCount} reference"
+                        + (impact.RewriteOccurrenceCount == 1 ? "." : "s."), "Rename"));
+                if (!confirmed)
+                {
+                    return new GameDBRowMutationResult(false, "Rename cancelled.",
+                        session.IsDisposed ? null : session.CreateSnapshot(),
+                        currentKey, impact);
+                }
+                if (!ReferenceEquals(m_workspace.ActiveTab?.Session, session)
+                    || session.IsDisposed)
+                {
+                    return new GameDBRowMutationResult(false,
+                        "The active GameDB document changed while confirmation was open. Retry the action.",
+                        session.IsDisposed ? null : session.CreateSnapshot(), currentKey, impact);
+                }
+            }
+
+            var result = m_commandService.Execute(session,
+                new RenameRowCommand(intent.TableName, currentKey, newKey),
+                intent.ExpectedRevision, destructiveConfirmed: true,
+                allowedOperations: IsDataOnlyEditing()
+                    ? GameDBEditorCommandService.DataOnlyOperations : null);
+            if (result.Success)
+            {
+                SetSelectedRow(intent.TableName, newKey, clearSearch: true);
+                ScheduleRenderAfterEdit();
+            }
+            var unresolved = impact.OccurrenceCount - impact.RewriteOccurrenceCount;
+            var message = result.Success && unresolved > 0
+                ? $"Renamed the row, but {unresolved} malformed reference"
+                    + (unresolved == 1 ? " remains unresolved." : "s remain unresolved.")
+                : result.Message;
+            return RowMutationResult(result, result.Success ? newKey : currentKey,
+                impact, message);
+        }
+
+        internal GameDBRowMutationResult DeleteRow(GameDBRowDeleteIntent intent)
+        {
+            if (!TryGetRowMutationSession(intent?.TableName, intent?.ExpectedRevision,
+                out var session, out var snapshot, out var error))
+            {
+                return new GameDBRowMutationResult(false, error, snapshot,
+                    intent?.RowKey, GameDBRowReferenceImpact.None);
+            }
+
+            var rowKey = intent.RowKey;
+            var impact = session.GetRowReferenceImpact(intent.TableName, rowKey);
+            if (impact.HasReferences)
+            {
+                return new GameDBRowMutationResult(false,
+                    $"Row is referenced by {impact.OccurrenceCount} value"
+                    + (impact.OccurrenceCount == 1 ? "." : "s.")
+                    + " Update those values before deleting it.", snapshot, rowKey, impact);
+            }
+
+            var nextSelection = RowSelectionAfterDelete(snapshot,
+                m_workspace.ActiveTab?.ViewState, intent.TableName, rowKey);
+            var result = m_commandService.Execute(session,
+                new DeleteRowCommand(intent.TableName, rowKey),
+                intent.ExpectedRevision, destructiveConfirmed: true,
+                allowedOperations: IsDataOnlyEditing()
+                    ? GameDBEditorCommandService.DataOnlyOperations : null);
+            if (result.Success)
+            {
+                SetSelectedRow(intent.TableName, nextSelection);
+                ScheduleRenderAfterEdit();
+            }
+            return RowMutationResult(result, result.Success ? nextSelection : rowKey, impact);
         }
 
         private GameDBValueEditResult SetValue(GameDBValueEditIntent intent)
@@ -596,8 +1113,103 @@ namespace GameDBEditorLibrary.UI
                     intent.FieldName, intent.WireValue), intent.ExpectedRevision,
                 allowedOperations: IsDataOnlyEditing()
                     ? GameDBEditorCommandService.DataOnlyOperations : null);
+            if (result.Success)
+            {
+                ScheduleRenderAfterEdit();
+            }
             return new GameDBValueEditResult(result.Success,
                 result.Message, result.Snapshot);
+        }
+
+        private void ScheduleRenderAfterEdit()
+        {
+            if (m_renderAfterEdit == null)
+            {
+                m_renderAfterEdit = m_root.schedule.Execute(RenderAfterEdit);
+            }
+        }
+
+        private bool TryGetRowMutationSession(string tableName,
+            string expectedRevision, out GameDBAssetSession session,
+            out GameDBEditorLibrary.Automation.GameDBSnapshot snapshot,
+            out string error)
+        {
+            session = null;
+            snapshot = null;
+            if (m_disposed)
+            {
+                error = "The GameDB editor is no longer available.";
+                return false;
+            }
+            session = m_workspace.ActiveTab?.Session;
+            if (session == null || session.IsDisposed)
+            {
+                error = "No active GameDB document is available.";
+                return false;
+            }
+            snapshot = session.CreateSnapshot();
+            if (string.IsNullOrWhiteSpace(tableName))
+            {
+                error = "A table is required.";
+                return false;
+            }
+            if (!string.Equals(snapshot.Revision, expectedRevision,
+                StringComparison.OrdinalIgnoreCase))
+            {
+                error = "The GameDB document changed. Retry the row action.";
+                return false;
+            }
+            error = null;
+            return true;
+        }
+
+        private void SetSelectedRow(string tableName, string rowKey,
+            bool clearSearch = false)
+        {
+            var tab = m_workspace.ActiveTab;
+            if (tab == null)
+            {
+                return;
+            }
+            var state = tab.ViewState;
+            m_workspace.TrySetTabViewState(tab.TabId,
+                new GameDBWorkspaceTabViewState(tableName, rowKey,
+                    clearSearch ? string.Empty : state.SearchText,
+                    state.Sorts, state.Columns,
+                    state.HorizontalScroll, state.VerticalScroll));
+        }
+
+        internal static string RowSelectionAfterDelete(
+            GameDBEditorLibrary.Automation.GameDBSnapshot snapshot,
+            GameDBWorkspaceTabViewState viewState, string tableName, string rowKey)
+        {
+            var projection = new GameDBTableViewProjection(snapshot, tableName,
+                viewState?.SearchText, viewState?.Sorts);
+            var index = projection.IndexOfRow(rowKey);
+            if (index < 0)
+            {
+                return null;
+            }
+            return index + 1 < projection.Rows.Count
+                ? projection.Rows[index + 1].Key
+                : index > 0 ? projection.Rows[index - 1].Key : null;
+        }
+
+        private static GameDBRowMutationResult RowMutationResult(
+            GameDBEditorCommandResult result, string canonicalRowKey,
+            GameDBRowReferenceImpact impact, string message = null)
+        {
+            return new GameDBRowMutationResult(result.Success,
+                message ?? result.Message, result.Snapshot, canonicalRowKey, impact);
+        }
+
+        private void RenderAfterEdit()
+        {
+            m_renderAfterEdit = null;
+            if (!m_disposed)
+            {
+                Render();
+            }
         }
 
         private bool IsDataOnlyEditing()
@@ -867,9 +1479,33 @@ namespace GameDBEditorLibrary.UI
             ChooseAndOpenDatabase();
         }
 
-        private void RegisterSelectedDatabase()
+        internal GameDBProjectSettingsResult RegisterEnteredDatabase()
         {
-            ChooseAndRegisterDatabase();
+            if (string.IsNullOrWhiteSpace(m_registrationPath.value))
+            {
+                var invalid = new GameDBProjectSettingsResult(false, false,
+                    m_projectSettings.GetSnapshot(),
+                    "Enter a project-relative database path beginning with Assets/.");
+                RenderSettings(invalid, true);
+                return invalid;
+            }
+
+            var result = RegisterDatabase(m_registrationPath.value);
+            if (result?.Success == true)
+            {
+                m_registrationPath.SetValueWithoutNotify(string.Empty);
+            }
+            return result;
+        }
+
+        private void OnRegisterEnteredDatabase()
+        {
+            RegisterEnteredDatabase();
+        }
+
+        private void OnRegisterCurrentDatabase()
+        {
+            RegisterCurrentDatabase();
         }
 
         internal void SaveSettings()
@@ -884,12 +1520,14 @@ namespace GameDBEditorLibrary.UI
 
         private void UndoActiveDocument()
         {
+            ClosePopoverLayer();
             m_collectionEditor.Cancel();
             m_workspace.UndoActiveDocument();
         }
 
         private void RedoActiveDocument()
         {
+            ClosePopoverLayer();
             m_collectionEditor.Cancel();
             m_workspace.RedoActiveDocument();
         }
@@ -908,6 +1546,7 @@ namespace GameDBEditorLibrary.UI
             {
                 return;
             }
+            ClosePopoverLayer();
             m_collectionEditor.Cancel();
             m_workspace.ReloadActiveDocument(expectedRevision, discard);
         }
@@ -923,7 +1562,15 @@ namespace GameDBEditorLibrary.UI
             {
                 return;
             }
-            var settings = m_projectSettings.GetSnapshot();
+            var refreshed = m_projectSettings.Refresh();
+            if (!refreshed.Success)
+            {
+                m_outputMessage = refreshed.Error;
+                m_outputSucceeded = false;
+                Render();
+                return;
+            }
+            var settings = refreshed.Snapshot;
             var active = m_workspace.ActiveTab;
             var result = m_outputService.Generate(active, settings.ExportPath);
             if (result.RequiresConfirmation && active != null
@@ -946,8 +1593,16 @@ namespace GameDBEditorLibrary.UI
             {
                 return;
             }
-            var settings = m_projectSettings.GetSnapshot();
-            var result = m_outputService.Build(m_workspace.ActiveTab, settings.BuildPath);
+            var refreshed = m_projectSettings.Refresh();
+            if (!refreshed.Success)
+            {
+                m_outputMessage = refreshed.Error;
+                m_outputSucceeded = false;
+                Render();
+                return;
+            }
+            var result = m_outputService.Build(m_workspace.ActiveTab,
+                refreshed.Snapshot.BuildPath);
             m_outputMessage = result.Message;
             m_outputSucceeded = result.Success;
             Render();
@@ -964,7 +1619,17 @@ namespace GameDBEditorLibrary.UI
 
         private void OnKeyDown(KeyDownEvent evt)
         {
-            if (!evt.actionKey || evt.keyCode != KeyCode.Z)
+            if (m_addRowRequest != null)
+            {
+                if (evt.keyCode == KeyCode.Escape)
+                {
+                    CancelAddRow();
+                    evt.StopImmediatePropagation();
+                }
+                return;
+            }
+            if (!evt.actionKey || evt.keyCode != KeyCode.Z
+                || IsTextInputEventTarget(evt.target as VisualElement))
             {
                 return;
             }
@@ -977,6 +1642,20 @@ namespace GameDBEditorLibrary.UI
                 UndoActiveDocument();
             }
             evt.StopPropagation();
+        }
+
+        private static bool IsTextInputEventTarget(VisualElement target)
+        {
+            for (var current = target; current != null; current = current.parent)
+            {
+                if (current is TextField || current is IntegerField
+                    || current is LongField || current is FloatField
+                    || current is DoubleField)
+                {
+                    return true;
+                }
+            }
+            return false;
         }
 
         private void OnProjectSettingsChanged(GameDBProjectSettingsChange change)
@@ -1052,6 +1731,7 @@ namespace GameDBEditorLibrary.UI
                 ? draftExportPath : snapshot.ExportPath);
             m_buildPath.SetValueWithoutNotify(preserveDraft
                 ? draftBuildPath : snapshot.BuildPath);
+            m_registerCurrentButton.SetEnabled(m_workspace.ActiveTab != null);
             var hasRegisteredDatabases = snapshot.RegisteredDatabasePaths.Count > 0;
             m_registeredPathsEmpty.style.display = hasRegisteredDatabases
                 ? DisplayStyle.None : DisplayStyle.Flex;

@@ -35,12 +35,22 @@ namespace GameDBLibrary.Tests
                 { "build-button", typeof(ToolbarButton) },
                 { "workspace-content", typeof(VisualElement) },
                 { "table-navigation-host", typeof(VisualElement) },
-                { "table-search-field", typeof(ToolbarSearchField) },
                 { "table-navigation-list", typeof(ListView) },
                 { "table-surface-host", typeof(VisualElement) },
-                { "active-document-placeholder", typeof(Label) },
+                { "table-toolbar", typeof(Toolbar) },
+                { "table-add-row-button", typeof(ToolbarButton) },
+                { "table-delete-row-button", typeof(ToolbarButton) },
+                { "table-search-field", typeof(ToolbarSearchField) },
+                { "table-columns-button", typeof(ToolbarButton) },
+                { "table-inspector-toggle-button", typeof(ToolbarButton) },
+                { "table-action-message-host", typeof(VisualElement) },
+                { "table-empty-state", typeof(VisualElement) },
+                { "table-empty-message", typeof(Label) },
+                { "table-empty-action", typeof(Button) },
                 { "table-row-grid", typeof(MultiColumnListView) },
+                { "inspector-scrim", typeof(VisualElement) },
                 { "inspector-host", typeof(VisualElement) },
+                { "inspector-close-button", typeof(Button) },
                 { "schema-action-scroll", typeof(ScrollView) },
                 { "database-scope-field", typeof(TextField) },
                 { "database-localization-toggle", typeof(Toggle) },
@@ -50,8 +60,14 @@ namespace GameDBLibrary.Tests
                 { "field-navigation-list", typeof(ListView) },
                 { "field-name-field", typeof(TextField) },
                 { "field-type-field", typeof(DropdownField) },
-                { "row-key-field", typeof(TextField) },
                 { "editor-action-message-host", typeof(VisualElement) },
+                { "popover-layer", typeof(VisualElement) },
+                { "add-row-popover", typeof(VisualElement) },
+                { "add-row-popover-title", typeof(Label) },
+                { "add-row-key-control-host", typeof(VisualElement) },
+                { "add-row-validation-message", typeof(Label) },
+                { "add-row-cancel-button", typeof(Button) },
+                { "add-row-confirm-button", typeof(Button) },
                 { "modal-host", typeof(VisualElement) },
                 { "settings-panel", typeof(VisualElement) },
                 { "collection-editor-panel", typeof(VisualElement) },
@@ -66,7 +82,9 @@ namespace GameDBLibrary.Tests
                 { "settings-error-label", typeof(Label) },
                 { "registered-database-empty-label", typeof(Label) },
                 { "registered-database-paths", typeof(ScrollView) },
+                { "registration-path-field", typeof(TextField) },
                 { "register-database-button", typeof(Button) },
+                { "register-current-database-button", typeof(Button) },
                 { "imported-enum-types", typeof(ListView) },
                 { "export-path-field", typeof(TextField) },
                 { "build-path-field", typeof(TextField) },
@@ -100,6 +118,10 @@ namespace GameDBLibrary.Tests
                 .horizontalScrollingEnabled, Is.True);
             Assert.That(root.Q<MultiColumnListView>("table-row-grid").sortingMode,
                 Is.EqualTo(ColumnSortingMode.Custom));
+            Assert.That(root.Q<VisualElement>("popover-layer").parent,
+                Is.SameAs(root.Q<VisualElement>("modal-host").parent));
+            Assert.That(root.Q<VisualElement>("table-empty-state").parent,
+                Is.SameAs(root.Q<Toolbar>("table-toolbar").parent));
             Assert.That(root.Query<ListView>().ToList(), Has.Count.EqualTo(4));
             Assert.That(root.Q<ListView>("field-navigation-list"), Is.Not.Null);
             Assert.That(root.Q<ListView>("collection-editor-list"), Is.Not.Null);
@@ -138,6 +160,67 @@ namespace GameDBLibrary.Tests
                 GameDBEditorResponsiveLayout.CompactClass), Is.True);
             Assert.That(root.ClassListContains(
                 GameDBEditorResponsiveLayout.NarrowClass), Is.True);
+        }
+
+        [Test]
+        public void ResponsiveLayout_ControlsWidePaneAndCompactInspectorDrawer()
+        {
+            var host = new VisualElement();
+            GameDBEditorUiAssets.Build(host);
+            var root = host.Q<VisualElement>("gamedb-editor-root");
+            var navigation = root.Q<VisualElement>("table-navigation-host");
+            var surface = root.Q<VisualElement>("table-surface-host");
+            var layout = new GameDBEditorResponsiveLayout(root);
+            try
+            {
+                layout.Apply(GameDBEditorResponsiveLayout.CompactWidth);
+                Assert.That(layout.IsInspectorOpen, Is.True);
+                Assert.That(root.ClassListContains(
+                    GameDBEditorResponsiveLayout.InspectorOpenClass), Is.True);
+                Assert.That(navigation.enabledSelf, Is.True);
+                Assert.That(surface.enabledSelf, Is.True);
+
+                layout.ToggleInspector();
+                Assert.That(layout.IsInspectorOpen, Is.False);
+                layout.Apply(GameDBEditorResponsiveLayout.CompactWidth - 1f);
+                Assert.That(layout.IsInspectorOpen, Is.False,
+                    "Compact mode should not silently reopen a collapsed wide Inspector.");
+
+                layout.ToggleInspector();
+                Assert.That(layout.IsInspectorOpen, Is.True);
+                Assert.That(navigation.enabledSelf, Is.False);
+                Assert.That(surface.enabledSelf, Is.False);
+
+                layout.CloseInspector();
+                Assert.That(layout.IsInspectorOpen, Is.False);
+                Assert.That(navigation.enabledSelf, Is.True);
+                Assert.That(surface.enabledSelf, Is.True);
+
+                layout.Apply(GameDBEditorResponsiveLayout.CompactWidth);
+                Assert.That(layout.IsInspectorOpen, Is.False,
+                    "Returning wide should restore the user's collapsed pane preference.");
+                layout.ToggleInspector();
+                Assert.That(layout.IsInspectorOpen, Is.True);
+                layout.Apply(GameDBEditorResponsiveLayout.CompactWidth - 1f);
+                Assert.That(layout.IsInspectorOpen, Is.False);
+                layout.Apply(GameDBEditorResponsiveLayout.CompactWidth);
+                Assert.That(layout.IsInspectorOpen, Is.True,
+                    "Returning wide should restore the user's open pane preference.");
+
+                layout.Apply(GameDBEditorResponsiveLayout.CompactWidth - 1f);
+                layout.ToggleInspector();
+                Assert.That(layout.IsInspectorOpen, Is.True);
+                Assert.That(navigation.enabledSelf, Is.False);
+                Assert.That(surface.enabledSelf, Is.False);
+            }
+            finally
+            {
+                layout.Dispose();
+            }
+            Assert.That(root.ClassListContains(
+                GameDBEditorResponsiveLayout.InspectorOpenClass), Is.False);
+            Assert.That(navigation.enabledSelf, Is.True);
+            Assert.That(surface.enabledSelf, Is.True);
         }
 
         [Test]

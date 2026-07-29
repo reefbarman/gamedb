@@ -77,11 +77,6 @@ namespace GameDBEditorLibrary.UI
         private readonly Button m_renameField;
         private readonly Button m_replaceField;
         private readonly Button m_deleteField;
-        private readonly Label m_selectedRow;
-        private readonly TextField m_rowKey;
-        private readonly Button m_addRow;
-        private readonly Button m_renameRow;
-        private readonly Button m_deleteRow;
         private readonly VisualElement m_messageHost;
         private GameDBSnapshot m_snapshot;
         private string m_boundTabId;
@@ -123,11 +118,6 @@ namespace GameDBEditorLibrary.UI
             m_renameField = Required<Button>(root, "rename-field-button");
             m_replaceField = Required<Button>(root, "replace-field-button");
             m_deleteField = Required<Button>(root, "delete-field-button");
-            m_selectedRow = Required<Label>(root, "selected-row-label");
-            m_rowKey = Required<TextField>(root, "row-key-field");
-            m_addRow = Required<Button>(root, "add-row-button");
-            m_renameRow = Required<Button>(root, "rename-row-button");
-            m_deleteRow = Required<Button>(root, "delete-row-button");
             m_messageHost = Required<VisualElement>(root, "editor-action-message-host");
 
             m_tableKeyType.choices = Enum.GetNames(typeof(KeyType)).ToList();
@@ -145,9 +135,6 @@ namespace GameDBEditorLibrary.UI
             m_renameField.clicked += RenameFieldFromControls;
             m_replaceField.clicked += ReplaceFieldFromControls;
             m_deleteField.clicked += DeleteFieldFromControls;
-            m_addRow.clicked += AddRowFromControls;
-            m_renameRow.clicked += RenameRowFromControls;
-            m_deleteRow.clicked += DeleteRowFromControls;
         }
 
         internal void Bind(GameDBEditorWorkspaceTab tab, GameDBSnapshot snapshot)
@@ -184,7 +171,7 @@ namespace GameDBEditorLibrary.UI
                     table = snapshot.Tables.FirstOrDefault();
                     m_boundTableName = table?.Name;
                 }
-                BindTable(tab, table);
+                BindTable(table);
                 m_applyMetadata.SetEnabled(true);
                 ApplyEditingMode();
             }
@@ -290,45 +277,6 @@ namespace GameDBEditorLibrary.UI
                 });
         }
 
-        internal GameDBEditorCommandResult AddRow(string tableName, string rowKey)
-        {
-            rowKey = Trim(rowKey);
-            return Execute(new AddRowCommand(Trim(tableName), rowKey,
-                new Dictionary<string, object>()), onSuccess: (tab, result) =>
-                SetViewState(tab, CopyView(tab.ViewState, selectedRowId: rowKey,
-                    replaceRow: true)));
-        }
-
-        internal GameDBEditorCommandResult RenameRow(string tableName,
-            string currentKey, string newKey)
-        {
-            tableName = Trim(tableName);
-            currentKey = Trim(currentKey);
-            newKey = Trim(newKey);
-            return Execute(new RenameRowCommand(tableName, currentKey, newKey),
-                Confirmation(GameDBCommandKind.RenameRow, "Rename Row",
-                    $"Rename row '{tableName}[{currentKey}]' to '{newKey}'? Table references will be updated.",
-                    "Rename"),
-                (tab, result) => SetViewState(tab,
-                    tab.ViewState.SelectedRowId == currentKey
-                        ? CopyView(tab.ViewState, selectedRowId: newKey, replaceRow: true)
-                        : tab.ViewState));
-        }
-
-        internal GameDBEditorCommandResult DeleteRow(string tableName, string rowKey)
-        {
-            tableName = Trim(tableName);
-            rowKey = Trim(rowKey);
-            return Execute(new DeleteRowCommand(tableName, rowKey),
-                Confirmation(GameDBCommandKind.DeleteRow, "Delete Row",
-                    $"Delete row '{tableName}[{rowKey}]'? Referenced rows cannot be deleted.",
-                    "Delete"),
-                (tab, result) => SetViewState(tab,
-                    tab.ViewState.SelectedRowId == rowKey
-                        ? CopyView(tab.ViewState, selectedRowId: null, replaceRow: true)
-                        : tab.ViewState));
-        }
-
         public void Dispose()
         {
             if (m_disposed)
@@ -347,16 +295,13 @@ namespace GameDBEditorLibrary.UI
             m_renameField.clicked -= RenameFieldFromControls;
             m_replaceField.clicked -= ReplaceFieldFromControls;
             m_deleteField.clicked -= DeleteFieldFromControls;
-            m_addRow.clicked -= AddRowFromControls;
-            m_renameRow.clicked -= RenameRowFromControls;
-            m_deleteRow.clicked -= DeleteRowFromControls;
             m_fields.makeItem = null;
             m_fields.bindItem = null;
             m_fields.itemsSource = null;
             m_snapshot = null;
         }
 
-        private void BindTable(GameDBEditorWorkspaceTab tab, GameDBTableSnapshot table)
+        private void BindTable(GameDBTableSnapshot table)
         {
             var hasTable = table != null;
             m_selectedTable.text = hasTable ? table.Name : "No table selected";
@@ -375,17 +320,8 @@ namespace GameDBEditorLibrary.UI
                 ? Array.Empty<int>() : new[] { fieldIndex });
             BindField(fieldIndex < 0 ? null : table.Fields[fieldIndex]);
 
-            var selectedRow = hasTable
-                ? table.Rows.FirstOrDefault(row => row.Key == tab.ViewState.SelectedRowId)
-                : null;
-            m_selectedRow.text = selectedRow == null
-                ? "No row selected" : selectedRow.Key;
-            m_rowKey.SetValueWithoutNotify(selectedRow?.Key ?? string.Empty);
-            m_addRow.SetEnabled(hasTable);
             m_renameTable.SetEnabled(hasTable);
             m_deleteTable.SetEnabled(hasTable);
-            m_renameRow.SetEnabled(selectedRow != null);
-            m_deleteRow.SetEnabled(selectedRow != null);
             m_fieldTableArgument.choices = m_snapshot.Tables.Select(candidate => candidate.Name).ToList();
             if (m_tableKeyType.index < 0)
             {
@@ -654,7 +590,6 @@ namespace GameDBEditorLibrary.UI
             m_localization.SetValueWithoutNotify(false);
             m_selectedTable.text = "No table selected";
             m_selectedFieldType.text = string.Empty;
-            m_selectedRow.text = "No row selected";
             m_fields.itemsSource = null;
             m_fields.RefreshItems();
             m_applyMetadata.SetEnabled(false);
@@ -662,9 +597,6 @@ namespace GameDBEditorLibrary.UI
             m_renameField.SetEnabled(false);
             m_replaceField.SetEnabled(false);
             m_deleteField.SetEnabled(false);
-            m_addRow.SetEnabled(false);
-            m_renameRow.SetEnabled(false);
-            m_deleteRow.SetEnabled(false);
             m_renameTable.SetEnabled(false);
             m_deleteTable.SetEnabled(false);
             ClearMessage();
@@ -694,11 +626,6 @@ namespace GameDBEditorLibrary.UI
             m_selectedFieldName, Parse<FieldType>(m_fieldType.value), FieldArgument());
         private void DeleteFieldFromControls() =>
             DeleteField(m_boundTableName, m_selectedFieldName);
-        private void AddRowFromControls() => AddRow(m_boundTableName, m_rowKey.value);
-        private void RenameRowFromControls() => RenameRow(m_boundTableName,
-            m_workspace.ActiveTab?.ViewState.SelectedRowId, m_rowKey.value);
-        private void DeleteRowFromControls() => DeleteRow(m_boundTableName,
-            m_workspace.ActiveTab?.ViewState.SelectedRowId);
 
         private string FieldArgument()
         {

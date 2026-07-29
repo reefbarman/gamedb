@@ -8,6 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.0.0-preview.5] - 2026-07-29
+
+### Added
+
+- Added supported project-settings inspection and full-state updates with canonical `Assets/...` paths, semantic revision guards, dry runs, validation, and structured commit/recovery state.
+- Added picker-free settings controls for an exact registration path and the currently active GameDB document.
+- Added a table-first authoring workflow with persistent row actions, anchored row creation, direct key editing, collection editing, column Best Fit, and a responsive Inspector drawer.
+
+### Changed
+
+- Refreshed editor mutations from canonical snapshots, unified scalar/array/dictionary row-reference traversal, and expanded editor UI and automation regression coverage.
+
 ## [1.0.0-preview.4] - 2026-07-28
 
 ### Fixed
@@ -65,7 +77,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Legacy Free/Pro feature split, old project files, vendored promise/JSON sources, binary/encrypted build output, and the unshipped legacy deployment server workflow.
 
-[Unreleased]: https://github.com/reefbarman/gamedb/compare/v1.0.0-preview.4...HEAD
+[Unreleased]: https://github.com/reefbarman/gamedb/compare/v1.0.0-preview.5...HEAD
+[1.0.0-preview.5]: https://github.com/reefbarman/gamedb/compare/v1.0.0-preview.4...v1.0.0-preview.5
 [1.0.0-preview.4]: https://github.com/reefbarman/gamedb/compare/v1.0.0-preview.3...v1.0.0-preview.4
 [1.0.0-preview.3]: https://github.com/reefbarman/gamedb/compare/v1.0.0-preview.1...v1.0.0-preview.3
 [1.0.0-preview.1]: https://github.com/reefbarman/gamedb/releases/tag/v1.0.0-preview.1

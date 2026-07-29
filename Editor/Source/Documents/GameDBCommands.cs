@@ -551,11 +551,16 @@ namespace GameDBEditorLibrary.Documents
         internal override GameDBCommandExecution Execute(GameDBCommandContext context)
         {
             var table = GameDBModelOperations.GetTable(context.Model, m_tableName);
-            var references = GameDBModelOperations.FindRowReferences(context.Model, m_tableName, m_rowKey);
+            var references = GameDBModelOperations.FindRowReferenceSites(
+                context.Model, m_tableName, m_rowKey);
             if (references.Count > 0)
             {
+                var descriptions = references.Select(reference =>
+                    reference.Path + (reference.OccurrenceCount == 1
+                        ? string.Empty
+                        : $" ({reference.OccurrenceCount} occurrences)"));
                 return GameDBCommandExecution.Failed(
-                    $"Row is referenced by: {string.Join(", ", references)}. Update those values before deleting it.");
+                    $"Row is referenced by: {string.Join(", ", descriptions)}. Update those values before deleting it.");
             }
 
             return table.RemoveKey(m_rowKey)

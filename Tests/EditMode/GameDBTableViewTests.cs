@@ -231,7 +231,7 @@ namespace GameDBLibrary.Tests
             var navigation = new ListView();
             var grid = new MultiColumnListView();
             var placeholder = new Label();
-            using (var controller = new GameDBTableViewController(new ToolbarSearchField(), navigation, grid,
+            using (var controller = CreateController(new ToolbarSearchField(), navigation, grid,
                 placeholder, _ => { }))
             {
                 var missingTable = controller.Bind(
@@ -250,14 +250,25 @@ namespace GameDBLibrary.Tests
         [Test]
         public void TableController_RendersEmptyDatabaseAndEmptyTableStates()
         {
+            var addRow = new ToolbarButton();
+            var deleteRow = new ToolbarButton();
+            var columns = new ToolbarButton();
             var navigation = new ListView();
             var grid = new MultiColumnListView();
-            var placeholder = new Label();
-            using (var controller = new GameDBTableViewController(new ToolbarSearchField(), navigation, grid,
-                placeholder, _ => { }))
+            var emptyState = new VisualElement();
+            var emptyMessage = new Label();
+            var emptyAction = new Button();
+            using (var controller = new GameDBTableViewController(addRow, deleteRow,
+                columns, new ToolbarSearchField(), navigation, grid,
+                new VisualElement(), emptyState, emptyMessage, emptyAction, _ => { }))
             {
                 controller.Bind(new GameDBWorkspaceTabViewState(), new GameDBSnapshot());
-                Assert.That(placeholder.text, Is.EqualTo("This database has no tables."));
+                Assert.That(emptyMessage.text, Is.EqualTo("This database has no tables."));
+                Assert.That(emptyState.style.display.value, Is.EqualTo(DisplayStyle.Flex));
+                Assert.That(emptyAction.style.display.value, Is.EqualTo(DisplayStyle.None));
+                Assert.That(addRow.enabledSelf, Is.False);
+                Assert.That(deleteRow.enabledSelf, Is.False);
+                Assert.That(columns.enabledSelf, Is.False);
                 Assert.That(grid.style.display.value, Is.EqualTo(DisplayStyle.None));
                 Assert.That(grid.columns, Is.Empty);
 
@@ -269,7 +280,12 @@ namespace GameDBLibrary.Tests
                             Table("Empty")
                         }
                     });
-                Assert.That(placeholder.text, Is.EqualTo("'Empty' has no rows."));
+                Assert.That(emptyMessage.text, Is.EqualTo("'Empty' has no rows."));
+                Assert.That(emptyAction.style.display.value, Is.EqualTo(DisplayStyle.Flex));
+                Assert.That(emptyAction.enabledSelf, Is.True);
+                Assert.That(addRow.enabledSelf, Is.True);
+                Assert.That(deleteRow.enabledSelf, Is.False);
+                Assert.That(columns.enabledSelf, Is.True);
                 Assert.That(grid.columns.Count, Is.EqualTo(2));
                 Assert.That(grid.itemsSource, Is.Empty);
             }
@@ -283,7 +299,7 @@ namespace GameDBLibrary.Tests
             var grid = new MultiColumnListView();
             var placeholder = new Label();
             var selections = new List<string>();
-            using (var controller = new GameDBTableViewController(new ToolbarSearchField(), navigation, grid,
+            using (var controller = CreateController(new ToolbarSearchField(), navigation, grid,
                 placeholder, state => selections.Add(state.SelectedTableId + "/" + state.SelectedRowId)))
             {
                 controller.Bind(new GameDBWorkspaceTabViewState(
@@ -299,7 +315,7 @@ namespace GameDBLibrary.Tests
                     Is.EqualTo(GameDBTableViewProjection.KeyFieldId));
                 Assert.That(grid.columns.Last().name, Is.EqualTo("Field23"));
                 Assert.That(grid.selectedIndex, Is.EqualTo(123));
-                Assert.That(placeholder.style.display.value, Is.EqualTo(DisplayStyle.None));
+                Assert.That(grid.style.display.value, Is.EqualTo(DisplayStyle.Flex));
                 Assert.That(selections, Is.Empty);
 
                 var firstColumns = grid.columns.ToArray();
@@ -323,7 +339,7 @@ namespace GameDBLibrary.Tests
             };
             var grid = new MultiColumnListView();
             var states = new List<GameDBWorkspaceTabViewState>();
-            var controller = new GameDBTableViewController(new ToolbarSearchField(),
+            var controller = CreateController(new ToolbarSearchField(),
                 new ListView(), grid, new Label(), states.Add);
             try
             {
@@ -386,6 +402,156 @@ namespace GameDBLibrary.Tests
         }
 
         [Test]
+        public void TableController_BestFitMeasuresHeaderAndAllSourceRowsWithClamps()
+        {
+            var field = Field("DescriptiveFieldName", GameDBLibrary.FieldType.@string);
+            var table = new GameDBTableSnapshot
+            {
+                Name = "Items",
+                Fields = new List<GameDBFieldSnapshot> { field },
+                Rows = new List<GameDBRowSnapshot>
+                {
+                    Row("Visible", (field.Name, "short")),
+                    Row("Hidden", (field.Name, new string('x', 80)))
+                }
+            };
+            var valueColumn = new Column
+            {
+                name = field.Name,
+                title = field.Name
+            };
+
+            Assert.That(GameDBTableViewController.TryCalculateBestFitWidth(
+                valueColumn, table, text => text.Length, out var valueWidth), Is.True);
+            Assert.That(valueWidth, Is.EqualTo(96f),
+                "The longest source value should win even when it is not projected or realized.");
+
+            var headerColumn = new Column
+            {
+                name = field.Name,
+                title = new string('h', 100)
+            };
+            Assert.That(GameDBTableViewController.TryCalculateBestFitWidth(
+                headerColumn, table, text => text.Length, out var headerWidth), Is.True);
+            Assert.That(headerWidth, Is.EqualTo(128f));
+
+            Assert.That(GameDBTableViewController.TryCalculateBestFitWidth(
+                valueColumn, table, _ => 0f, out var minimumWidth), Is.True);
+            Assert.That(minimumWidth, Is.EqualTo(48f));
+            Assert.That(GameDBTableViewController.TryCalculateBestFitWidth(
+                valueColumn, table, _ => 1000f, out var maximumWidth), Is.True);
+            Assert.That(maximumWidth, Is.EqualTo(600f));
+        }
+
+        [Test]
+        public void TableController_BestFitPersistsOneChangedWidthAndSkipsUnchangedWidth()
+        {
+            var table = Table("Items", "short", new string('x', 80));
+            var snapshot = new GameDBSnapshot
+            {
+                Tables = new List<GameDBTableSnapshot> { table }
+            };
+            var grid = new MultiColumnListView();
+            var states = new List<GameDBWorkspaceTabViewState>();
+            using (var controller = CreateController(new ToolbarSearchField(),
+                new ListView(), grid, new Label(), states.Add))
+            {
+                controller.Bind(new GameDBWorkspaceTabViewState("Items",
+                    searchText: "short"), snapshot);
+                Assert.That(grid.itemsSource.Count, Is.EqualTo(1));
+
+                Assert.That(controller.BestFitColumn("Value", text => text.Length), Is.True);
+                Assert.That(grid.columns["Value"].width.value, Is.EqualTo(96f));
+                Assert.That(states, Has.Count.EqualTo(1));
+                Assert.That(states.Single().Columns.Single(column =>
+                    column.FieldId == "Value").Width, Is.EqualTo(96f));
+
+                Assert.That(controller.BestFitColumn("Value", text => text.Length), Is.False);
+                Assert.That(states, Has.Count.EqualTo(1));
+                Assert.That(controller.BestFitColumn("missing", text => text.Length), Is.False);
+            }
+        }
+
+        [Test]
+        public void TableController_BestFitFormatsReferenceAndCollectionDisplayValues()
+        {
+            var reference = Field("Target", GameDBLibrary.FieldType.tableRef);
+            var collection = Field("Tags", GameDBLibrary.FieldType.@string, true);
+            var table = new GameDBTableSnapshot
+            {
+                Name = "Items",
+                Fields = new List<GameDBFieldSnapshot> { reference, collection },
+                Rows = new List<GameDBRowSnapshot>
+                {
+                    Row("Row1", (reference.Name, null),
+                        (collection.Name, new[] { "one", "two" }))
+                }
+            };
+            var measured = new List<string>();
+
+            Assert.That(GameDBTableViewController.TryCalculateBestFitWidth(new Column
+            {
+                name = reference.Name,
+                title = reference.Name
+            }, table, text =>
+            {
+                measured.Add(text);
+                return text.Length;
+            }, out _), Is.True);
+            Assert.That(measured, Does.Contain(GameDBLibrary.FieldBase.NullRefToken));
+
+            measured.Clear();
+            Assert.That(GameDBTableViewController.TryCalculateBestFitWidth(new Column
+            {
+                name = collection.Name,
+                title = collection.Name
+            }, table, text =>
+            {
+                measured.Add(text);
+                return text.Length;
+            }, out _), Is.True);
+            Assert.That(measured, Does.Contain("2 items"));
+        }
+
+        [Test]
+        public void TableController_BestFitKeepsCompositeControlsUsableAndFormatsObjectPath()
+        {
+            var vector = Field("Position", GameDBLibrary.FieldType.vector3);
+            var objectField = Field("Icon", GameDBLibrary.FieldType.unityObject);
+            var reference = new GameDBLibrary.UnityObjectReference(
+                "0123456789abcdef0123456789abcdef", "Assets/Icons/Long Sword.png");
+            var table = new GameDBTableSnapshot
+            {
+                Name = "Items",
+                Fields = new List<GameDBFieldSnapshot> { vector, objectField },
+                Rows = new List<GameDBRowSnapshot>
+                {
+                    Row("Row1", (vector.Name, new GameDBLibrary.Vector3(0f, 0f, 0f)),
+                        (objectField.Name, reference))
+                }
+            };
+
+            Assert.That(GameDBTableViewController.TryCalculateBestFitWidth(new Column
+            {
+                name = vector.Name,
+                title = vector.Name
+            }, table, text => text.Length, out var vectorWidth), Is.True);
+            Assert.That(vectorWidth, Is.EqualTo(160f));
+
+            var measured = new List<string>();
+            Assert.That(GameDBTableViewController.TryCalculateBestFitWidth(new Column
+            {
+                name = objectField.Name,
+                title = objectField.Name
+            }, table, text =>
+            {
+                measured.Add(text);
+                return text.Length;
+            }, out _), Is.True);
+            Assert.That(measured, Does.Contain("Long Sword"));
+        }
+
+        [Test]
         public void TableController_PreservesIndependentLayoutsAcrossTables()
         {
             var snapshot = new GameDBSnapshot
@@ -398,7 +564,7 @@ namespace GameDBLibrary.Tests
             };
             var grid = new MultiColumnListView();
             var states = new List<GameDBWorkspaceTabViewState>();
-            using (var controller = new GameDBTableViewController(
+            using (var controller = CreateController(
                 new ToolbarSearchField(), new ListView(), grid,
                 new Label(), states.Add))
             {
@@ -443,7 +609,7 @@ namespace GameDBLibrary.Tests
                 Tables = new List<GameDBTableSnapshot> { table }
             };
             var grid = new MultiColumnListView();
-            using (var controller = new GameDBTableViewController(
+            using (var controller = CreateController(
                 new ToolbarSearchField(), new ListView(), grid,
                 new Label(), _ => { }))
             {
@@ -477,7 +643,7 @@ namespace GameDBLibrary.Tests
             var navigation = new ListView();
             var grid = new MultiColumnListView();
             var placeholder = new Label();
-            using (var controller = new GameDBTableViewController(new ToolbarSearchField(), navigation, grid,
+            using (var controller = CreateController(new ToolbarSearchField(), navigation, grid,
                 placeholder, _ => { }))
             {
                 controller.Bind(new GameDBWorkspaceTabViewState("Items"), snapshot);
@@ -509,7 +675,7 @@ namespace GameDBLibrary.Tests
             {
                 sortingMode = ColumnSortingMode.Custom
             };
-            using (var controller = new GameDBTableViewController(
+            using (var controller = CreateController(
                 new ToolbarSearchField(), new ListView(), grid, new Label(), _ => { }))
             {
                 controller.Bind(new GameDBWorkspaceTabViewState("Table00"), snapshot);
@@ -570,7 +736,7 @@ namespace GameDBLibrary.Tests
                 sortingMode = ColumnSortingMode.Custom
             };
             var states = new List<GameDBWorkspaceTabViewState>();
-            using (var controller = new GameDBTableViewController(search,
+            using (var controller = CreateController(search,
                 navigation, grid, new Label(), states.Add))
             {
                 controller.Bind(new GameDBWorkspaceTabViewState(
@@ -611,7 +777,7 @@ namespace GameDBLibrary.Tests
                 sortingMode = ColumnSortingMode.Custom
             };
             var states = new List<GameDBWorkspaceTabViewState>();
-            using (var controller = new GameDBTableViewController(new ToolbarSearchField(),
+            using (var controller = CreateController(new ToolbarSearchField(),
                 new ListView(), grid, new Label(), states.Add))
             {
                 var resolved = controller.Bind(new GameDBWorkspaceTabViewState(
@@ -634,6 +800,206 @@ namespace GameDBLibrary.Tests
         }
 
         [Test]
+        public void RowSelectionAfterDelete_UsesNextVisibleSortedRow()
+        {
+            var snapshot = new GameDBSnapshot
+            {
+                Tables = new List<GameDBTableSnapshot>
+                {
+                    new GameDBTableSnapshot
+                    {
+                        Name = "Items",
+                        Fields = new List<GameDBFieldSnapshot>
+                        {
+                            Field("Power", GameDBLibrary.FieldType.@int)
+                        },
+                        Rows = new List<GameDBRowSnapshot>
+                        {
+                            Row("Row1", ("Power", 10)),
+                            Row("Row2", ("Power", 30)),
+                            Row("Row3", ("Power", 20)),
+                            Row("Hidden", ("Power", 40))
+                        }
+                    }
+                }
+            };
+            var sorted = new GameDBWorkspaceTabViewState("Items", "Row3",
+                searchText: "Row", sorts: new[]
+                {
+                    new GameDBWorkspaceSortState("Power", true)
+                });
+
+            Assert.That(GameDBEditorWindowController.RowSelectionAfterDelete(
+                snapshot, sorted, "Items", "Row3"), Is.EqualTo("Row1"));
+            Assert.That(GameDBEditorWindowController.RowSelectionAfterDelete(
+                snapshot, sorted, "Items", "Row1"), Is.EqualTo("Row3"));
+            Assert.That(GameDBEditorWindowController.RowSelectionAfterDelete(
+                snapshot, sorted, "Items", "Hidden"), Is.Null);
+        }
+
+        [Test]
+        public void TableController_AddRowEntryPointsEmitEquivalentBoundRequestsAndStopAfterDispose()
+        {
+            var snapshot = new GameDBSnapshot
+            {
+                Revision = "revision-1",
+                Tables = new List<GameDBTableSnapshot>
+                {
+                    Table("Items")
+                }
+            };
+            var addButton = new ToolbarButton();
+            var emptyAction = new Button();
+            var requests = new List<GameDBAddRowRequest>();
+            var controller = new GameDBTableViewController(addButton,
+                new ToolbarButton(), new ToolbarButton(), new ToolbarSearchField(),
+                new ListView(), new MultiColumnListView(), new VisualElement(),
+                new VisualElement(), new Label(), emptyAction, _ => { },
+                addRowRequested: request =>
+                {
+                    requests.Add(request);
+                    return true;
+                });
+            try
+            {
+                controller.RequestAddRowFromToolbar();
+                controller.RequestAddRowFromEmptyState();
+                Assert.That(requests, Is.Empty);
+
+                controller.Bind(new GameDBWorkspaceTabViewState("Items"), snapshot);
+                controller.RequestAddRowFromToolbar();
+                controller.RequestAddRowFromEmptyState();
+
+                Assert.That(requests, Has.Count.EqualTo(2));
+                Assert.That(requests.Select(request => request.Snapshot),
+                    Is.All.SameAs(snapshot));
+                Assert.That(requests.Select(request => request.Table),
+                    Is.All.SameAs(snapshot.Tables.Single()));
+                Assert.That(requests.Select(request => request.Revision),
+                    Is.All.EqualTo("revision-1"));
+                Assert.That(requests[0].FocusTarget, Is.SameAs(addButton));
+                Assert.That(requests[1].FocusTarget, Is.SameAs(emptyAction));
+
+                controller.Dispose();
+                requests.Clear();
+                controller.RequestAddRowFromToolbar();
+                controller.RequestAddRowFromEmptyState();
+                Assert.That(requests, Is.Empty);
+            }
+            finally
+            {
+                controller.Dispose();
+            }
+        }
+
+        [Test]
+        public void TableController_AddRowOpenFailurePresentsActionFeedback()
+        {
+            var actionMessage = new VisualElement();
+            using (var controller = new GameDBTableViewController(new ToolbarButton(),
+                new ToolbarButton(), new ToolbarButton(), new ToolbarSearchField(),
+                new ListView(), new MultiColumnListView(), actionMessage,
+                new VisualElement(), new Label(), new Button(), _ => { },
+                addRowRequested: _ => false))
+            {
+                controller.Bind(new GameDBWorkspaceTabViewState("Items"),
+                    new GameDBSnapshot
+                    {
+                        Revision = "revision-1",
+                        Tables = new List<GameDBTableSnapshot> { Table("Items") }
+                    });
+
+                controller.RequestAddRowFromToolbar();
+
+                Assert.That(actionMessage.Q<HelpBox>(), Is.Not.Null);
+                Assert.That(actionMessage.Q<HelpBox>().text,
+                    Does.Contain("could not be opened"));
+            }
+        }
+
+        [Test]
+        public void TableController_RowIntentsCaptureBoundIdentityRevisionAndStopAfterDispose()
+        {
+            var snapshot = new GameDBSnapshot
+            {
+                Revision = "revision-1",
+                Tables = new List<GameDBTableSnapshot>
+                {
+                    Table("Items", "Row1", "Row2")
+                }
+            };
+            GameDBRowCreateIntent create = null;
+            GameDBRowRenameIntent rename = null;
+            GameDBRowDeleteIntent delete = null;
+            var deleteButton = new ToolbarButton();
+            var actionMessage = new VisualElement();
+            var controller = new GameDBTableViewController(new ToolbarButton(),
+                deleteButton, new ToolbarButton(), new ToolbarSearchField(),
+                new ListView(), new MultiColumnListView(), actionMessage,
+                new VisualElement(), new Label(), new Button(), _ => { },
+                createRow: intent =>
+                {
+                    create = intent;
+                    return null;
+                },
+                renameRow: intent =>
+                {
+                    rename = intent;
+                    return null;
+                },
+                deleteRowIntent: intent =>
+                {
+                    delete = intent;
+                    return new GameDBRowMutationResult(false, "blocked", snapshot,
+                        intent.RowKey, GameDBRowReferenceImpact.None);
+                });
+            try
+            {
+                controller.Bind(new GameDBWorkspaceTabViewState("Items", "Row2"), snapshot);
+
+                controller.CreateRow(" Row3 ");
+                controller.RenameRow("Row2", "Renamed");
+                controller.DeleteRow("Row1");
+
+                Assert.That(create.TableName, Is.EqualTo("Items"));
+                Assert.That(create.RowKey, Is.EqualTo(" Row3 "));
+                Assert.That(create.ExpectedRevision, Is.EqualTo("revision-1"));
+                Assert.That(rename.CurrentKey, Is.EqualTo("Row2"));
+                Assert.That(rename.NewKey, Is.EqualTo("Renamed"));
+                Assert.That(rename.ExpectedRevision, Is.EqualTo("revision-1"));
+                Assert.That(delete.RowKey, Is.EqualTo("Row1"));
+                Assert.That(delete.ExpectedRevision, Is.EqualTo("revision-1"));
+                Assert.That(actionMessage.Q<HelpBox>(), Is.Not.Null);
+                Assert.That(actionMessage.Q<HelpBox>().text, Does.Contain("blocked"));
+
+                controller.Bind(new GameDBWorkspaceTabViewState("Items", "Row2"), snapshot);
+                Assert.That(actionMessage.Q<HelpBox>(), Is.Null,
+                    "A canonical rebind should clear stale feedback.");
+
+                controller.DeleteRow("Row1");
+                Assert.That(actionMessage.Q<HelpBox>(), Is.Not.Null);
+                controller.CreateRow("Row4");
+                Assert.That(actionMessage.Q<HelpBox>(), Is.Null,
+                    "A subsequent row action should clear stale feedback.");
+
+                controller.Dispose();
+                create = null;
+                rename = null;
+                delete = null;
+                Assert.That(controller.CreateRow("Ignored"), Is.Null);
+                Assert.That(controller.RenameRow("Row2", "Ignored"), Is.Null);
+                Assert.That(controller.DeleteRow("Row2"), Is.Null);
+                Assert.That(create, Is.Null);
+                Assert.That(rename, Is.Null);
+                Assert.That(delete, Is.Null);
+            }
+            finally
+            {
+                controller.Dispose();
+            }
+        }
+
+        [Test]
         public void TableController_UserSelectionUsesTableAndRowKeysAndDisposeDetachesCallbacks()
         {
             var snapshot = new GameDBSnapshot
@@ -652,7 +1018,7 @@ namespace GameDBLibrary.Tests
             };
             var placeholder = new Label();
             var selections = new List<string>();
-            var controller = new GameDBTableViewController(search, navigation, grid,
+            var controller = CreateController(search, navigation, grid,
                 placeholder, state => selections.Add(state.SelectedTableId + "/" + state.SelectedRowId));
             try
             {
@@ -800,6 +1166,7 @@ namespace GameDBLibrary.Tests
             return new GameDBTableSnapshot
             {
                 Name = name,
+                KeyType = GameDBLibrary.KeyType.@string,
                 Fields = new List<GameDBFieldSnapshot>
                 {
                     new GameDBFieldSnapshot
@@ -816,6 +1183,17 @@ namespace GameDBLibrary.Tests
             };
         }
 
+
+        private static GameDBTableViewController CreateController(
+            ToolbarSearchField search, ListView navigation,
+            MultiColumnListView grid, Label emptyMessage,
+            Action<GameDBWorkspaceTabViewState> stateChanged)
+        {
+            return new GameDBTableViewController(new ToolbarButton(),
+                new ToolbarButton(), new ToolbarButton(), search, navigation, grid,
+                new VisualElement(), new VisualElement(), emptyMessage,
+                new Button(), stateChanged);
+        }
 
         private static GameDBProjectSettingsService CreateSettings()
         {

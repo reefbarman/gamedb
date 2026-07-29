@@ -58,8 +58,7 @@
     justify-content: center;
 }
 
-.gamedb-editor__empty-message,
-.gamedb-editor__placeholder {
+.gamedb-editor__empty-message {
     color: var(--gamedb-muted-text-color);
     unity-text-align: middle-center;
 }
@@ -133,11 +132,23 @@
     unity-font-style: bold;
 }
 
-.gamedb-editor__table-search {
+.gamedb-editor__table-toolbar {
+    height: auto;
+    min-height: 22px;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
     flex-shrink: 0;
+    padding-left: var(--gamedb-space-xs);
+    padding-right: var(--gamedb-space-xs);
+}
+
+.gamedb-editor__table-search {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 80px;
     margin-left: var(--gamedb-space-xs);
     margin-right: var(--gamedb-space-xs);
-    margin-bottom: var(--gamedb-space-xs);
 }
 
 .gamedb-editor__table-navigation-list,
@@ -157,10 +168,31 @@
     overflow: hidden;
 }
 
+.gamedb-editor__table-grid .unity-multi-column-header__column__default-content,
+.gamedb-editor__table-grid .unity-multi-column-header__column__title {
+    min-width: 0;
+    overflow: hidden;
+}
+
+.gamedb-editor__table-grid .unity-multi-column-header__column__title {
+    flex-shrink: 1;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
 .gamedb-editor__value-editor,
-.gamedb-editor__value-editor-control {
+.gamedb-editor__value-editor-control,
+.gamedb-editor__key-editor,
+.gamedb-editor__key-editor-label,
+.gamedb-editor__key-editor-control {
     flex-grow: 1;
     min-width: 0;
+}
+
+.gamedb-editor__key-editor-label {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .gamedb-editor__value-editor--invalid {
@@ -168,21 +200,62 @@
     border-color: #d9534f;
 }
 
-.gamedb-editor__placeholder {
-    position: absolute;
-    left: var(--gamedb-space-md);
-    right: var(--gamedb-space-md);
-    top: var(--gamedb-space-md);
-    bottom: var(--gamedb-space-md);
+.gamedb-editor__table-action-message {
+    flex-shrink: 0;
+}
+
+.gamedb-editor__table-empty-state {
+    flex-grow: 1;
+    min-height: 72px;
+    margin: var(--gamedb-space-md);
     align-items: center;
     justify-content: center;
 }
 
+.gamedb-editor__table-empty-message {
+    color: var(--gamedb-muted-text-color);
+    unity-text-align: middle-center;
+    white-space: normal;
+}
+
+.gamedb-editor__table-empty-action {
+    display: none;
+    margin-top: var(--gamedb-space-sm);
+}
+
+.gamedb-editor__inspector-scrim {
+    display: none;
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.35);
+}
+
 .gamedb-editor__inspector {
+    display: none;
     width: var(--gamedb-inspector-width);
     flex-shrink: 0;
     border-left-width: 1px;
     border-left-color: var(--gamedb-border-color);
+}
+
+.gamedb-editor--inspector-open .gamedb-editor__inspector {
+    display: flex;
+}
+
+.gamedb-editor__inspector-toolbar {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+    border-bottom-width: 1px;
+    border-bottom-color: var(--gamedb-border-color);
+}
+
+.gamedb-editor__inspector-close {
+    display: none;
+    margin-right: var(--gamedb-space-xs);
 }
 
 .gamedb-editor__inspector-scroll {
@@ -229,12 +302,73 @@
     color: #d9534f;
 }
 
+.gamedb-editor--compact.gamedb-editor--inspector-open .gamedb-editor__inspector-scrim {
+    display: flex;
+}
+
 .gamedb-editor--compact .gamedb-editor__inspector {
-    display: none;
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 320px;
+    max-width: 88%;
+    background-color: var(--gamedb-dialog-color);
+    border-left-width: 1px;
+    border-left-color: var(--gamedb-border-color);
+}
+
+.gamedb-editor--compact .gamedb-editor__inspector-close {
+    display: flex;
 }
 
 .gamedb-editor--narrow .gamedb-editor__navigation {
     width: 112px;
+}
+
+.gamedb-editor--narrow .gamedb-editor__table-search {
+    min-width: 120px;
+    flex-basis: 120px;
+}
+
+.gamedb-editor__popover-layer {
+    display: none;
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+}
+
+.gamedb-editor__add-row-popover {
+    display: none;
+    position: absolute;
+    width: 300px;
+    padding: var(--gamedb-space-md);
+    background-color: var(--gamedb-dialog-color);
+    border-width: 1px;
+    border-color: var(--gamedb-border-color);
+}
+
+.gamedb-editor__popover-title {
+    unity-font-style: bold;
+    margin-bottom: var(--gamedb-space-sm);
+}
+
+.gamedb-editor__popover-control {
+    min-height: 20px;
+}
+
+.gamedb-editor__popover-validation {
+    color: #d9534f;
+    white-space: normal;
+    margin-top: var(--gamedb-space-xs);
+}
+
+.gamedb-editor__popover-actions {
+    flex-direction: row;
+    align-items: center;
+    margin-top: var(--gamedb-space-sm);
 }
 
 .gamedb-editor__modal-host {

@@ -4,6 +4,8 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using UnityEngine;
 
 namespace GameDBEditorLibrary.Workspace
@@ -26,6 +28,17 @@ namespace GameDBEditorLibrary.Workspace
         }
     }
 
+    internal enum GameDBProjectSettingsCommitStatus
+    {
+        NotAttempted,
+        DryRun,
+        Saved,
+        NoChanges,
+        ValidationFailed,
+        Conflict,
+        PersistenceFailed
+    }
+
     internal sealed class GameDBProjectSettingsSnapshot
     {
         private readonly string[] m_registeredDatabasePaths;
@@ -37,10 +50,11 @@ namespace GameDBEditorLibrary.Workspace
         internal string ExportPath { get; }
         internal string BuildPath { get; }
         internal IReadOnlyList<GameDBProjectSettingsIssue> ValidationIssues { get; }
+        internal string Revision { get; }
 
         internal GameDBProjectSettingsSnapshot(IEnumerable<string> registeredDatabasePaths,
             IEnumerable<string> importedEnumTypeNames, string exportPath, string buildPath,
-            IEnumerable<GameDBProjectSettingsIssue> validationIssues)
+            IEnumerable<GameDBProjectSettingsIssue> validationIssues, string revision)
         {
             m_registeredDatabasePaths = registeredDatabasePaths.ToArray();
             m_importedEnumTypeNames = importedEnumTypeNames.ToArray();
@@ -50,6 +64,7 @@ namespace GameDBEditorLibrary.Workspace
             ValidationIssues = new ReadOnlyCollection<GameDBProjectSettingsIssue>(m_validationIssues);
             ExportPath = exportPath;
             BuildPath = buildPath;
+            Revision = revision;
         }
 
         internal bool HasSameValues(GameDBProjectSettingsSnapshot other)
@@ -90,10 +105,14 @@ namespace GameDBEditorLibrary.Workspace
         internal GameDBProjectSettingsSnapshot Snapshot { get; }
         internal string Error { get; }
         internal IReadOnlyList<string> NotificationErrors { get; }
+        internal GameDBProjectSettingsCommitStatus CommitStatus { get; }
+        internal string RevisionBefore { get; }
 
         internal GameDBProjectSettingsResult(bool success, bool changed,
             GameDBProjectSettingsSnapshot snapshot, string error,
-            IEnumerable<string> notificationErrors = null)
+            IEnumerable<string> notificationErrors = null,
+            GameDBProjectSettingsCommitStatus commitStatus = GameDBProjectSettingsCommitStatus.NotAttempted,
+            string revisionBefore = null)
         {
             Success = success;
             Changed = changed;
@@ -101,6 +120,8 @@ namespace GameDBEditorLibrary.Workspace
             Error = error;
             NotificationErrors = new ReadOnlyCollection<string>(
                 (notificationErrors ?? Array.Empty<string>()).ToArray());
+            CommitStatus = commitStatus;
+            RevisionBefore = revisionBefore;
         }
     }
 
@@ -198,7 +219,9 @@ namespace GameDBEditorLibrary.Workspace
                 "ProjectSettings", "GameDBSettings.json"));
             return new GameDBProjectSettingsService(
                 new GameDBProjectSettingsFileStore(settingsPath),
-                path => File.Exists(Path.Combine(Application.dataPath, path)),
+                path => File.Exists(Path.Combine(Application.dataPath, path))
+                    && File.Exists(Path.ChangeExtension(
+                        Path.Combine(Application.dataPath, path), ".schema.json")),
                 typeName =>
                 {
                     AssemblyExplorer.Instance.Load();
@@ -216,33 +239,40 @@ namespace GameDBEditorLibrary.Workspace
             }
 
             m_loaded = true;
-            if (!m_store.Exists)
+            var loaded = ReadStore();
+            m_snapshot = loaded.Snapshot;
+            m_loadError = loaded.Error;
+            return loaded;
+        }
+
+        internal GameDBProjectSettingsResult Refresh()
+        {
+            if (!m_loaded)
             {
-                m_snapshot = CreateSnapshot(Array.Empty<string>(), Array.Empty<string>(),
-                    string.Empty, string.Empty);
-                return new GameDBProjectSettingsResult(true, false, m_snapshot, null);
+                return Load();
             }
 
-            try
+            var previous = m_snapshot;
+            var refreshed = ReadStore();
+            if (!refreshed.Success)
             {
-                if (!(JsonSerialization.Deserialize(m_store.ReadAllText())
-                    is IDictionary<string, object> settings))
-                {
-                    throw new FormatException("GameDB settings must contain a JSON object.");
-                }
+                m_loadError = refreshed.Error;
+                return new GameDBProjectSettingsResult(false, false, previous,
+                    refreshed.Error);
+            }
 
-                m_snapshot = CreateSnapshot(ReadStringList(settings, "gameDBPaths"),
-                    ReadStringList(settings, "importedEnums"),
-                    ReadString(settings, "exportPath"), ReadString(settings, "buildPath"));
-                return new GameDBProjectSettingsResult(true, false, m_snapshot, null);
-            }
-            catch (Exception exception)
+            m_loadError = null;
+            if (previous.HasSameValues(refreshed.Snapshot)
+                && previous.HasSameValidation(refreshed.Snapshot))
             {
-                m_snapshot = CreateSnapshot(Array.Empty<string>(), Array.Empty<string>(),
-                    string.Empty, string.Empty);
-                m_loadError = $"Failed to load GameDB project settings: {exception.Message}";
-                return new GameDBProjectSettingsResult(false, false, m_snapshot, m_loadError);
+                return new GameDBProjectSettingsResult(true, false, previous, null);
             }
+
+            m_snapshot = refreshed.Snapshot;
+            var notificationErrors = NotifyChanged(
+                new GameDBProjectSettingsChange(previous, m_snapshot));
+            return new GameDBProjectSettingsResult(true, true, m_snapshot, null,
+                notificationErrors);
         }
 
         internal GameDBProjectSettingsSnapshot GetSnapshot()
@@ -253,7 +283,15 @@ namespace GameDBEditorLibrary.Workspace
         internal GameDBProjectSettingsResult Update(IEnumerable<string> registeredDatabasePaths,
             IEnumerable<string> importedEnumTypeNames, string exportPath, string buildPath)
         {
-            var loaded = Load();
+            return Update(registeredDatabasePaths, importedEnumTypeNames, exportPath, buildPath,
+                false, null, false);
+        }
+
+        internal GameDBProjectSettingsResult Update(IEnumerable<string> registeredDatabasePaths,
+            IEnumerable<string> importedEnumTypeNames, string exportPath, string buildPath,
+            bool dryRun, string expectedRevision, bool requireValid)
+        {
+            var loaded = Refresh();
             var previous = loaded.Snapshot;
             if (!loaded.Success)
             {
@@ -262,9 +300,33 @@ namespace GameDBEditorLibrary.Workspace
 
             var current = CreateSnapshot(registeredDatabasePaths, importedEnumTypeNames,
                 exportPath, buildPath);
+            if (!string.IsNullOrWhiteSpace(expectedRevision)
+                && !string.Equals(expectedRevision, previous.Revision,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return new GameDBProjectSettingsResult(false, false, previous,
+                    $"Revision conflict. Expected '{expectedRevision}', current revision is '{previous.Revision}'.",
+                    commitStatus: GameDBProjectSettingsCommitStatus.Conflict,
+                    revisionBefore: previous.Revision);
+            }
+            if (requireValid && current.ValidationIssues.Count > 0)
+            {
+                return new GameDBProjectSettingsResult(false, false, current,
+                    $"Project settings have {current.ValidationIssues.Count} validation issue(s).",
+                    commitStatus: GameDBProjectSettingsCommitStatus.ValidationFailed,
+                    revisionBefore: previous.Revision);
+            }
             if (previous.HasSameValues(current))
             {
-                return new GameDBProjectSettingsResult(true, false, previous, null);
+                return new GameDBProjectSettingsResult(true, false, previous, null,
+                    commitStatus: GameDBProjectSettingsCommitStatus.NoChanges,
+                    revisionBefore: previous.Revision);
+            }
+            if (dryRun)
+            {
+                return new GameDBProjectSettingsResult(true, true, current, null,
+                    commitStatus: GameDBProjectSettingsCommitStatus.DryRun,
+                    revisionBefore: previous.Revision);
             }
 
             try
@@ -274,12 +336,16 @@ namespace GameDBEditorLibrary.Workspace
             catch (Exception exception)
             {
                 return new GameDBProjectSettingsResult(false, false, previous,
-                    $"Failed to save GameDB project settings: {exception.Message}");
+                    $"Failed to save GameDB project settings: {exception.Message}",
+                    commitStatus: GameDBProjectSettingsCommitStatus.PersistenceFailed,
+                    revisionBefore: previous.Revision);
             }
 
             m_snapshot = current;
-            var notificationErrors = NotifyChanged(new GameDBProjectSettingsChange(previous, current));
-            return new GameDBProjectSettingsResult(true, true, current, null, notificationErrors);
+            var notificationErrors = loaded.NotificationErrors.Concat(
+                NotifyChanged(new GameDBProjectSettingsChange(previous, current))).ToArray();
+            return new GameDBProjectSettingsResult(true, true, current, null, notificationErrors,
+                GameDBProjectSettingsCommitStatus.Saved, previous.Revision);
         }
 
         internal GameDBProjectSettingsResult Revalidate()
@@ -301,6 +367,38 @@ namespace GameDBEditorLibrary.Workspace
             m_snapshot = current;
             var notificationErrors = NotifyChanged(new GameDBProjectSettingsChange(previous, current));
             return new GameDBProjectSettingsResult(true, true, current, null, notificationErrors);
+        }
+
+        private GameDBProjectSettingsResult ReadStore()
+        {
+            if (!m_store.Exists)
+            {
+                return new GameDBProjectSettingsResult(true, false,
+                    CreateSnapshot(Array.Empty<string>(), Array.Empty<string>(),
+                        string.Empty, string.Empty), null);
+            }
+
+            try
+            {
+                if (!(JsonSerialization.Deserialize(m_store.ReadAllText())
+                    is IDictionary<string, object> settings))
+                {
+                    throw new FormatException("GameDB settings must contain a JSON object.");
+                }
+
+                return new GameDBProjectSettingsResult(true, false,
+                    CreateSnapshot(ReadStringList(settings, "gameDBPaths"),
+                        ReadStringList(settings, "importedEnums"),
+                        ReadString(settings, "exportPath"),
+                        ReadString(settings, "buildPath")), null);
+            }
+            catch (Exception exception)
+            {
+                return new GameDBProjectSettingsResult(false, false,
+                    CreateSnapshot(Array.Empty<string>(), Array.Empty<string>(),
+                        string.Empty, string.Empty),
+                    $"Failed to load GameDB project settings: {exception.Message}");
+            }
         }
 
         private GameDBProjectSettingsSnapshot CreateSnapshot(
@@ -330,8 +428,11 @@ namespace GameDBEditorLibrary.Workspace
                 }
             }
 
+            var normalizedExportPath = NormalizePath(exportPath);
+            var normalizedBuildPath = NormalizePath(buildPath);
             return new GameDBProjectSettingsSnapshot(paths, enumTypes,
-                NormalizePath(exportPath), NormalizePath(buildPath), issues);
+                normalizedExportPath, normalizedBuildPath, issues,
+                ComputeRevision(paths, enumTypes, normalizedExportPath, normalizedBuildPath));
         }
 
         private static string[] NormalizeValues(IEnumerable<string> values, bool sort,
@@ -389,14 +490,34 @@ namespace GameDBEditorLibrary.Workspace
 
         private static string Serialize(GameDBProjectSettingsSnapshot snapshot)
         {
-            var settings = new Dictionary<string, object>
+            return JsonHelper.FormatJson(JsonSerialization.Serialize(CreateWireValues(
+                snapshot.RegisteredDatabasePaths, snapshot.ImportedEnumTypeNames,
+                snapshot.ExportPath, snapshot.BuildPath)));
+        }
+
+        private static string ComputeRevision(IEnumerable<string> registeredDatabasePaths,
+            IEnumerable<string> importedEnumTypeNames, string exportPath, string buildPath)
+        {
+            var json = JsonSerialization.Serialize(CreateWireValues(registeredDatabasePaths,
+                importedEnumTypeNames, exportPath, buildPath));
+            using (var algorithm = SHA256.Create())
             {
-                { "gameDBPaths", snapshot.RegisteredDatabasePaths.ToArray() },
-                { "exportPath", snapshot.ExportPath },
-                { "importedEnums", snapshot.ImportedEnumTypeNames.ToArray() },
-                { "buildPath", snapshot.BuildPath }
+                return string.Concat(algorithm.ComputeHash(Encoding.UTF8.GetBytes(json))
+                    .Select(value => value.ToString("x2")));
+            }
+        }
+
+        private static Dictionary<string, object> CreateWireValues(
+            IEnumerable<string> registeredDatabasePaths,
+            IEnumerable<string> importedEnumTypeNames, string exportPath, string buildPath)
+        {
+            return new Dictionary<string, object>
+            {
+                { "gameDBPaths", registeredDatabasePaths.ToArray() },
+                { "exportPath", exportPath },
+                { "importedEnums", importedEnumTypeNames.ToArray() },
+                { "buildPath", buildPath }
             };
-            return JsonHelper.FormatJson(JsonSerialization.Serialize(settings));
         }
 
         private IReadOnlyList<string> NotifyChanged(GameDBProjectSettingsChange change)

@@ -1,4 +1,5 @@
 using GameDBEditorLibrary.Automation;
+using GameDBEditorLibrary.Documents;
 using GameDBEditorLibrary.UI;
 using GameDBLibrary;
 using NUnit.Framework;
@@ -158,6 +159,160 @@ namespace GameDBLibrary.Tests
             Assert.That(text.value, Is.Empty);
             Assert.That(cell.ClassListContains(
                 "gamedb-editor__value-editor--invalid"), Is.False);
+        }
+
+        [Test]
+        public void RowKeyEditor_StringCommitRejectCancelAndUnbindPreserveCanonicalIdentity()
+        {
+            var table = Table("Items", Array.Empty<GameDBFieldSnapshot>(),
+                Row("Sword"), Row("Shield"));
+            table.KeyType = KeyType.@string;
+            var snapshot = Snapshot(table);
+            var intents = new List<GameDBRowRenameIntent>();
+            var accept = true;
+            var cell = new GameDBRowKeyEditorCell(intent =>
+            {
+                intents.Add(intent);
+                if (!accept)
+                {
+                    var current = Snapshot(Table("Items",
+                        Array.Empty<GameDBFieldSnapshot>(), Row("Blade"), Row("Shield")));
+                    current.Tables.Single().KeyType = KeyType.@string;
+                    current.Revision = "revision-2";
+                    return new GameDBRowMutationResult(false, "Rejected key", current,
+                        intent.CurrentKey, GameDBRowReferenceImpact.None);
+                }
+                var renamed = Snapshot(Table("Items", Array.Empty<GameDBFieldSnapshot>(),
+                    Row(intent.NewKey.Trim()), Row("Shield")));
+                renamed.Tables.Single().KeyType = KeyType.@string;
+                renamed.Revision = "revision-2";
+                return new GameDBRowMutationResult(true, null, renamed,
+                    intent.NewKey.Trim(), GameDBRowReferenceImpact.None);
+            });
+            cell.Bind(snapshot, table, table.Rows[0], snapshot.Revision);
+
+            cell.BeginEdit();
+            Assert.That(cell.Control, Is.TypeOf<TextField>());
+            Assert.That(((TextField)cell.Control).value, Is.EqualTo("Sword"));
+            cell.Commit(" Blade ");
+            Assert.That(intents.Single().TableName, Is.EqualTo("Items"));
+            Assert.That(intents.Single().CurrentKey, Is.EqualTo("Sword"));
+            Assert.That(intents.Single().NewKey, Is.EqualTo(" Blade "));
+            Assert.That(intents.Single().ExpectedRevision, Is.EqualTo("revision"));
+            Assert.That(intents.Single().ExpectedDatabasePath,
+                Is.EqualTo(snapshot.DatabasePath));
+            Assert.That(cell.userData, Is.EqualTo("Blade"));
+            Assert.That(cell.IsEditing, Is.False);
+
+            accept = false;
+            cell.BeginEdit();
+            cell.Commit("Rejected");
+            Assert.That(intents.Last().CurrentKey, Is.EqualTo("Blade"));
+            Assert.That(intents.Last().ExpectedRevision, Is.EqualTo("revision-2"));
+            Assert.That(cell.userData, Is.EqualTo("Blade"));
+            Assert.That(cell.tooltip, Is.EqualTo("Rejected key"));
+            Assert.That(cell.ClassListContains(
+                "gamedb-editor__value-editor--invalid"), Is.True);
+            Assert.That(cell.IsEditing, Is.True);
+            Assert.That(((TextField)cell.Control).value, Is.EqualTo("Rejected"),
+                "Rejected drafts should remain editable while canonical identity refreshes.");
+
+            cell.CancelEdit(false);
+            Assert.That(cell.userData, Is.EqualTo("Blade"));
+            Assert.That(intents, Has.Count.EqualTo(2));
+
+            cell.BeginEdit();
+            cell.Unbind();
+            Assert.That(cell.IsEditing, Is.False);
+            Assert.That(cell.Control, Is.Null);
+            Assert.That(cell.userData, Is.Null);
+            Assert.That(cell.tooltip, Is.Empty);
+            Assert.That(cell.ClassListContains(
+                "gamedb-editor__value-editor--invalid"), Is.False);
+        }
+
+        [Test]
+        public void RowKeyEditor_ValidatesFriendlyErrorsWithoutDispatchOrLosingDraft()
+        {
+            var table = Table("Items", Array.Empty<GameDBFieldSnapshot>(),
+                Row("Sword"), Row("Shield"));
+            table.KeyType = KeyType.@string;
+            var snapshot = Snapshot(table);
+            var intents = new List<GameDBRowRenameIntent>();
+            var cell = new GameDBRowKeyEditorCell(intent =>
+            {
+                intents.Add(intent);
+                return null;
+            });
+            cell.Bind(snapshot, table, table.Rows[0], snapshot.Revision);
+            cell.BeginEdit();
+            var field = (TextField)cell.Control;
+
+            field.SetValueWithoutNotify("   ");
+            cell.Commit(field.value);
+            Assert.That(cell.tooltip, Is.EqualTo("Enter a row key."));
+            Assert.That(cell.IsEditing, Is.True);
+            Assert.That(field.value, Is.EqualTo("   "));
+            Assert.That(intents, Is.Empty);
+
+            field.SetValueWithoutNotify(FieldBase.NullRefToken);
+            cell.Commit(field.value);
+            Assert.That(cell.tooltip, Does.Contain("reserved"));
+            Assert.That(intents, Is.Empty);
+
+            field.SetValueWithoutNotify("Shield");
+            cell.Commit(field.value);
+            Assert.That(cell.tooltip, Does.Contain("already exists"));
+            Assert.That(field.value, Is.EqualTo("Shield"));
+            Assert.That(intents, Is.Empty);
+        }
+
+        [Test]
+        public void RowKeyEditor_RebindPreservesSameRowDraftAndCancelsDifferentRowDraft()
+        {
+            var table = Table("Items", Array.Empty<GameDBFieldSnapshot>(),
+                Row("Sword"), Row("Shield"));
+            table.KeyType = KeyType.@string;
+            var snapshot = Snapshot(table);
+            var cell = new GameDBRowKeyEditorCell(_ => null);
+            cell.Bind(snapshot, table, table.Rows[0], snapshot.Revision);
+            cell.BeginEdit();
+            var field = (TextField)cell.Control;
+            field.SetValueWithoutNotify("Draft");
+
+            var refreshed = Snapshot(Table("Items", Array.Empty<GameDBFieldSnapshot>(),
+                Row("Sword"), Row("Shield")));
+            refreshed.Tables.Single().KeyType = KeyType.@string;
+            refreshed.Revision = "revision-2";
+            cell.Bind(refreshed, refreshed.Tables.Single(),
+                refreshed.Tables.Single().Rows[0], refreshed.Revision);
+            Assert.That(cell.IsEditing, Is.True);
+            Assert.That(((TextField)cell.Control).value, Is.EqualTo("Draft"));
+
+            cell.Bind(refreshed, refreshed.Tables.Single(),
+                refreshed.Tables.Single().Rows[1], refreshed.Revision);
+            Assert.That(cell.IsEditing, Is.False);
+            Assert.That(cell.Control, Is.Null);
+            Assert.That(cell.userData, Is.EqualTo("Shield"));
+        }
+
+        [Test]
+        public void RowKeyEditor_EnumOffersCurrentAndUnusedDeclaredMembers()
+        {
+            var table = Table("Enums", Array.Empty<GameDBFieldSnapshot>(),
+                Row(nameof(SparseEnum.First)));
+            table.KeyType = KeyType.@enum;
+            table.KeyTypeArgument = typeof(SparseEnum).FullName;
+            var snapshot = Snapshot(table);
+            var cell = new GameDBRowKeyEditorCell(_ => null);
+            cell.Bind(snapshot, table, table.Rows.Single(), snapshot.Revision);
+
+            cell.BeginEdit();
+
+            var popup = (PopupField<string>)cell.Control;
+            Assert.That(popup.choices,
+                Is.EqualTo(new[] { nameof(SparseEnum.First), nameof(SparseEnum.Second) }));
+            Assert.That(popup.value, Is.EqualTo(nameof(SparseEnum.First)));
         }
 
         [Test]

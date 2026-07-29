@@ -1,4 +1,5 @@
 using GameDBEditorLibrary.Documents;
+using GameDBEditorLibrary.Workspace;
 using GameDBLibrary;
 using System;
 using System.Collections;
@@ -8,12 +9,136 @@ using System.Linq;
 
 using UnityEditor;
 using UnityEngine;
+using WorkspaceProjectSettingsResult
+    = GameDBEditorLibrary.Workspace.GameDBProjectSettingsResult;
+using WorkspaceProjectSettingsSnapshot
+    = GameDBEditorLibrary.Workspace.GameDBProjectSettingsSnapshot;
 
 namespace GameDBEditorLibrary.Automation
 {
     public static class GameDBAutomationService
     {
+        private const string ProjectSettingsPath = "ProjectSettings/GameDBSettings.json";
         private static readonly StringComparer NameComparer = StringComparer.Ordinal;
+
+        public static GameDBProjectSettingsResult InspectProjectSettings()
+        {
+            try
+            {
+                return InspectProjectSettings(GameDBEditorDomainServices.ProjectSettings);
+            }
+            catch (Exception exception)
+            {
+                return ProjectSettingsFailure(false, exception.Message);
+            }
+        }
+
+        internal static GameDBProjectSettingsResult InspectProjectSettings(
+            GameDBProjectSettingsService service)
+        {
+            var loaded = service.Refresh();
+            return ProjectSettingsResult(loaded, false, null);
+        }
+
+        public static GameDBProjectSettingsResult UpdateProjectSettings(
+            GameDBProjectSettingsRequest request)
+        {
+            try
+            {
+                return UpdateProjectSettings(request,
+                    GameDBEditorDomainServices.ProjectSettings);
+            }
+            catch (Exception exception)
+            {
+                return ProjectSettingsFailure(request?.Options?.DryRun ?? false,
+                    exception.Message);
+            }
+        }
+
+        internal static GameDBProjectSettingsResult UpdateProjectSettings(
+            GameDBProjectSettingsRequest request, GameDBProjectSettingsService service)
+        {
+            if (request == null)
+            {
+                return ProjectSettingsFailure(false, "Request is required.");
+            }
+
+            var options = request.Options ?? new GameDBProjectSettingsOptions();
+            if (request.RegisteredDatabasePaths == null
+                || request.ImportedEnumTypeNames == null
+                || request.ExportPath == null
+                || request.BuildPath == null)
+            {
+                return ProjectSettingsFailure(options.DryRun,
+                    "RegisteredDatabasePaths, ImportedEnumTypeNames, ExportPath, and BuildPath are required. Use empty collections or strings to clear values.");
+            }
+
+            var loaded = service.Refresh();
+            if (!loaded.Success)
+            {
+                return ProjectSettingsResult(loaded, options.DryRun, null);
+            }
+            if (!string.IsNullOrWhiteSpace(options.ExpectedRevision)
+                && !string.Equals(options.ExpectedRevision, loaded.Snapshot.Revision,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return new GameDBProjectSettingsResult
+                {
+                    Success = false,
+                    DryRun = options.DryRun,
+                    CommitStatus = GameDBCommitStatus.Conflict,
+                    Message = $"Revision conflict. Expected '{options.ExpectedRevision}', current revision is '{loaded.Snapshot.Revision}'.",
+                    RevisionBefore = loaded.Snapshot.Revision,
+                    RevisionAfter = loaded.Snapshot.Revision,
+                    Snapshot = ToAutomationSnapshot(loaded.Snapshot),
+                    Issues = ToAutomationIssues(loaded.Snapshot)
+                };
+            }
+
+            var registeredPaths = new List<string>();
+            foreach (var registeredPath in request.RegisteredDatabasePaths)
+            {
+                try
+                {
+                    registeredPaths.Add(ResolveDatabasePath(registeredPath).RelativePath);
+                }
+                catch (Exception exception)
+                {
+                    return ProjectSettingsValidationFailure(options.DryRun, loaded.Snapshot,
+                        GameDBProjectSettingsIssueKind.InvalidDatabasePath,
+                        registeredPath, exception.Message);
+                }
+            }
+
+            string exportPath;
+            try
+            {
+                exportPath = ResolveOptionalAssetDirectory(request.ExportPath);
+            }
+            catch (Exception exception)
+            {
+                return ProjectSettingsValidationFailure(options.DryRun, loaded.Snapshot,
+                    GameDBProjectSettingsIssueKind.InvalidExportPath,
+                    request.ExportPath, exception.Message);
+            }
+
+            string buildPath;
+            try
+            {
+                buildPath = ResolveOptionalAssetDirectory(request.BuildPath);
+            }
+            catch (Exception exception)
+            {
+                return ProjectSettingsValidationFailure(options.DryRun, loaded.Snapshot,
+                    GameDBProjectSettingsIssueKind.InvalidBuildPath,
+                    request.BuildPath, exception.Message);
+            }
+
+            var updated = service.Update(registeredPaths,
+                request.ImportedEnumTypeNames ?? new List<string>(), exportPath, buildPath,
+                options.DryRun, options.ExpectedRevision, options.RequireValid);
+            return ProjectSettingsResult(updated, options.DryRun, loaded.Snapshot.Revision);
+        }
 
         public static GameDBListResult ListDatabases(string searchDirectory = "Assets")
         {
@@ -1408,6 +1533,196 @@ namespace GameDBEditorLibrary.Automation
             };
         }
 
+        private static GameDBProjectSettingsResult ProjectSettingsResult(
+            WorkspaceProjectSettingsResult source, bool dryRun, string revisionBefore)
+        {
+            var snapshot = ToAutomationSnapshot(source.Snapshot);
+            var committed = source.Changed
+                && source.CommitStatus == GameDBProjectSettingsCommitStatus.Saved;
+            var postSavePending = committed && source.NotificationErrors.Count > 0;
+            var commitStatus = postSavePending
+                ? GameDBCommitStatus.PostSavePending
+                : ToCommitStatus(source.CommitStatus);
+            var changedPaths = source.Changed
+                && (source.CommitStatus == GameDBProjectSettingsCommitStatus.Saved
+                    || source.CommitStatus == GameDBProjectSettingsCommitStatus.DryRun)
+                ? new List<string> { ProjectSettingsPath }
+                : new List<string>();
+            var message = source.Error;
+            if (message == null)
+            {
+                if (source.NotificationErrors.Count > 0)
+                {
+                    message = committed
+                        ? "Project settings were saved, but one or more listeners failed."
+                        : "Project settings were loaded, but one or more listeners failed.";
+                }
+                else if (source.CommitStatus == GameDBProjectSettingsCommitStatus.NotAttempted)
+                {
+                    message = "Project settings loaded.";
+                }
+                else if (dryRun)
+                {
+                    message = source.Changed
+                        ? "Project settings validated; no files were written."
+                        : "Project settings already match; no files were written.";
+                }
+                else
+                {
+                    message = source.Changed
+                        ? "Project settings saved."
+                        : "Project settings already match.";
+                }
+            }
+
+            return new GameDBProjectSettingsResult
+            {
+                Success = source.Success && !postSavePending,
+                DryRun = dryRun,
+                CommitStatus = commitStatus,
+                Message = message,
+                RevisionBefore = source.RevisionBefore ?? revisionBefore ?? snapshot?.Revision,
+                RevisionAfter = snapshot?.Revision,
+                Snapshot = snapshot,
+                SnapshotIsProspective = (source.CommitStatus
+                        == GameDBProjectSettingsCommitStatus.DryRun && source.Changed)
+                    || source.CommitStatus
+                        == GameDBProjectSettingsCommitStatus.ValidationFailed,
+                Issues = ToAutomationIssues(source.Snapshot),
+                ChangedPaths = changedPaths,
+                FilesCommitted = committed,
+                PostSavePending = postSavePending,
+                PostSaveErrors = committed
+                    ? source.NotificationErrors.ToList()
+                    : new List<string>()
+            };
+        }
+
+        private static GameDBProjectSettingsResult ProjectSettingsFailure(bool dryRun,
+            string message)
+        {
+            return new GameDBProjectSettingsResult
+            {
+                Success = false,
+                DryRun = dryRun,
+                CommitStatus = GameDBCommitStatus.NotAttempted,
+                Message = message
+            };
+        }
+
+        private static GameDBProjectSettingsResult ProjectSettingsValidationFailure(
+            bool dryRun, WorkspaceProjectSettingsSnapshot current,
+            GameDBProjectSettingsIssueKind kind, string value, string message)
+        {
+            return new GameDBProjectSettingsResult
+            {
+                Success = false,
+                DryRun = dryRun,
+                CommitStatus = GameDBCommitStatus.ValidationFailed,
+                Message = message,
+                RevisionBefore = current.Revision,
+                RevisionAfter = current.Revision,
+                Snapshot = ToAutomationSnapshot(current),
+                SnapshotIsProspective = false,
+                Issues = new List<GameDBProjectSettingsIssue>
+                {
+                    new GameDBProjectSettingsIssue
+                    {
+                        Kind = kind,
+                        Value = value,
+                        Message = message
+                    }
+                }
+            };
+        }
+
+        private static GameDBProjectSettingsSnapshot ToAutomationSnapshot(
+            WorkspaceProjectSettingsSnapshot source)
+        {
+            if (source == null)
+            {
+                return null;
+            }
+
+            return new GameDBProjectSettingsSnapshot
+            {
+                Revision = source.Revision,
+                RegisteredDatabasePaths = source.RegisteredDatabasePaths
+                    .Select(path => "Assets/" + path).ToList(),
+                ImportedEnumTypeNames = source.ImportedEnumTypeNames.ToList(),
+                ExportPath = ToAutomationAssetDirectory(source.ExportPath),
+                BuildPath = ToAutomationAssetDirectory(source.BuildPath)
+            };
+        }
+
+        private static List<GameDBProjectSettingsIssue> ToAutomationIssues(
+            WorkspaceProjectSettingsSnapshot source)
+        {
+            if (source == null)
+            {
+                return new List<GameDBProjectSettingsIssue>();
+            }
+
+            return source.ValidationIssues.Select(issue => new GameDBProjectSettingsIssue
+            {
+                Kind = issue.Kind == Workspace.GameDBProjectSettingsIssueKind.MissingDatabasePath
+                    ? GameDBProjectSettingsIssueKind.MissingDatabase
+                    : GameDBProjectSettingsIssueKind.UnresolvedImportedEnumType,
+                Value = issue.Kind == Workspace.GameDBProjectSettingsIssueKind.MissingDatabasePath
+                    ? "Assets/" + issue.Value
+                    : issue.Value,
+                Message = issue.Kind == Workspace.GameDBProjectSettingsIssueKind.MissingDatabasePath
+                    ? $"Database data or schema file is missing: Assets/{issue.Value}"
+                    : $"Imported enum type could not be resolved: {issue.Value}"
+            }).ToList();
+        }
+
+        private static GameDBCommitStatus ToCommitStatus(
+            GameDBProjectSettingsCommitStatus status)
+        {
+            switch (status)
+            {
+                case GameDBProjectSettingsCommitStatus.NotAttempted:
+                    return GameDBCommitStatus.NotAttempted;
+                case GameDBProjectSettingsCommitStatus.DryRun:
+                    return GameDBCommitStatus.DryRun;
+                case GameDBProjectSettingsCommitStatus.Saved:
+                    return GameDBCommitStatus.Saved;
+                case GameDBProjectSettingsCommitStatus.NoChanges:
+                    return GameDBCommitStatus.NoChanges;
+                case GameDBProjectSettingsCommitStatus.ValidationFailed:
+                    return GameDBCommitStatus.ValidationFailed;
+                case GameDBProjectSettingsCommitStatus.Conflict:
+                    return GameDBCommitStatus.Conflict;
+                case GameDBProjectSettingsCommitStatus.PersistenceFailed:
+                    return GameDBCommitStatus.PersistenceFailed;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(status));
+            }
+        }
+
+        private static string ResolveOptionalAssetDirectory(string assetPath)
+        {
+            if (string.IsNullOrWhiteSpace(assetPath))
+            {
+                return string.Empty;
+            }
+            var directory = ResolveAssetDirectory(assetPath, true);
+            if (string.IsNullOrEmpty(directory.RelativePath))
+            {
+                throw new ArgumentException(
+                    "Output path must identify a child directory under Assets.");
+            }
+            return directory.RelativePath;
+        }
+
+        private static string ToAutomationAssetDirectory(string relativePath)
+        {
+            return string.IsNullOrWhiteSpace(relativePath)
+                ? string.Empty
+                : "Assets/" + relativePath;
+        }
+
         private static GameDBAutomationResult Failure(string operation, string databasePath, string message)
         {
             return new GameDBAutomationResult
@@ -1447,12 +1762,14 @@ namespace GameDBEditorLibrary.Automation
                 throw new ArgumentException("DatabasePath must identify a data .json file, not a schema file.");
             }
 
-            var relative = normalized.Substring("Assets/".Length);
-            var absolute = EnsureInsideAssets(Path.Combine(Application.dataPath, relative));
+            var inputRelative = normalized.Substring("Assets/".Length);
+            var absolute = EnsureInsideAssets(Path.Combine(Application.dataPath, inputRelative));
+            var canonicalDatabaseAssetPath = ToAssetPath(absolute);
+            var relative = canonicalDatabaseAssetPath.Substring("Assets/".Length);
             var schemaAbsolute = Path.ChangeExtension(absolute, ".schema.json");
             return new DatabasePath
             {
-                AssetPath = "Assets/" + relative,
+                AssetPath = canonicalDatabaseAssetPath,
                 RelativePath = relative,
                 AbsolutePath = absolute,
                 SchemaAbsolutePath = schemaAbsolute,
@@ -1470,16 +1787,35 @@ namespace GameDBEditorLibrary.Automation
                 throw new ArgumentException("Directory must be Assets or a child of Assets.");
             }
 
-            var relative = normalized.Equals("Assets", StringComparison.OrdinalIgnoreCase)
+            var inputRelative = normalized.Equals("Assets", StringComparison.OrdinalIgnoreCase)
                 ? string.Empty
                 : normalized.Substring("Assets/".Length);
-            var absolute = EnsureInsideAssets(Path.Combine(Application.dataPath, relative), true);
+            var absolute = EnsureInsideAssets(Path.Combine(Application.dataPath, inputRelative), true);
+            var assetsRoot = Path.GetFullPath(Application.dataPath)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var relative = string.Equals(absolute, assetsRoot, StringComparison.OrdinalIgnoreCase)
+                ? string.Empty
+                : absolute.Substring(assetsRoot.Length + 1)
+                    .Replace(Path.DirectorySeparatorChar, '/');
+            var canonicalAssetPath = string.IsNullOrEmpty(relative)
+                ? "Assets"
+                : "Assets/" + relative;
             if (!allowCreate && !Directory.Exists(absolute))
             {
-                return new AssetDirectory { AssetPath = normalized, RelativePath = relative, AbsolutePath = absolute };
+                return new AssetDirectory
+                {
+                    AssetPath = canonicalAssetPath,
+                    RelativePath = relative,
+                    AbsolutePath = absolute
+                };
             }
 
-            return new AssetDirectory { AssetPath = normalized, RelativePath = relative, AbsolutePath = absolute };
+            return new AssetDirectory
+            {
+                AssetPath = canonicalAssetPath,
+                RelativePath = relative,
+                AbsolutePath = absolute
+            };
         }
 
         private static string EnsureInsideAssets(string path, bool allowAssetsRoot = false)

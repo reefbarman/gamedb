@@ -32,12 +32,15 @@ A table key is either:
 
 To add a table:
 
-1. In the inspector's **Table** section, enter its **Name**.
+1. In the Inspector's **Table** section, enter its **Name**.
 2. Select its **Key type** and, for enum keys, enter the fully qualified imported enum type.
 3. Click **Add**.
-4. Select the table, enter a key in the **Row** section, then click **Add**.
 
-The center grid is virtualized and supports search and stable column sorting. Selection follows the row key across filtering and sorting.
+To add a row, select its table and click **+ Row** in the table toolbar. Empty tables also show **+ Add Row** in the table body. Enter a unique string key or choose an unused enum member, then confirm with **Add** or Enter. Escape, the Cancel button, or clicking outside the popover cancels creation.
+
+The center grid is virtualized and supports search and stable column sorting. Selection follows the row key across filtering and sorting. Double-click a key cell to rename it; Enter commits and Escape cancels. Long column names are ellipsized, and double-clicking a column's right resize border applies Best Fit using the header and all loaded rows.
+
+Use the table toolbar's **Inspector** button to show or collapse schema controls. At compact window widths, the same controls open as a side drawer; use **Close**, Escape outside text input, or the shaded scrim to dismiss it.
 
 Scope, table, and field names must be valid non-keyword C# identifiers. Row keys must produce distinct valid `Key<RowKey>` members after whitespace is removed. Generation also rejects generated accessor/type collisions and case-insensitive filename conflicts before writing any output. Avoid changing keys and schemas casually after game code depends on them, and regenerate classes after every schema change.
 
@@ -110,9 +113,9 @@ GameDB stores editor state in:
 ProjectSettings/GameDBSettings.json
 ```
 
-It includes registered database paths, imported enums, and code-generation and build paths.
+It includes registered database paths, imported enums, and code-generation and build paths. Enter an exact project-relative data path such as `Assets/Data/Resources/GameDB/gameplay.json` and click **Register Path**, or open a GameDB document and click **Register Current Database**. Registration does not require a native file picker.
 
-If the file is missing, GameDB uses stable defaults and writes it when settings first change. If it cannot be parsed, the settings panel reports the error and preserves the malformed file instead of overwriting it. Close Unity and repair or delete the file to reset project settings; database and schema files under `Assets` are unaffected.
+If the file is missing, GameDB uses stable defaults and writes it when settings first change. If it cannot be parsed, the settings panel reports the error and preserves the malformed file instead of overwriting it. Close Unity and repair or delete the file to reset project settings; database and schema files under `Assets` are unaffected. Editor tooling and agents can inspect or update the same settings through the supported `GameDBAutomationService` project-settings API described in [GameDB editor automation](automation.md#project-settings-automation).
 
 ## Play Mode editing
 

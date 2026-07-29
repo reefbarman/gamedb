@@ -1,9 +1,11 @@
+using GameDBEditorLibrary.Automation;
 using GameDBEditorLibrary.Documents;
 using GameDBEditorLibrary.UI;
 using GameDBEditorLibrary.Workspace;
 using GameDBLibrary;
 using NUnit.Framework;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using UnityEditor.UIElements;
 using UnityEngine.UIElements;
@@ -33,7 +35,7 @@ namespace GameDBLibrary.Tests
                     Is.EqualTo(FirstPath));
                 Assert.That(root.Q<Label>("active-document-summary-label").text,
                     Does.Contain("FirstScope").And.Contain("1 table").And.Contain("Unsaved changes"));
-                Assert.That(root.Q<Label>("active-document-placeholder").text,
+                Assert.That(root.Q<Label>("table-empty-message").text,
                     Is.EqualTo("'Items' has no rows."));
                 Assert.That(root.Q<ToolbarButton>("save-button").enabledSelf, Is.True);
                 Assert.That(root.Q<ToolbarButton>("reload-button").enabledSelf, Is.False);
@@ -48,7 +50,7 @@ namespace GameDBLibrary.Tests
                     Is.EqualTo(SecondPath));
                 Assert.That(root.Q<Label>("active-document-summary-label").text,
                     Does.Contain("SecondScope").And.Contain("2 tables"));
-                Assert.That(root.Q<Label>("active-document-placeholder").text,
+                Assert.That(root.Q<Label>("table-empty-message").text,
                     Is.EqualTo("'Items' has no rows."));
                 Assert.That(controller.ActivateTab("missing"), Is.False);
                 Assert.That(workspace.ActiveTabId, Is.EqualTo("second"));
@@ -393,7 +395,14 @@ namespace GameDBLibrary.Tests
                     Is.False);
                 Assert.That(root.Q<Button>("add-table-button").enabledSelf, Is.False);
                 Assert.That(root.Q<Button>("add-field-button").enabledSelf, Is.False);
-                Assert.That(root.Q<Button>("add-row-button").enabledSelf, Is.True);
+                Assert.That(root.Q<ToolbarButton>("table-add-row-button").enabledSelf, Is.True);
+                var beforeRow = workspace.ActiveTab.Session.CreateSnapshot();
+                var row = controller.CreateRow(new GameDBRowCreateIntent(
+                    "Items", "RuntimeRow", beforeRow.Revision));
+                Assert.That(row.Success, Is.True, row.Message);
+                Assert.That(workspace.ActiveTab.Session.CreateSnapshot().Tables
+                    .Single(table => table.Name == "Items").Rows.Single().Key,
+                    Is.EqualTo("RuntimeRow"));
                 Assert.That(root.Q<Label>("play-mode-status-label").text,
                     Does.Contain("Select a runtime GameDB"));
             }
@@ -525,6 +534,338 @@ namespace GameDBLibrary.Tests
             restored.Dispose();
         }
 
+        [Test]
+        public void AddRowPopover_ValidatesStringKeysCreatesVisibleSelectionAndCancels()
+        {
+            var workspace = CreateWorkspace(out _);
+            var root = new VisualElement();
+            GameDBEditorUiAssets.Build(root);
+            using (var controller = new GameDBEditorWindowController(root, workspace))
+            {
+                var session = workspace.ActiveTab.Session;
+                Assert.That(session.ApplyTransaction(new GameDBCommand[]
+                {
+                    new AddRowCommand("Items", "Existing", new Dictionary<string, object>())
+                }).Success, Is.True);
+                controller.Render();
+                var snapshot = session.CreateSnapshot();
+                var table = snapshot.Tables.Single(candidate => candidate.Name == "Items");
+                var focusTarget = root.Q<ToolbarButton>("table-add-row-button");
+                Assert.That(workspace.TrySetTabViewState("first",
+                    new GameDBWorkspaceTabViewState("Items", searchText: "missing")), Is.True);
+
+                Assert.That(controller.OpenAddRow(new GameDBAddRowRequest(
+                    snapshot, table, snapshot.Revision, focusTarget)), Is.True);
+                var layer = root.Q<VisualElement>("popover-layer");
+                var confirm = root.Q<Button>("add-row-confirm-button");
+                var validation = root.Q<Label>("add-row-validation-message");
+                var key = root.Q<VisualElement>("add-row-key-control-host").Q<TextField>();
+                Assert.That(layer.style.display.value, Is.EqualTo(DisplayStyle.Flex));
+                Assert.That(confirm.enabledSelf, Is.False);
+                Assert.That(validation.text, Does.Contain("Enter a row key"));
+
+                key.value = " Existing ";
+                Assert.That(confirm.enabledSelf, Is.False);
+                Assert.That(validation.text, Does.Contain("already exists"));
+                key.value = FieldBase.NullRefToken;
+                Assert.That(confirm.enabledSelf, Is.False);
+                Assert.That(validation.text, Does.Contain("reserved"));
+                key.value = " NewRow ";
+                Assert.That(confirm.enabledSelf, Is.True);
+
+                controller.SubmitAddRow();
+
+                Assert.That(session.CreateSnapshot().Tables.Single(candidate =>
+                    candidate.Name == "Items").Rows.Select(row => row.Key),
+                    Does.Contain("NewRow"));
+                Assert.That(workspace.ActiveTab.ViewState.SelectedRowId,
+                    Is.EqualTo("NewRow"));
+                Assert.That(workspace.ActiveTab.ViewState.SearchText, Is.Empty);
+                Assert.That(layer.style.display.value, Is.EqualTo(DisplayStyle.None));
+
+                snapshot = session.CreateSnapshot();
+                table = snapshot.Tables.Single(candidate => candidate.Name == "Items");
+                Assert.That(controller.OpenAddRow(new GameDBAddRowRequest(
+                    snapshot, table, snapshot.Revision, focusTarget)), Is.True);
+                controller.CancelAddRow();
+                Assert.That(layer.style.display.value, Is.EqualTo(DisplayStyle.None));
+                Assert.That(layer.pickingMode, Is.EqualTo(PickingMode.Ignore));
+            }
+            workspace.Dispose();
+        }
+
+        [Test]
+        public void AddRowPopover_UsesDeclaredEnumMembersAndRejectsDuplicates()
+        {
+            var workspace = CreateWorkspace(out _);
+            var root = new VisualElement();
+            GameDBEditorUiAssets.Build(root);
+            using (var controller = new GameDBEditorWindowController(root, workspace))
+            {
+                var session = workspace.ActiveTab.Session;
+                Assert.That(session.ApplyTransaction(new GameDBCommand[]
+                {
+                    new AddTableCommand("EnumRows", KeyType.@enum,
+                        typeof(AddRowKey).AssemblyQualifiedName),
+                    new AddRowCommand("EnumRows", nameof(AddRowKey.Alpha),
+                        new Dictionary<string, object>())
+                }).Success, Is.True);
+                var snapshot = session.CreateSnapshot();
+                var table = snapshot.Tables.Single(candidate => candidate.Name == "EnumRows");
+
+                Assert.That(controller.OpenAddRow(new GameDBAddRowRequest(snapshot,
+                    table, snapshot.Revision,
+                    root.Q<ToolbarButton>("table-add-row-button"))), Is.True);
+                var popup = root.Q<VisualElement>("add-row-key-control-host")
+                    .Q<PopupField<string>>();
+                var confirm = root.Q<Button>("add-row-confirm-button");
+                Assert.That(popup.choices,
+                    Is.EqualTo(new[] { nameof(AddRowKey.Beta) }));
+                Assert.That(popup.value, Is.EqualTo(nameof(AddRowKey.Beta)));
+                Assert.That(confirm.enabledSelf, Is.True);
+                controller.SubmitAddRow();
+                Assert.That(session.CreateSnapshot().Tables.Single(candidate =>
+                    candidate.Name == "EnumRows").Rows.Select(row => row.Key),
+                    Does.Contain(nameof(AddRowKey.Beta)));
+            }
+            workspace.Dispose();
+        }
+
+        [Test]
+        public void AddRowPopover_RevisionAndTabRacesKeepCanonicalDataUnchanged()
+        {
+            var workspace = CreateWorkspace(out _);
+            var root = new VisualElement();
+            GameDBEditorUiAssets.Build(root);
+            using (var controller = new GameDBEditorWindowController(root, workspace))
+            {
+                var first = workspace.ActiveTab.Session;
+                var snapshot = first.CreateSnapshot();
+                var table = snapshot.Tables.Single(candidate => candidate.Name == "Items");
+                var request = new GameDBAddRowRequest(snapshot, table, snapshot.Revision,
+                    root.Q<ToolbarButton>("table-add-row-button"));
+                Assert.That(controller.OpenAddRow(request), Is.True);
+                root.Q<VisualElement>("add-row-key-control-host").Q<TextField>().value
+                    = "StaleRow";
+                Assert.That(first.ApplyTransaction(new GameDBCommand[]
+                {
+                    new AddRowCommand("Items", "Concurrent", new Dictionary<string, object>())
+                }).Success, Is.True);
+
+                controller.SubmitAddRow();
+
+                Assert.That(first.CreateSnapshot().Tables.Single(candidate =>
+                    candidate.Name == "Items").Rows.Select(row => row.Key),
+                    Does.Contain("Concurrent").And.Not.Contain("StaleRow"));
+                Assert.That(root.Q<VisualElement>("popover-layer").style.display.value,
+                    Is.EqualTo(DisplayStyle.Flex));
+                Assert.That(root.Q<Label>("add-row-validation-message").text,
+                    Does.Contain("changed"));
+                controller.SubmitAddRow();
+                Assert.That(first.CreateSnapshot().Tables.Single(candidate =>
+                    candidate.Name == "Items").Rows.Select(row => row.Key),
+                    Does.Contain("StaleRow"));
+
+                controller.CancelAddRow();
+                controller.Render();
+                snapshot = first.CreateSnapshot();
+                table = snapshot.Tables.Single(candidate => candidate.Name == "Items");
+                Assert.That(controller.OpenAddRow(new GameDBAddRowRequest(snapshot,
+                    table, snapshot.Revision,
+                    root.Q<ToolbarButton>("table-add-row-button"))), Is.True);
+                root.Q<VisualElement>("add-row-key-control-host").Q<TextField>().value
+                    = "WrongTab";
+                Assert.That(workspace.TryActivateTab("second"), Is.True);
+
+                Assert.That(root.Q<VisualElement>("popover-layer").style.display.value,
+                    Is.EqualTo(DisplayStyle.None));
+                Assert.That(first.CreateSnapshot().Tables.Single(candidate =>
+                    candidate.Name == "Items").Rows.Select(row => row.Key),
+                    Does.Not.Contain("WrongTab"));
+                Assert.That(workspace.ActiveTab.Session.CreateSnapshot().Tables.Single(candidate =>
+                    candidate.Name == "Items").Rows.Select(row => row.Key),
+                    Does.Not.Contain("WrongTab"));
+            }
+            workspace.Dispose();
+        }
+
+        [Test]
+        public void RowMutations_CreateNoOpRenameRejectStaleAndDeleteNextVisibleRow()
+        {
+            var workspace = CreateWorkspace(out _);
+            var root = new VisualElement();
+            GameDBEditorUiAssets.Build(root);
+            var policy = new RecordingDestructivePolicy();
+            using (var controller = new GameDBEditorWindowController(root, workspace,
+                destructiveActionPolicy: policy))
+            {
+                var session = workspace.ActiveTab.Session;
+                var revision = session.CreateSnapshot().Revision;
+                var first = controller.CreateRow(new GameDBRowCreateIntent(
+                    "Items", "Row10", revision));
+                Assert.That(first.Success, Is.True, first.Message);
+                var second = controller.CreateRow(new GameDBRowCreateIntent(
+                    "Items", "Row2", first.Snapshot.Revision));
+                Assert.That(second.Success, Is.True, second.Message);
+                Assert.That(workspace.ActiveTab.ViewState.SelectedRowId,
+                    Is.EqualTo("Row2"));
+
+                var beforeNoOp = session.CreateSnapshot();
+                var noOp = controller.RenameRow(new GameDBRowRenameIntent(
+                    "Items", "Row2", " Row2 ", beforeNoOp.Revision));
+                Assert.That(noOp.Success, Is.True);
+                Assert.That(noOp.CanonicalRowKey, Is.EqualTo("Row2"));
+                Assert.That(session.CreateSnapshot().Revision,
+                    Is.EqualTo(beforeNoOp.Revision));
+                Assert.That(policy.Requests, Is.Empty);
+
+                var staleRevision = beforeNoOp.Revision;
+                Assert.That(session.ApplyTransaction(new GameDBCommand[]
+                {
+                    new AddRowCommand("Items", "Row1", new Dictionary<string, object>())
+                }).Success, Is.True);
+                var stale = controller.CreateRow(new GameDBRowCreateIntent(
+                    "Items", "Ignored", staleRevision));
+                Assert.That(stale.Success, Is.False);
+                Assert.That(stale.Message, Does.Contain("changed"));
+
+                controller.Render();
+                var current = session.CreateSnapshot();
+                var deleted = controller.DeleteRow(new GameDBRowDeleteIntent(
+                    "Items", "Row2", current.Revision));
+                Assert.That(deleted.Success, Is.True, deleted.Message);
+                Assert.That(deleted.CanonicalRowKey, Is.EqualTo("Row10"));
+                Assert.That(workspace.ActiveTab.ViewState.SelectedRowId,
+                    Is.EqualTo("Row10"));
+                Assert.That(policy.Requests, Is.Empty);
+
+                var withWhitespace = session.ApplyTransaction(new GameDBCommand[]
+                {
+                    new AddRowCommand("Items", " A ", new Dictionary<string, object>()),
+                    new AddRowCommand("Items", "A", new Dictionary<string, object>())
+                });
+                Assert.That(withWhitespace.Success, Is.True, withWhitespace.Message);
+                controller.Render();
+                var whitespaceDelete = controller.DeleteRow(new GameDBRowDeleteIntent(
+                    "Items", " A ", session.CreateSnapshot().Revision));
+                Assert.That(whitespaceDelete.Success, Is.True, whitespaceDelete.Message);
+                Assert.That(session.CreateSnapshot().Tables.Single(table =>
+                    table.Name == "Items").Rows.Select(row => row.Key),
+                    Does.Contain("A").And.Not.Contain(" A "));
+            }
+            workspace.Dispose();
+        }
+
+        [Test]
+        public void RowMutations_ConfirmReferencedRenameAndBlockReferencedDelete()
+        {
+            var workspace = CreateWorkspace(out _);
+            var session = workspace.ActiveTab.Session;
+            Assert.That(session.ApplyTransaction(new GameDBCommand[]
+            {
+                new AddRowCommand("Items", "Sword", new Dictionary<string, object>()),
+                new AddTableCommand("Recipes", KeyType.@string, null),
+                new AddFieldCommand("Recipes", "Item",
+                    new GameDBFieldTypeSpec(FieldType.tableRef, false, "Items")),
+                new AddRowCommand("Recipes", "Forge", new Dictionary<string, object>
+                {
+                    { "Item", "Sword" }
+                })
+            }).Success, Is.True);
+            var root = new VisualElement();
+            GameDBEditorUiAssets.Build(root);
+            var policy = new RecordingDestructivePolicy { Allow = false };
+            using (var controller = new GameDBEditorWindowController(root, workspace,
+                destructiveActionPolicy: policy))
+            {
+                var before = session.CreateSnapshot();
+                var cancelled = controller.RenameRow(new GameDBRowRenameIntent(
+                    "Items", "Sword", "Blade", before.Revision));
+                Assert.That(cancelled.Success, Is.False);
+                Assert.That(cancelled.ReferenceImpact.SiteCount, Is.EqualTo(1));
+                Assert.That(cancelled.ReferenceImpact.OccurrenceCount, Is.EqualTo(1));
+                Assert.That(policy.Requests.Single().Message,
+                    Does.Contain("1 reference"));
+                Assert.That(session.CreateSnapshot().Tables.Single(table =>
+                    table.Name == "Items").Rows.Single().Key, Is.EqualTo("Sword"));
+
+                policy.Allow = true;
+                policy.OnConfirm = () => session.ApplyTransaction(new GameDBCommand[]
+                {
+                    new SetDatabaseMetadataCommand("ChangedDuringRowConfirmation", false)
+                });
+                var raced = controller.RenameRow(new GameDBRowRenameIntent(
+                    "Items", "Sword", "Blade", before.Revision));
+                Assert.That(raced.Success, Is.False);
+                Assert.That(raced.Message, Does.Contain("revision"));
+                Assert.That(session.CreateSnapshot().Tables.Single(table =>
+                    table.Name == "Items").Rows.Single().Key, Is.EqualTo("Sword"));
+
+                policy.OnConfirm = null;
+                var current = session.CreateSnapshot();
+                var renamed = controller.RenameRow(new GameDBRowRenameIntent(
+                    "Items", "Sword", "Blade", current.Revision));
+                Assert.That(renamed.Success, Is.True, renamed.Message);
+                Assert.That(renamed.CanonicalRowKey, Is.EqualTo("Blade"));
+                Assert.That(session.CreateSnapshot().Tables.Single(table =>
+                    table.Name == "Recipes").Rows.Single().Values["Item"],
+                    Is.EqualTo("Blade"));
+
+                var blocked = controller.DeleteRow(new GameDBRowDeleteIntent(
+                    "Items", "Blade", renamed.Snapshot.Revision));
+                Assert.That(blocked.Success, Is.False);
+                Assert.That(blocked.ReferenceImpact.OccurrenceCount, Is.EqualTo(1));
+                Assert.That(blocked.Message, Does.Contain("referenced by 1 value"));
+                Assert.That(policy.Requests, Has.Count.EqualTo(3),
+                    "Delete blocking must not show a confirmation dialog.");
+            }
+            workspace.Dispose();
+        }
+
+        [Test]
+        public void RowRename_AbortsWhenConfirmationSwitchesActiveDocument()
+        {
+            var workspace = CreateWorkspace(out _);
+            var first = workspace.ActiveTab.Session;
+            Assert.That(first.ApplyTransaction(new GameDBCommand[]
+            {
+                new AddRowCommand("Items", "Sword", new Dictionary<string, object>()),
+                new AddTableCommand("References", KeyType.@string, null),
+                new AddFieldCommand("References", "Item",
+                    new GameDBFieldTypeSpec(FieldType.tableRef, false, "Items")),
+                new AddRowCommand("References", "Use", new Dictionary<string, object>
+                {
+                    { "Item", "Sword" }
+                })
+            }).Success, Is.True);
+            var root = new VisualElement();
+            GameDBEditorUiAssets.Build(root);
+            var policy = new RecordingDestructivePolicy
+            {
+                OnConfirm = () => workspace.TryActivateTab("second")
+            };
+            using (var controller = new GameDBEditorWindowController(root, workspace,
+                destructiveActionPolicy: policy))
+            {
+                var before = first.CreateSnapshot();
+                var result = controller.RenameRow(new GameDBRowRenameIntent(
+                    "Items", "Sword", "Blade", before.Revision));
+
+                Assert.That(result.Success, Is.False);
+                Assert.That(result.Message, Does.Contain("active GameDB document changed"));
+                Assert.That(workspace.ActiveTabId, Is.EqualTo("second"));
+                Assert.That(first.CreateSnapshot().Tables.Single(table =>
+                    table.Name == "Items").Rows.Single().Key, Is.EqualTo("Sword"));
+            }
+            workspace.Dispose();
+        }
+
+        private enum AddRowKey
+        {
+            Alpha,
+            Beta
+        }
+
         private static void AssertReadOnlyTableView(VisualElement root)
         {
             Assert.That(root.Q<MultiColumnListView>("table-row-grid"), Is.Not.Null);
@@ -536,7 +877,8 @@ namespace GameDBLibrary.Tests
             Assert.That(root.Q<ListView>("field-navigation-list"), Is.Not.Null);
             Assert.That(root.Q<MultiColumnListView>("table-row-grid")
                 .Q<TextField>("database-scope-field"), Is.Null);
-            Assert.That(root.Q<Label>("active-document-placeholder"), Is.Not.Null);
+            Assert.That(root.Q<VisualElement>("table-empty-state"), Is.Not.Null);
+            Assert.That(root.Q<Label>("table-empty-message"), Is.Not.Null);
         }
 
         private static GameDBEditorWorkspace CreateWorkspace(out MemoryStore store)
@@ -595,6 +937,22 @@ namespace GameDBLibrary.Tests
             public string WriteQuarantine(string label, string contents)
             {
                 return "quarantine-" + label + ".json";
+            }
+        }
+
+        private sealed class RecordingDestructivePolicy
+            : IGameDBEditorDestructiveActionPolicy
+        {
+            internal bool Allow { get; set; } = true;
+            internal List<GameDBDestructiveActionRequest> Requests { get; }
+                = new List<GameDBDestructiveActionRequest>();
+            internal Action OnConfirm { get; set; }
+
+            public bool Confirm(GameDBDestructiveActionRequest request)
+            {
+                Requests.Add(request);
+                OnConfirm?.Invoke();
+                return Allow;
             }
         }
 

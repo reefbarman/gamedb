@@ -4,6 +4,7 @@ using GameDBEditorLibrary.Documents;
 using GameDBLibrary;
 using NUnit.Framework;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -403,6 +404,112 @@ namespace GameDBLibrary.Tests
             Assert.That(document.CurrentRevision, Is.EqualTo(revisionBefore));
             Assert.That(document.CreateSnapshot().Tables.Single().Rows.Select(row => row.Key),
                 Is.EqualTo(new[] { "Sword" }));
+        }
+
+        [Test]
+        public void RowReferenceTraversal_ReportsAndRewritesTheSameSitesAndOccurrences()
+        {
+            var gameDB = CreateModel();
+            Assert.That(gameDB.AddTable("Items", KeyType.@string), Is.True);
+            Assert.That(gameDB.AddTable("Recipes", KeyType.@string), Is.True);
+            var items = (TableModel)gameDB.Tables["Items"];
+            var recipes = (TableModel)gameDB.Tables["Recipes"];
+            Assert.That(items.AddKey("Sword"), Is.True);
+            Assert.That(recipes.AddField("Result", FieldType.tableRef, false, "Items"),
+                Is.True);
+            Assert.That(recipes.AddField("Ingredients", FieldType.tableRef, true, "Items"),
+                Is.True);
+            Assert.That(recipes.AddField("Slots", FieldType.dictionary, false,
+                new DictionaryType(KeyType.@string, null, FieldType.tableRef, "Items")),
+                Is.True);
+            Assert.That(recipes.AddKey("Forge"), Is.True);
+            Assert.That(recipes.AddKey("Enumerable"), Is.True);
+            Assert.That(recipes.AddKey("Malformed"), Is.True);
+            Assert.That(recipes.SetValue("Forge", "Result", "Sword"), Is.True);
+            Assert.That(recipes.SetValue("Forge", "Ingredients",
+                new List<object> { "Sword", "Sword", FieldBase.NullRefToken }), Is.True);
+            Assert.That(recipes.SetValue("Forge", "Slots",
+                new Dictionary<string, object>
+                {
+                    { "Primary", "Sword" },
+                    { "Secondary", "Sword" }
+                }), Is.True);
+            ((RowModel)recipes.Data["Enumerable"]).SetValue("Ingredients",
+                new EnumerableOnly("Sword", "Sword", FieldBase.NullRefToken));
+            ((RowModel)recipes.Data["Malformed"]).SetValue("Slots", "Sword");
+
+            var sites = GameDBModelOperations.FindRowReferenceSites(
+                gameDB, "Items", "Sword");
+
+            Assert.That(sites.Select(site => new
+            {
+                site.Path,
+                site.Kind,
+                site.OccurrenceCount
+            }), Is.EquivalentTo(new[]
+            {
+                new
+                {
+                    Path = "Recipes[Forge].Result",
+                    Kind = GameDBRowReferenceKind.Scalar,
+                    OccurrenceCount = 1
+                },
+                new
+                {
+                    Path = "Recipes[Forge].Ingredients",
+                    Kind = GameDBRowReferenceKind.ArrayElement,
+                    OccurrenceCount = 2
+                },
+                new
+                {
+                    Path = "Recipes[Forge].Slots",
+                    Kind = GameDBRowReferenceKind.DictionaryValue,
+                    OccurrenceCount = 2
+                },
+                new
+                {
+                    Path = "Recipes[Enumerable].Ingredients",
+                    Kind = GameDBRowReferenceKind.ArrayElement,
+                    OccurrenceCount = 2
+                },
+                new
+                {
+                    Path = "Recipes[Malformed].Slots",
+                    Kind = GameDBRowReferenceKind.InvalidShape,
+                    OccurrenceCount = 1
+                }
+            }));
+            Assert.That(GameDBModelOperations.FindRowReferences(
+                gameDB, "Items", "Sword"), Is.EquivalentTo(sites.Select(site => site.Path)));
+            var impact = GameDBModelOperations.GetRowReferenceImpact(
+                gameDB, "Items", "Sword");
+            Assert.That(impact.SiteCount, Is.EqualTo(5));
+            Assert.That(impact.OccurrenceCount, Is.EqualTo(8));
+            Assert.That(impact.RewriteOccurrenceCount, Is.EqualTo(7));
+
+            GameDBModelOperations.RenameRowReferences(gameDB, "Items", "Sword", "Blade");
+
+            var unresolved = GameDBModelOperations.FindRowReferenceSites(
+                gameDB, "Items", "Sword");
+            Assert.That(unresolved, Has.Count.EqualTo(1));
+            Assert.That(unresolved.Single().Kind, Is.EqualTo(
+                GameDBRowReferenceKind.InvalidShape));
+            var renamed = GameDBModelOperations.FindRowReferenceSites(
+                gameDB, "Items", "Blade");
+            Assert.That(renamed.Sum(site => site.OccurrenceCount), Is.EqualTo(7));
+            var forge = (RowModel)recipes.Data["Forge"];
+            Assert.That(forge.Data["Result"], Is.EqualTo("Blade"));
+            Assert.That(((IEnumerable)forge.Data["Ingredients"]).Cast<object>(),
+                Is.EqualTo(new[] { "Blade", "Blade", FieldBase.NullRefToken }));
+            Assert.That(((IDictionary)forge.Data["Slots"]).Values.Cast<object>(),
+                Is.EquivalentTo(new[] { "Blade", "Blade" }));
+            Assert.That(((IEnumerable)((RowModel)recipes.Data["Enumerable"])
+                .Data["Ingredients"]).Cast<object>(),
+                Is.EqualTo(new[] { "Blade", "Blade", FieldBase.NullRefToken }));
+            Assert.That(((RowModel)recipes.Data["Malformed"]).Data["Slots"],
+                Is.EqualTo("Sword"));
+            Assert.That(unresolved.Single().Path,
+                Is.EqualTo("Recipes[Malformed].Slots"));
         }
 
         [Test]
@@ -847,6 +954,21 @@ namespace GameDBLibrary.Tests
         {
             return snapshot.Tables.Single(table => table.Name == tableName)
                 .Rows.Single(row => row.Key == rowKey).Values[fieldName];
+        }
+
+        private sealed class EnumerableOnly : IEnumerable
+        {
+            private readonly object[] m_values;
+
+            internal EnumerableOnly(params object[] values)
+            {
+                m_values = values;
+            }
+
+            public IEnumerator GetEnumerator()
+            {
+                return m_values.GetEnumerator();
+            }
         }
 
         private sealed class MisclassifiedCommand : GameDBCommand

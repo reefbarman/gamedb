@@ -1,4 +1,5 @@
 using GameDBEditorLibrary.Automation;
+using GameDBEditorLibrary.Documents;
 using GameDBLibrary;
 using System;
 using System.Collections;
@@ -46,6 +47,75 @@ namespace GameDBEditorLibrary.UI
             Success = success;
             Message = message;
             Snapshot = snapshot;
+        }
+    }
+
+    internal sealed class GameDBRowCreateIntent
+    {
+        internal string TableName { get; }
+        internal string RowKey { get; }
+        internal string ExpectedRevision { get; }
+
+        internal GameDBRowCreateIntent(string tableName, string rowKey,
+            string expectedRevision)
+        {
+            TableName = tableName;
+            RowKey = rowKey;
+            ExpectedRevision = expectedRevision;
+        }
+    }
+
+    internal sealed class GameDBRowRenameIntent
+    {
+        internal string TableName { get; }
+        internal string CurrentKey { get; }
+        internal string NewKey { get; }
+        internal string ExpectedRevision { get; }
+        internal string ExpectedDatabasePath { get; }
+
+        internal GameDBRowRenameIntent(string tableName, string currentKey,
+            string newKey, string expectedRevision, string expectedDatabasePath = null)
+        {
+            TableName = tableName;
+            CurrentKey = currentKey;
+            NewKey = newKey;
+            ExpectedRevision = expectedRevision;
+            ExpectedDatabasePath = expectedDatabasePath;
+        }
+    }
+
+    internal sealed class GameDBRowDeleteIntent
+    {
+        internal string TableName { get; }
+        internal string RowKey { get; }
+        internal string ExpectedRevision { get; }
+
+        internal GameDBRowDeleteIntent(string tableName, string rowKey,
+            string expectedRevision)
+        {
+            TableName = tableName;
+            RowKey = rowKey;
+            ExpectedRevision = expectedRevision;
+        }
+    }
+
+    internal sealed class GameDBRowMutationResult
+    {
+        internal bool Success { get; }
+        internal string Message { get; }
+        internal GameDBSnapshot Snapshot { get; }
+        internal string CanonicalRowKey { get; }
+        internal GameDBRowReferenceImpact ReferenceImpact { get; }
+
+        internal GameDBRowMutationResult(bool success, string message,
+            GameDBSnapshot snapshot, string canonicalRowKey,
+            GameDBRowReferenceImpact referenceImpact)
+        {
+            Success = success;
+            Message = message;
+            Snapshot = snapshot;
+            CanonicalRowKey = canonicalRowKey;
+            ReferenceImpact = referenceImpact ?? GameDBRowReferenceImpact.None;
         }
     }
 
@@ -168,6 +238,350 @@ namespace GameDBEditorLibrary.UI
         }
     }
 
+    internal sealed class GameDBRowKeyEditorCell : VisualElement
+    {
+        private const string InvalidClass = "gamedb-editor__value-editor--invalid";
+        private readonly Func<GameDBRowRenameIntent, GameDBRowMutationResult> m_rename;
+        private readonly Label m_label;
+        private VisualElement m_control;
+        private GameDBSnapshot m_snapshot;
+        private GameDBTableSnapshot m_table;
+        private GameDBRowSnapshot m_row;
+        private string m_revision;
+        private bool m_editing;
+        private bool m_suppressFocusCommit;
+        private bool m_restoreFocusAfterCommit;
+        private bool m_commitPending;
+        private int m_bindingGeneration;
+
+        internal VisualElement Control => m_control;
+        internal bool IsEditing => m_editing;
+
+        internal GameDBRowKeyEditorCell(
+            Func<GameDBRowRenameIntent, GameDBRowMutationResult> rename)
+        {
+            m_rename = rename;
+            AddToClassList("gamedb-editor__table-cell");
+            AddToClassList("gamedb-editor__key-editor");
+            focusable = true;
+            m_label = new Label();
+            m_label.AddToClassList("gamedb-editor__key-editor-label");
+            Add(m_label);
+            RegisterCallback<PointerDownEvent>(OnPointerDown);
+        }
+
+        internal void Bind(GameDBSnapshot snapshot, GameDBTableSnapshot table,
+            GameDBRowSnapshot row, string revision)
+        {
+            var preserveDraft = m_editing && m_table?.Name == table.Name
+                && m_row?.Key == row.Key;
+            if (!preserveDraft)
+            {
+                m_bindingGeneration++;
+                CancelEdit(false);
+            }
+            m_snapshot = snapshot;
+            m_table = table;
+            m_row = row;
+            m_revision = revision;
+            userData = row.Key;
+            m_label.text = row.Key;
+            if (preserveDraft)
+            {
+                ValidateCurrentDraft();
+            }
+            else
+            {
+                tooltip = row.Key;
+                RemoveFromClassList(InvalidClass);
+            }
+        }
+
+        internal void Unbind()
+        {
+            m_bindingGeneration++;
+            CancelEdit(false);
+            m_snapshot = null;
+            m_table = null;
+            m_row = null;
+            m_revision = null;
+            userData = null;
+            tooltip = string.Empty;
+            m_label.text = string.Empty;
+            RemoveFromClassList(InvalidClass);
+        }
+
+        internal bool BeginEdit()
+        {
+            if (m_editing || m_rename == null || m_table == null || m_row == null)
+            {
+                return false;
+            }
+            m_editing = true;
+            RemoveFromClassList(InvalidClass);
+            tooltip = string.Empty;
+            m_label.style.display = DisplayStyle.None;
+            if (m_table.KeyType == KeyType.@enum)
+            {
+                var names = string.IsNullOrWhiteSpace(m_table.KeyTypeArgument)
+                    ? new List<string>()
+                    : GameDBScalarDraftAdapter.EnumNames(new GameDBScalarDraftDescriptor(
+                        FieldType.@enum, m_table.KeyTypeArgument, m_snapshot)).ToList();
+                var used = new HashSet<string>(m_table.Rows
+                    .Where(row => !ReferenceEquals(row, m_row)).Select(row => row.Key),
+                    StringComparer.Ordinal);
+                var choices = names.Where(name => !used.Contains(name)).ToList();
+                if (!choices.Contains(m_row.Key))
+                {
+                    choices.Insert(0, m_row.Key);
+                }
+                var popup = new PopupField<string>(choices, m_row.Key);
+                popup.RegisterValueChangedCallback(evt => RequestCommit(evt.newValue, true));
+                popup.RegisterCallback<KeyDownEvent>(OnEnumKeyDown,
+                    TrickleDown.TrickleDown);
+                popup.RegisterCallback<FocusOutEvent>(OnEnumFocusOut);
+                m_control = popup;
+            }
+            else
+            {
+                var field = new TextField();
+                field.SetValueWithoutNotify(m_row.Key);
+                field.RegisterCallback<KeyDownEvent>(OnKeyDown, TrickleDown.TrickleDown);
+                field.RegisterCallback<FocusOutEvent>(OnFocusOut);
+                m_control = field;
+            }
+            m_control.AddToClassList("gamedb-editor__key-editor-control");
+            Add(m_control);
+            m_control.schedule.Execute(() =>
+            {
+                if (m_editing)
+                {
+                    m_control.Focus();
+                    if (m_control is TextField text)
+                    {
+                        text.SelectAll();
+                    }
+                }
+            });
+            return true;
+        }
+
+        internal void Commit(string newKey)
+        {
+            if (!m_editing || m_table == null || m_row == null)
+            {
+                return;
+            }
+            var currentKey = m_row.Key;
+            var normalizedKey = newKey?.Trim();
+            if (string.Equals(currentKey, normalizedKey, StringComparison.Ordinal))
+            {
+                EndEdit(m_restoreFocusAfterCommit);
+                return;
+            }
+            if (!ValidateDraft(newKey, out var validationMessage))
+            {
+                Reject(validationMessage);
+                return;
+            }
+            var generation = m_bindingGeneration;
+            var result = m_rename(new GameDBRowRenameIntent(
+                m_table.Name, currentKey, newKey, m_revision,
+                m_snapshot?.DatabasePath));
+            if (generation != m_bindingGeneration || !m_editing)
+            {
+                return;
+            }
+            if (result?.Success == true)
+            {
+                var canonicalKey = result.CanonicalRowKey ?? newKey?.Trim();
+                if (!ApplyCanonicalResult(result, canonicalKey))
+                {
+                    Reject("The renamed row could not be resolved from canonical data.");
+                    return;
+                }
+                EndEdit(m_restoreFocusAfterCommit);
+                return;
+            }
+            if (result?.Snapshot != null
+                && !ApplyCanonicalResult(result, result.CanonicalRowKey ?? currentKey))
+            {
+                Unbind();
+                return;
+            }
+            Reject(result?.Message ?? "The row key could not be renamed.");
+        }
+
+        internal void CancelEdit(bool restoreFocus = true)
+        {
+            if (!m_editing)
+            {
+                return;
+            }
+            m_suppressFocusCommit = true;
+            EndEdit(false);
+            m_suppressFocusCommit = false;
+            if (restoreFocus && panel != null)
+            {
+                Focus();
+            }
+        }
+
+        private void OnPointerDown(PointerDownEvent evt)
+        {
+            if (evt.button == 0 && evt.clickCount == 2 && BeginEdit())
+            {
+                evt.StopImmediatePropagation();
+            }
+        }
+
+        private void OnKeyDown(KeyDownEvent evt)
+        {
+            if (evt.keyCode == KeyCode.Escape)
+            {
+                CancelEdit();
+                evt.StopImmediatePropagation();
+            }
+            else if (evt.keyCode == KeyCode.Return || evt.keyCode == KeyCode.KeypadEnter)
+            {
+                RequestCommit(((TextField)m_control).value, true);
+                evt.StopImmediatePropagation();
+            }
+        }
+
+        private void OnFocusOut(FocusOutEvent evt)
+        {
+            if (!m_suppressFocusCommit && m_editing && m_control is TextField field)
+            {
+                RequestCommit(field.value, false);
+            }
+        }
+
+        private void OnEnumKeyDown(KeyDownEvent evt)
+        {
+            if (evt.keyCode == KeyCode.Escape)
+            {
+                CancelEdit();
+                evt.StopImmediatePropagation();
+            }
+        }
+
+        private void OnEnumFocusOut(FocusOutEvent evt)
+        {
+            schedule.Execute(() =>
+            {
+                if (!m_suppressFocusCommit && m_editing && !m_commitPending)
+                {
+                    CancelEdit(false);
+                }
+            });
+        }
+
+        private void RequestCommit(string newKey, bool restoreFocus)
+        {
+            var row = m_row;
+            var revision = m_revision;
+            m_commitPending = true;
+            schedule.Execute(() =>
+            {
+                m_commitPending = false;
+                if (m_editing && ReferenceEquals(m_row, row)
+                    && string.Equals(m_revision, revision,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    m_restoreFocusAfterCommit = restoreFocus;
+                    Commit(newKey);
+                }
+            });
+        }
+
+        private bool ApplyCanonicalResult(GameDBRowMutationResult result,
+            string canonicalKey)
+        {
+            var snapshot = result.Snapshot;
+            var table = snapshot?.Tables.FirstOrDefault(candidate =>
+                candidate.Name == m_table.Name);
+            var row = table?.Rows.FirstOrDefault(candidate =>
+                candidate.Key == canonicalKey);
+            if (table == null || row == null)
+            {
+                return false;
+            }
+            m_snapshot = snapshot;
+            m_table = table;
+            m_row = row;
+            m_revision = snapshot.Revision;
+            m_label.text = canonicalKey;
+            userData = canonicalKey;
+            tooltip = canonicalKey;
+            return true;
+        }
+
+        private void Reject(string message)
+        {
+            tooltip = message ?? string.Empty;
+            AddToClassList(InvalidClass);
+            m_control?.Focus();
+        }
+
+        private void ValidateCurrentDraft()
+        {
+            var draft = m_control is TextField text ? text.value
+                : m_control is PopupField<string> popup ? popup.value : m_row.Key;
+            if (ValidateDraft(draft, out var message))
+            {
+                tooltip = string.Empty;
+                RemoveFromClassList(InvalidClass);
+            }
+            else
+            {
+                tooltip = message;
+                AddToClassList(InvalidClass);
+            }
+        }
+
+        private bool ValidateDraft(string newKey, out string message)
+        {
+            var key = newKey?.Trim();
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                message = "Enter a row key.";
+                return false;
+            }
+            if (key == FieldBase.NullRefToken)
+            {
+                message = $"{FieldBase.NullRefToken} is reserved for null table references.";
+                return false;
+            }
+            if (m_table.Rows.Any(row => row.Key == key && row.Key != m_row.Key))
+            {
+                message = $"A row with key '{key}' already exists.";
+                return false;
+            }
+            message = null;
+            return true;
+        }
+
+        private void EndEdit(bool restoreFocus)
+        {
+            m_editing = false;
+            m_commitPending = false;
+            m_suppressFocusCommit = true;
+            if (m_control != null)
+            {
+                m_control.RemoveFromHierarchy();
+                m_control = null;
+            }
+            m_suppressFocusCommit = false;
+            m_label.style.display = DisplayStyle.Flex;
+            RemoveFromClassList(InvalidClass);
+            if (restoreFocus && panel != null)
+            {
+                Focus();
+            }
+        }
+    }
+
     internal sealed class GameDBReadOnlyValueCell : Label
     {
         internal GameDBReadOnlyValueCell()
@@ -203,6 +617,7 @@ namespace GameDBEditorLibrary.UI
         private object m_canonicalValue;
         private bool m_binding;
 
+        internal string FieldName => m_field.Name;
         internal VisualElement Control => m_control;
 
         internal GameDBValueEditorCell(GameDBFieldSnapshot field,

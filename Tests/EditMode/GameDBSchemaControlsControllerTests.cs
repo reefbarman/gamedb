@@ -23,7 +23,7 @@ namespace GameDBLibrary.Tests
                     "Items", KeyType.@string, null).Success, Is.True);
                 Assert.That(fixture.Controller.AddField("Items", "Name",
                     FieldType.@string, null).Success, Is.True);
-                Assert.That(fixture.Controller.AddRow("Items", "Sword").Success, Is.True);
+                fixture.AddRow("Items", "Sword");
 
                 var snapshot = fixture.Workspace.ActiveTab.Session.CreateSnapshot();
                 Assert.That(snapshot.ScopeName, Is.EqualTo("EditedScope"));
@@ -36,7 +36,7 @@ namespace GameDBLibrary.Tests
                 Assert.That(fixture.Workspace.ActiveTab.ViewState.SelectedRowId,
                     Is.EqualTo("Sword"));
                 Assert.That(fixture.Policy.Requests, Is.Empty);
-                Assert.That(fixture.RefreshCount, Is.EqualTo(4));
+                Assert.That(fixture.RefreshCount, Is.EqualTo(3));
             }
         }
 
@@ -47,7 +47,7 @@ namespace GameDBLibrary.Tests
             {
                 fixture.Controller.AddTable("Items", KeyType.@string, null);
                 fixture.Controller.AddField("Items", "Name", FieldType.@string, null);
-                fixture.Controller.AddRow("Items", "Sword");
+                fixture.AddRow("Items", "Sword");
                 fixture.Workspace.TrySetTabViewState(fixture.Workspace.ActiveTab.TabId,
                     new GameDBWorkspaceTabViewState("Items", "Sword", sorts: new[]
                     {
@@ -63,7 +63,7 @@ namespace GameDBLibrary.Tests
 
                 fixture.Policy.Allow = false;
                 Assert.That(fixture.Controller.RenameTable("Items", "Gear"), Is.Null);
-                Assert.That(fixture.RefreshCount, Is.EqualTo(3));
+                Assert.That(fixture.RefreshCount, Is.EqualTo(2));
                 Assert.That(fixture.Workspace.ActiveTab.Session.CreateSnapshot().Revision,
                     Is.EqualTo(before));
                 Assert.That(fixture.Policy.Requests.Single().Kind,
@@ -82,17 +82,12 @@ namespace GameDBLibrary.Tests
                 Assert.That(fieldState.Sorts.Single().FieldId, Is.EqualTo("Label"));
                 Assert.That(fieldState.Columns.Single().FieldId, Is.EqualTo("Label"));
 
-                Assert.That(fixture.Controller.RenameRow(
-                    "Gear", "Sword", "Blade").Success, Is.True);
-                Assert.That(fixture.Workspace.ActiveTab.ViewState.SelectedRowId,
-                    Is.EqualTo("Blade"));
                 Assert.That(fixture.Policy.Requests.Select(request => request.Kind),
                     Is.EqualTo(new[]
                     {
                         GameDBCommandKind.RenameTable,
                         GameDBCommandKind.RenameTable,
-                        GameDBCommandKind.RenameField,
-                        GameDBCommandKind.RenameRow
+                        GameDBCommandKind.RenameField
                     }));
             }
         }
@@ -127,7 +122,7 @@ namespace GameDBLibrary.Tests
             {
                 fixture.Controller.AddTable("Items", KeyType.@string, null);
                 fixture.Controller.AddField("Items", "Name", FieldType.@string, null);
-                fixture.Controller.AddRow("Items", "Sword");
+                fixture.AddRow("Items", "Sword");
                 fixture.Workspace.TrySetTabViewState(fixture.Workspace.ActiveTab.TabId,
                     new GameDBWorkspaceTabViewState("Items", "Sword", sorts: new[]
                     {
@@ -145,8 +140,6 @@ namespace GameDBLibrary.Tests
                     .Tables.Single().Fields.Single();
                 Assert.That(replaced.FieldType, Is.EqualTo(FieldType.@int));
 
-                Assert.That(fixture.Controller.DeleteRow("Items", "Sword").Success, Is.True);
-                Assert.That(fixture.Workspace.ActiveTab.ViewState.SelectedRowId, Is.Null);
                 Assert.That(fixture.Controller.DeleteField("Items", "Name").Success, Is.True);
                 Assert.That(fixture.Workspace.ActiveTab.ViewState.Sorts, Is.Empty);
                 Assert.That(fixture.Workspace.ActiveTab.ViewState.Columns, Is.Empty);
@@ -219,6 +212,22 @@ namespace GameDBLibrary.Tests
                     () => RefreshCount++);
                 Controller.Bind(Workspace.ActiveTab,
                     Workspace.ActiveTab.Session.CreateSnapshot());
+            }
+
+            internal void AddRow(string tableName, string rowKey)
+            {
+                var result = Workspace.ActiveTab.Session.ApplyTransaction(new GameDBCommand[]
+                {
+                    new AddRowCommand(tableName, rowKey, new Dictionary<string, object>())
+                });
+                Assert.That(result.Success, Is.True, result.Message);
+                var tab = Workspace.ActiveTab;
+                Workspace.TrySetTabViewState(tab.TabId,
+                    new GameDBWorkspaceTabViewState(tableName, rowKey,
+                        tab.ViewState.SearchText, tab.ViewState.Sorts,
+                        tab.ViewState.Columns, tab.ViewState.HorizontalScroll,
+                        tab.ViewState.VerticalScroll));
+                Controller.Bind(tab, tab.Session.CreateSnapshot());
             }
 
             private void SanitizePresentationState()

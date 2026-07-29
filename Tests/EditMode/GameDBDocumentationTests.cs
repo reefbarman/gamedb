@@ -100,6 +100,19 @@ namespace GameDBLibrary.Tests
         }
 
         [Test]
+        public void ReadDocument_AutomationDescribesProjectSettingsContract()
+        {
+            var result = GameDBDocumentationService.ReadDocument("automation");
+
+            Assert.That(result.Success, Is.True, result.Message);
+            Assert.That(result.Content, Does.Contain("## Project settings automation"));
+            Assert.That(result.Content, Does.Contain("InspectProjectSettings"));
+            Assert.That(result.Content, Does.Contain("GameDBProjectSettingsRequest"));
+            Assert.That(result.Content, Does.Contain("RequireValid"));
+            Assert.That(result.Content, Does.Contain("FilesCommitted == true"));
+        }
+
+        [Test]
         public void ReadDocument_AutomationDescribesQueryContract()
         {
             var result = GameDBDocumentationService.ReadDocument("automation");

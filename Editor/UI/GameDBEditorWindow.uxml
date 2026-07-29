@@ -38,11 +38,27 @@
                     <ui:ListView name="table-navigation-list" fixed-item-height="22" virtualization-method="FixedHeight" selection-type="Single" reorderable="false" class="gamedb-editor__table-navigation-list" />
                 </ui:VisualElement>
                 <ui:VisualElement name="table-surface-host" class="gamedb-editor__surface">
-                    <uie:ToolbarSearchField name="table-search-field" class="gamedb-editor__table-search" />
-                    <ui:Label name="active-document-placeholder" class="gamedb-editor__placeholder" />
+                    <uie:Toolbar name="table-toolbar" class="gamedb-editor__toolbar gamedb-editor__table-toolbar">
+                        <uie:ToolbarButton name="table-add-row-button" text="+ Row" tooltip="Add a row to the selected table" enabled="false" />
+                        <uie:ToolbarButton name="table-delete-row-button" text="Delete" tooltip="Delete the selected row" enabled="false" class="gamedb-editor__destructive-action" />
+                        <uie:ToolbarSearchField name="table-search-field" class="gamedb-editor__table-search" />
+                        <uie:ToolbarButton name="table-columns-button" text="Columns" tooltip="Configure and resize table columns" enabled="false" />
+                        <uie:ToolbarButton name="table-inspector-toggle-button" text="Inspector" tooltip="Show or hide the Inspector" />
+                    </uie:Toolbar>
+                    <ui:VisualElement name="table-action-message-host" class="gamedb-editor__table-action-message" />
+                    <ui:VisualElement name="table-empty-state" class="gamedb-editor__table-empty-state">
+                        <ui:Label name="table-empty-message" class="gamedb-editor__table-empty-message" />
+                        <ui:Button name="table-empty-action" text="+ Add Row" tooltip="Add the first row to this table" enabled="false" class="gamedb-editor__table-empty-action" />
+                    </ui:VisualElement>
                     <ui:MultiColumnListView name="table-row-grid" fixed-item-height="22" virtualization-method="FixedHeight" selection-type="Single" sorting-mode="Custom" reorderable="false" horizontal-scrolling="true" class="gamedb-editor__table-grid" />
                 </ui:VisualElement>
+                <ui:VisualElement name="inspector-scrim" class="gamedb-editor__inspector-scrim" />
                 <ui:VisualElement name="inspector-host" class="gamedb-editor__inspector">
+                    <ui:VisualElement class="gamedb-editor__inspector-toolbar">
+                        <ui:Label text="Inspector" class="gamedb-editor__pane-title" />
+                        <ui:VisualElement class="gamedb-editor__toolbar-spacer" />
+                        <ui:Button name="inspector-close-button" text="Close" tooltip="Close the Inspector" class="gamedb-editor__inspector-close" />
+                    </ui:VisualElement>
                     <ui:ScrollView name="schema-action-scroll" class="gamedb-editor__inspector-scroll">
                         <ui:Label text="Database" class="gamedb-editor__pane-title" />
                         <ui:TextField name="database-scope-field" label="Scope" />
@@ -76,18 +92,20 @@
                                 <ui:Button name="delete-field-button" text="Delete" class="gamedb-editor__destructive-action" />
                             </ui:VisualElement>
                         </ui:VisualElement>
-                        <ui:VisualElement class="gamedb-editor__inspector-section">
-                            <ui:Label text="Row" class="gamedb-editor__pane-title" />
-                            <ui:Label name="selected-row-label" text="No row selected" />
-                            <ui:TextField name="row-key-field" label="Key" />
-                            <ui:VisualElement class="gamedb-editor__inspector-actions">
-                                <ui:Button name="add-row-button" text="Add" />
-                                <ui:Button name="rename-row-button" text="Rename" />
-                                <ui:Button name="delete-row-button" text="Delete" class="gamedb-editor__destructive-action" />
-                            </ui:VisualElement>
-                        </ui:VisualElement>
                         <ui:VisualElement name="editor-action-message-host" />
                     </ui:ScrollView>
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+        <ui:VisualElement name="popover-layer" class="gamedb-editor__popover-layer">
+            <ui:VisualElement name="add-row-popover" class="gamedb-editor__add-row-popover">
+                <ui:Label name="add-row-popover-title" text="Add Row" class="gamedb-editor__popover-title" />
+                <ui:VisualElement name="add-row-key-control-host" class="gamedb-editor__popover-control" />
+                <ui:Label name="add-row-validation-message" class="gamedb-editor__popover-validation" />
+                <ui:VisualElement class="gamedb-editor__popover-actions">
+                    <ui:VisualElement class="gamedb-editor__toolbar-spacer" />
+                    <ui:Button name="add-row-cancel-button" text="Cancel" />
+                    <ui:Button name="add-row-confirm-button" text="Add" enabled="false" />
                 </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>
@@ -100,7 +118,9 @@
                     <ui:Label text="Databases included in project-wide generation and build operations." class="gamedb-editor__settings-help" />
                     <ui:Label name="registered-database-empty-label" text="No databases registered." class="gamedb-editor__settings-empty" />
                     <ui:ScrollView name="registered-database-paths" class="gamedb-editor__registered-paths" />
-                    <ui:Button name="register-database-button" text="Register Database" tooltip="Choose a GameDB data file to include in project-wide operations." />
+                    <ui:TextField name="registration-path-field" label="Registration path" tooltip="Exact project-relative GameDB data path beginning with Assets/." />
+                    <ui:Button name="register-database-button" text="Register Path" tooltip="Register the exact project-relative GameDB data path for project-wide operations." />
+                    <ui:Button name="register-current-database-button" text="Register Current Database" tooltip="Register the currently active GameDB document for project-wide operations." />
                     <ui:Label text="Imported enum types" class="gamedb-editor__settings-heading" />
                     <ui:Label text="Select public enums that GameDB schemas may reference." class="gamedb-editor__settings-help" />
                     <ui:ListView name="imported-enum-types" fixed-item-height="22" virtualization-method="FixedHeight" selection-type="None" reorderable="false" class="gamedb-editor__imported-enums" tooltip="Checked enum types are available when defining enum-backed keys and fields." />

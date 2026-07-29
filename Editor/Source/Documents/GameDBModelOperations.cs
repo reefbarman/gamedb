@@ -41,6 +41,59 @@ namespace GameDBEditorLibrary.Documents
         }
     }
 
+    internal enum GameDBRowReferenceKind
+    {
+        Scalar,
+        ArrayElement,
+        DictionaryValue,
+        InvalidShape
+    }
+
+    internal sealed class GameDBRowReferenceImpact
+    {
+        internal static GameDBRowReferenceImpact None { get; }
+            = new GameDBRowReferenceImpact(0, 0, 0);
+
+        internal int SiteCount { get; }
+        internal int OccurrenceCount { get; }
+        internal int RewriteOccurrenceCount { get; }
+        internal bool HasReferences => SiteCount > 0;
+        internal bool HasRewrites => RewriteOccurrenceCount > 0;
+
+        internal GameDBRowReferenceImpact(int siteCount, int occurrenceCount,
+            int rewriteOccurrenceCount)
+        {
+            SiteCount = siteCount;
+            OccurrenceCount = occurrenceCount;
+            RewriteOccurrenceCount = rewriteOccurrenceCount;
+        }
+    }
+
+    internal sealed class GameDBRowReferenceSite
+    {
+        internal string TableName { get; }
+        internal string RowKey { get; }
+        internal string FieldName { get; }
+        internal GameDBRowReferenceKind Kind { get; }
+        internal int OccurrenceCount { get; }
+        internal string Path => $"{TableName}[{RowKey}].{FieldName}";
+        internal RowModel Row { get; }
+        internal object Value { get; }
+
+        internal GameDBRowReferenceSite(string tableName, string rowKey,
+            string fieldName, GameDBRowReferenceKind kind, int occurrenceCount,
+            RowModel row, object value)
+        {
+            TableName = tableName;
+            RowKey = rowKey;
+            FieldName = fieldName;
+            Kind = kind;
+            OccurrenceCount = occurrenceCount;
+            Row = row;
+            Value = value;
+        }
+    }
+
     internal static class GameDBModelOperations
     {
         private static readonly StringComparer NameComparer = StringComparer.Ordinal;
@@ -240,59 +293,31 @@ namespace GameDBEditorLibrary.Documents
                 return;
             }
 
-            foreach (var table in gameDB.Tables.Values.Cast<TableModel>())
+            foreach (var site in FindRowReferenceSites(gameDB, referencedTableName, oldKey))
             {
-                foreach (var fieldPair in table.Fields)
+                switch (site.Kind)
                 {
-                    var field = fieldPair.Value;
-                    var directReference = field.Type == FieldType.tableRef
-                        && field.GetTypeArg<string>() == referencedTableName;
-                    var dictionaryReference = field.Type == FieldType.dictionary
-                        && field.GetTypeArg<DictionaryType>().ValueType == FieldType.tableRef
-                        && (string)field.GetTypeArg<DictionaryType>().ValueTypeArg == referencedTableName;
-                    if (!directReference && !dictionaryReference)
-                    {
-                        continue;
-                    }
-
-                    foreach (var row in table.Data.Values.Cast<RowModel>())
-                    {
-                        if (!row.Data.TryGetValue(fieldPair.Key, out var value))
+                    case GameDBRowReferenceKind.InvalidShape:
+                        break;
+                    case GameDBRowReferenceKind.DictionaryValue:
+                        var dictionary = (IDictionary)site.Value;
+                        foreach (var key in dictionary.Keys.Cast<object>().ToArray())
                         {
-                            continue;
-                        }
-
-                        if (dictionaryReference && value is IDictionary dictionary)
-                        {
-                            var keysToUpdate = new List<object>();
-                            foreach (DictionaryEntry entry in dictionary)
-                            {
-                                if (Equals(entry.Value, oldKey))
-                                {
-                                    keysToUpdate.Add(entry.Key);
-                                }
-                            }
-
-                            foreach (var key in keysToUpdate)
+                            if (Equals(dictionary[key], oldKey))
                             {
                                 dictionary[key] = newKey;
                             }
                         }
-                        else if (field.IsArray && value is IList values)
-                        {
-                            for (var index = 0; index < values.Count; index++)
-                            {
-                                if (Equals(values[index], oldKey))
-                                {
-                                    values[index] = newKey;
-                                }
-                            }
-                        }
-                        else if (Equals(value, oldKey))
-                        {
-                            row.SetValue(fieldPair.Key, newKey);
-                        }
-                    }
+                        break;
+                    case GameDBRowReferenceKind.ArrayElement:
+                        var values = ((IEnumerable)site.Value).Cast<object>()
+                            .Select(value => Equals(value, oldKey) ? newKey : value)
+                            .ToList();
+                        site.Row.SetValue(site.FieldName, values);
+                        break;
+                    default:
+                        site.Row.SetValue(site.FieldName, newKey);
+                        break;
                 }
             }
         }
@@ -324,13 +349,34 @@ namespace GameDBEditorLibrary.Documents
             return references;
         }
 
-        internal static List<string> FindRowReferences(GameDB gameDB, string tableName, string rowKey)
+        internal static List<string> FindRowReferences(GameDB gameDB,
+            string tableName, string rowKey)
         {
-            var references = new List<string>();
+            return FindRowReferenceSites(gameDB, tableName, rowKey)
+                .Select(site => site.Path).ToList();
+        }
+
+        internal static GameDBRowReferenceImpact GetRowReferenceImpact(
+            GameDB gameDB, string tableName, string rowKey)
+        {
+            var sites = FindRowReferenceSites(gameDB, tableName, rowKey);
+            return sites.Count == 0
+                ? GameDBRowReferenceImpact.None
+                : new GameDBRowReferenceImpact(sites.Count,
+                    sites.Sum(site => site.OccurrenceCount),
+                    sites.Where(site => site.Kind != GameDBRowReferenceKind.InvalidShape)
+                        .Sum(site => site.OccurrenceCount));
+        }
+
+        internal static IReadOnlyList<GameDBRowReferenceSite> FindRowReferenceSites(
+            GameDB gameDB, string tableName, string rowKey)
+        {
+            var sites = new List<GameDBRowReferenceSite>();
             if (rowKey == FieldBase.NullRefToken)
             {
-                return references;
+                return sites;
             }
+
             foreach (var tablePair in gameDB.Tables)
             {
                 var table = (TableModel)tablePair.Value;
@@ -349,25 +395,57 @@ namespace GameDBEditorLibrary.Documents
 
                     foreach (var dataPair in table.Data)
                     {
-                        if (!dataPair.Value.Data.TryGetValue(fieldPair.Key, out var value))
+                        var row = (RowModel)dataPair.Value;
+                        if (!row.Data.TryGetValue(fieldPair.Key, out var value))
                         {
                             continue;
                         }
 
-                        var found = dictionaryReference && value is IDictionary dictionary
-                            ? dictionary.Values.Cast<object>().Any(item => Equals(item, rowKey))
-                            : field.IsArray && value is IEnumerable values && !(value is string)
-                                ? values.Cast<object>().Any(item => Equals(item, rowKey))
-                                : Equals(value, rowKey);
-                        if (found)
+                        var kind = GameDBRowReferenceKind.Scalar;
+                        var count = 0;
+                        if (dictionaryReference)
                         {
-                            references.Add($"{tablePair.Key}[{dataPair.Key}].{fieldPair.Key}");
+                            if (value is IDictionary dictionary)
+                            {
+                                kind = GameDBRowReferenceKind.DictionaryValue;
+                                count = dictionary.Values.Cast<object>()
+                                    .Count(item => Equals(item, rowKey));
+                            }
+                            else if (Equals(value, rowKey))
+                            {
+                                kind = GameDBRowReferenceKind.InvalidShape;
+                                count = 1;
+                            }
+                        }
+                        else if (field.IsArray)
+                        {
+                            if (value is IEnumerable values && !(value is string))
+                            {
+                                kind = GameDBRowReferenceKind.ArrayElement;
+                                count = values.Cast<object>()
+                                    .Count(item => Equals(item, rowKey));
+                            }
+                            else if (Equals(value, rowKey))
+                            {
+                                kind = GameDBRowReferenceKind.InvalidShape;
+                                count = 1;
+                            }
+                        }
+                        else if (Equals(value, rowKey))
+                        {
+                            count = 1;
+                        }
+
+                        if (count > 0)
+                        {
+                            sites.Add(new GameDBRowReferenceSite(tablePair.Key,
+                                dataPair.Key, fieldPair.Key, kind, count, row, value));
                         }
                     }
                 }
             }
 
-            return references;
+            return sites;
         }
 
         internal static Dictionary<string, object> CopyWireValues(IDictionary<string, object> values)

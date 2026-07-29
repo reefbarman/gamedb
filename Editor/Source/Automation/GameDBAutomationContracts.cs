@@ -10,6 +10,23 @@ namespace GameDBEditorLibrary.Automation
         public string ExpectedRevision { get; set; }
     }
 
+    public sealed class GameDBProjectSettingsOptions
+    {
+        public bool DryRun { get; set; }
+        public string ExpectedRevision { get; set; }
+        public bool RequireValid { get; set; } = true;
+    }
+
+    public sealed class GameDBProjectSettingsRequest
+    {
+        public List<string> RegisteredDatabasePaths { get; set; }
+        public List<string> ImportedEnumTypeNames { get; set; }
+        public string ExportPath { get; set; }
+        public string BuildPath { get; set; }
+        public GameDBProjectSettingsOptions Options { get; set; }
+            = new GameDBProjectSettingsOptions();
+    }
+
     public enum GameDBBatchOperationKind
     {
         Unspecified,

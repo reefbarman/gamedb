@@ -301,6 +301,8 @@ Every operation is path-addressed and loads an isolated model. It does not depen
 
 `GameDBAutomationResult` exposes revision metadata as `RevisionBefore` and `RevisionAfter`. For `Create`, `RevisionBefore` is `null` when no database existed and is the replaced database's revision during an overwrite. `RevisionAfter` equals `Snapshot.Revision`; in a dry run this is the prospective revision and is not persisted.
 
+For `GenerateCSharp`, a successful dry run reports `CommitStatus == DryRun` and `FilesCommitted == false`; validation failures report `ValidationFailed`, stale revisions report `Conflict`, and failures while staging or replacing output report `PersistenceFailed`. Successful generation replaces the scope output directory through a staged swap and reports `CommitStatus == Saved` and `FilesCommitted == true`. If generation commits the files but Unity asset refresh fails, the result reports `CommitStatus == PostSavePending`, `FilesCommitted == true`, `PostSavePending == true`, and the refresh error in `PostSaveErrors`; inspect the generated scope rather than replaying the destructive operation. Load-time recovery failures leave `CommitStatus == NotAttempted` and populate `RecoveryArtifacts`. Generation currently performs replacement rather than content comparison, so it does not report `NoChanges`.
+
 ## Operation options
 
 Single-operation requests use `GameDBOperationOptions`:

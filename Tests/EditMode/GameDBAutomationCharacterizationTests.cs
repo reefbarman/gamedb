@@ -602,6 +602,7 @@ namespace GameDBLibrary.Tests
             Assert.That(result.Message, Does.Contain("Revision conflict"));
             Assert.That(result.Message, Does.Not.Contain("AllowDestructive"));
             AssertGenericFailure(result);
+            Assert.That(result.CommitStatus, Is.EqualTo(GameDBCommitStatus.Conflict));
             Assert.That(File.ReadAllText(markerPath), Is.EqualTo("keep"));
         }
 

@@ -155,6 +155,7 @@ namespace GameDBEditorLibrary.UI
                 if (tableChanged)
                 {
                     m_selectedFieldName = null;
+                    ClearMessage();
                 }
 
                 if (snapshot == null || tab == null)
@@ -171,7 +172,7 @@ namespace GameDBEditorLibrary.UI
                     table = snapshot.Tables.FirstOrDefault();
                     m_boundTableName = table?.Name;
                 }
-                BindTable(table);
+                BindTable(table, tableChanged);
                 m_applyMetadata.SetEnabled(true);
                 ApplyEditingMode();
             }
@@ -301,11 +302,18 @@ namespace GameDBEditorLibrary.UI
             m_snapshot = null;
         }
 
-        private void BindTable(GameDBTableSnapshot table)
+        private void BindTable(GameDBTableSnapshot table, bool tableChanged)
         {
             var hasTable = table != null;
             m_selectedTable.text = hasTable ? table.Name : "No table selected";
             m_tableName.SetValueWithoutNotify(table?.Name ?? string.Empty);
+            if (tableChanged)
+            {
+                m_tableKeyType.SetValueWithoutNotify(
+                    (table?.KeyType ?? KeyType.@string).ToString());
+                m_tableKeyArgument.SetValueWithoutNotify(table?.KeyType == KeyType.@enum
+                    ? table.KeyTypeArgument ?? string.Empty : string.Empty);
+            }
             m_fields.itemsSource = table?.Fields;
             m_fields.RefreshItems();
             if (hasTable && (string.IsNullOrEmpty(m_selectedFieldName)
@@ -323,10 +331,6 @@ namespace GameDBEditorLibrary.UI
             m_renameTable.SetEnabled(hasTable);
             m_deleteTable.SetEnabled(hasTable);
             m_fieldTableArgument.choices = m_snapshot.Tables.Select(candidate => candidate.Name).ToList();
-            if (m_tableKeyType.index < 0)
-            {
-                m_tableKeyType.SetValueWithoutNotify(KeyType.@string.ToString());
-            }
             UpdateArgumentVisibility();
         }
 

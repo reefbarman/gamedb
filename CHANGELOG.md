@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.0.0-preview.7] - 2026-07-29
+
+### Fixed
+
+- Fixed C# generation automation results so dry runs, validation and revision failures, committed output, persistence failures, pending Unity refreshes, and recovery artifacts report consistent structured commit state.
+- Fixed table selection so the Inspector immediately rebinds key and field controls, clears stale messages, and preserves same-table draft values.
+
 ## [1.0.0-preview.6] - 2026-07-29
 
 ### Fixed
@@ -83,7 +90,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Legacy Free/Pro feature split, old project files, vendored promise/JSON sources, binary/encrypted build output, and the unshipped legacy deployment server workflow.
 
-[Unreleased]: https://github.com/reefbarman/gamedb/compare/v1.0.0-preview.6...HEAD
+[Unreleased]: https://github.com/reefbarman/gamedb/compare/v1.0.0-preview.7...HEAD
+[1.0.0-preview.7]: https://github.com/reefbarman/gamedb/compare/v1.0.0-preview.6...v1.0.0-preview.7
 [1.0.0-preview.6]: https://github.com/reefbarman/gamedb/compare/v1.0.0-preview.5...v1.0.0-preview.6
 [1.0.0-preview.5]: https://github.com/reefbarman/gamedb/compare/v1.0.0-preview.4...v1.0.0-preview.5
 [1.0.0-preview.4]: https://github.com/reefbarman/gamedb/compare/v1.0.0-preview.3...v1.0.0-preview.4

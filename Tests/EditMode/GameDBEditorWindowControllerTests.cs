@@ -60,6 +60,75 @@ namespace GameDBLibrary.Tests
         }
 
         [Test]
+        public void Controller_TableSelectionImmediatelyRefreshesInspectorBinding()
+        {
+            var workspace = CreateWorkspace(out _);
+            Assert.That(workspace.TryActivateTab("second"), Is.True);
+            var session = workspace.ActiveTab.Session;
+            Assert.That(session.ApplyTransaction(new GameDBCommand[]
+            {
+                new AddFieldCommand("Recipes", "Ingredient",
+                    new GameDBFieldTypeSpec(FieldType.@string, false, null))
+            }).Success, Is.True);
+            var root = new VisualElement();
+            GameDBEditorUiAssets.Build(root);
+            using (var controller = new GameDBEditorWindowController(root, workspace))
+            {
+                Assert.That(root.Q<Label>("selected-table-label").text,
+                    Is.EqualTo("Items"));
+                root.Q<DropdownField>("table-key-type-field")
+                    .SetValueWithoutNotify(KeyType.@enum.ToString());
+                root.Q<TextField>("table-key-type-argument-field")
+                    .SetValueWithoutNotify("stale-enum-type");
+                root.Q<ListView>("table-navigation-list").SetSelection(1);
+
+                Assert.That(workspace.ActiveTab.ViewState.SelectedTableId,
+                    Is.EqualTo("Recipes"));
+                Assert.That(root.Q<Label>("selected-table-label").text,
+                    Is.EqualTo("Recipes"));
+                Assert.That(root.Q<TextField>("table-name-field").value,
+                    Is.EqualTo("Recipes"));
+                Assert.That(root.Q<DropdownField>("table-key-type-field").value,
+                    Is.EqualTo(KeyType.@string.ToString()));
+                Assert.That(root.Q<TextField>("table-key-type-argument-field").value,
+                    Is.Empty);
+                Assert.That(root.Q<ListView>("field-navigation-list").itemsSource
+                    .Cast<GameDBFieldSnapshot>().Select(field => field.Name),
+                    Is.EqualTo(new[] { "Ingredient" }));
+                Assert.That(root.Q<TextField>("field-name-field").value,
+                    Is.EqualTo("Ingredient"));
+                Assert.That(root.Q<TextField>("table-key-type-argument-field")
+                    .style.display.value, Is.EqualTo(DisplayStyle.None));
+
+                root.Q<DropdownField>("table-key-type-field")
+                    .SetValueWithoutNotify(KeyType.@enum.ToString());
+                root.Q<TextField>("table-key-type-argument-field")
+                    .SetValueWithoutNotify("draft-enum-type");
+                controller.Render();
+                Assert.That(root.Q<DropdownField>("table-key-type-field").value,
+                    Is.EqualTo(KeyType.@enum.ToString()));
+                Assert.That(root.Q<TextField>("table-key-type-argument-field").value,
+                    Is.EqualTo("draft-enum-type"),
+                    "Same-table renders should preserve the Add Table key draft.");
+
+                root.Q<VisualElement>("editor-action-message-host").Add(
+                    new HelpBox("Stale Recipes error", HelpBoxMessageType.Error));
+                root.Q<ListView>("table-navigation-list").SetSelection(0);
+                Assert.That(root.Q<Label>("selected-table-label").text,
+                    Is.EqualTo("Items"));
+                Assert.That(root.Q<DropdownField>("table-key-type-field").value,
+                    Is.EqualTo(KeyType.@string.ToString()));
+                Assert.That(root.Q<TextField>("table-key-type-argument-field").value,
+                    Is.Empty);
+                Assert.That(root.Q<TextField>("table-key-type-argument-field")
+                    .style.display.value, Is.EqualTo(DisplayStyle.None));
+                Assert.That(root.Q<VisualElement>("editor-action-message-host").childCount,
+                    Is.Zero);
+            }
+            workspace.Dispose();
+        }
+
+        [Test]
         public void Controller_ProjectsUndoRedoDirtyAndRevertState()
         {
             var workspace = CreateWorkspace(out _);

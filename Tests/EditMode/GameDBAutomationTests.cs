@@ -397,6 +397,115 @@ namespace GameDBLibrary.Tests
         }
 
         [Test]
+        public void GenerateCSharp_ReportsCommittedOutput()
+        {
+            CreateDatabase();
+            AssertSuccess(GameDBAutomationService.AddTable(new GameDBTableRequest
+            {
+                DatabasePath = m_databasePath,
+                TableName = "Items"
+            }));
+
+            var outputPath = $"{m_assetFolderPath}/Generated";
+            var scopeOutputPath = outputPath + "/AutomationTestDatabase";
+            var result = GameDBAutomationService.GenerateCSharp(new GameDBGenerateRequest
+            {
+                DatabasePath = m_databasePath,
+                OutputDirectory = outputPath
+            }, () => { });
+
+            Assert.That(result.Success, Is.True, result.Message);
+            Assert.That(result.CommitStatus, Is.EqualTo(GameDBCommitStatus.Saved));
+            Assert.That(result.FilesCommitted, Is.True);
+            Assert.That(result.PostSavePending, Is.False);
+            Assert.That(result.ChangedPaths, Is.EqualTo(new[] { scopeOutputPath }));
+            Assert.That(File.Exists(Path.Combine(m_assetFolderAbsolutePath,
+                "Generated", "AutomationTestDatabase", "GameDB.cs")), Is.True);
+        }
+
+        [Test]
+        public void GenerateCSharp_AuthorizedReplacementReportsCommittedOutput()
+        {
+            CreateDatabase();
+            AssertSuccess(GameDBAutomationService.AddTable(new GameDBTableRequest
+            {
+                DatabasePath = m_databasePath,
+                TableName = "Items"
+            }));
+
+            var outputPath = $"{m_assetFolderPath}/Generated";
+            var scopeOutputAbsolutePath = Path.Combine(m_assetFolderAbsolutePath,
+                "Generated", "AutomationTestDatabase");
+            Directory.CreateDirectory(scopeOutputAbsolutePath);
+            var stalePath = Path.Combine(scopeOutputAbsolutePath, "stale.txt");
+            File.WriteAllText(stalePath, "stale");
+
+            var result = GameDBAutomationService.GenerateCSharp(new GameDBGenerateRequest
+            {
+                DatabasePath = m_databasePath,
+                OutputDirectory = outputPath,
+                Options = DestructiveOptions()
+            }, () => { });
+
+            Assert.That(result.Success, Is.True, result.Message);
+            Assert.That(result.CommitStatus, Is.EqualTo(GameDBCommitStatus.Saved));
+            Assert.That(result.FilesCommitted, Is.True);
+            Assert.That(File.Exists(stalePath), Is.False);
+            Assert.That(File.Exists(Path.Combine(scopeOutputAbsolutePath, "GameDB.cs")), Is.True);
+        }
+
+        [Test]
+        public void GenerateCSharp_ExporterFailureReportsPersistenceFailed()
+        {
+            CreateDatabase();
+            var outputPath = $"{m_assetFolderPath}/Generated";
+            var conflictingScopePath = Path.Combine(m_assetFolderAbsolutePath,
+                "Generated", "automationtestdatabase");
+            Directory.CreateDirectory(conflictingScopePath);
+
+            var result = GameDBAutomationService.GenerateCSharp(new GameDBGenerateRequest
+            {
+                DatabasePath = m_databasePath,
+                OutputDirectory = outputPath,
+                Options = DestructiveOptions()
+            }, () => { });
+
+            Assert.That(result.Success, Is.False);
+            Assert.That(result.CommitStatus, Is.EqualTo(GameDBCommitStatus.PersistenceFailed));
+            Assert.That(result.FilesCommitted, Is.False);
+            Assert.That(result.Message, Does.Contain("conflicts with existing directory"));
+            Assert.That(Directory.GetFiles(conflictingScopePath), Is.Empty);
+        }
+
+        [Test]
+        public void GenerateCSharp_RefreshFailureReportsCommittedFilesAndPendingWork()
+        {
+            CreateDatabase();
+            var outputPath = $"{m_assetFolderPath}/Generated";
+
+            var result = GameDBAutomationService.GenerateCSharp(new GameDBGenerateRequest
+            {
+                DatabasePath = m_databasePath,
+                OutputDirectory = outputPath
+            }, () => throw new InvalidOperationException("refresh failed"));
+
+            Assert.That(result.Success, Is.False);
+            Assert.That(result.CommitStatus, Is.EqualTo(GameDBCommitStatus.PostSavePending));
+            Assert.That(result.FilesCommitted, Is.True);
+            Assert.That(result.PostSavePending, Is.True);
+            Assert.That(result.PostSaveErrors, Is.EqualTo(new[] { "refresh failed" }));
+            Assert.That(File.Exists(Path.Combine(m_assetFolderAbsolutePath,
+                "Generated", "AutomationTestDatabase", "GameDB.cs")), Is.True);
+        }
+
+        [Test]
+        public void GenerateCSharp_NullRefreshActionIsRejected()
+        {
+            Assert.Throws<ArgumentNullException>(() =>
+                GameDBAutomationService.GenerateCSharp(new GameDBGenerateRequest(), null));
+        }
+
+        [Test]
         public void GenerateCSharp_DryRunValidatesWithoutCreatingOutput()
         {
             CreateDatabase();
@@ -415,6 +524,9 @@ namespace GameDBLibrary.Tests
             });
 
             Assert.That(result.Success, Is.True, result.Message);
+            Assert.That(result.CommitStatus, Is.EqualTo(GameDBCommitStatus.DryRun));
+            Assert.That(result.FilesCommitted, Is.False);
+            Assert.That(result.PostSavePending, Is.False);
             Assert.That(result.ChangedPaths, Does.Contain(outputPath + "/AutomationTestDatabase"));
             Assert.That(Directory.Exists(Path.Combine(m_assetFolderAbsolutePath, "Generated")), Is.False);
         }

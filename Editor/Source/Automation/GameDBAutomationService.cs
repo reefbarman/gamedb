@@ -918,9 +918,20 @@ namespace GameDBEditorLibrary.Automation
 
         public static GameDBAutomationResult GenerateCSharp(GameDBGenerateRequest request)
         {
+            return GenerateCSharp(request,
+                () => AssetDatabase.Refresh(ImportAssetOptions.ForceUpdate));
+        }
+
+        internal static GameDBAutomationResult GenerateCSharp(GameDBGenerateRequest request,
+            Action refreshAssets)
+        {
             if (request == null)
             {
                 return Failure("generateCSharp", null, "Request is required.");
+            }
+            if (refreshAssets == null)
+            {
+                throw new ArgumentNullException(nameof(refreshAssets));
             }
 
             try
@@ -933,7 +944,9 @@ namespace GameDBEditorLibrary.Automation
                 var conflict = CheckRevision(options.ExpectedRevision, revision);
                 if (conflict != null)
                 {
-                    return Failure("generateCSharp", path.AssetPath, conflict);
+                    var failure = Failure("generateCSharp", path.AssetPath, conflict);
+                    failure.CommitStatus = GameDBCommitStatus.Conflict;
+                    return failure;
                 }
 
                 var gameDB = document.CreateDetachedModel();
@@ -963,6 +976,11 @@ namespace GameDBEditorLibrary.Automation
                     Operation = "generateCSharp",
                     DatabasePath = path.AssetPath,
                     DryRun = options.DryRun,
+                    CommitStatus = issues.Count > 0
+                        ? GameDBCommitStatus.ValidationFailed
+                        : options.DryRun
+                            ? GameDBCommitStatus.DryRun
+                            : GameDBCommitStatus.NotAttempted,
                     Message = issues.Count == 0
                         ? options.DryRun
                             ? "Code generation validated; no files were written."
@@ -982,11 +1000,42 @@ namespace GameDBEditorLibrary.Automation
                 if (!options.DryRun)
                 {
                     Directory.CreateDirectory(output.AbsolutePath);
-                    new CSharpExporter().Export(output.RelativePath, gameDB, request.IncludeUnityLoader);
-                    AssetDatabase.Refresh(ImportAssetOptions.ForceUpdate);
+                    try
+                    {
+                        new CSharpExporter().Export(output.RelativePath,
+                            gameDB, request.IncludeUnityLoader);
+                    }
+                    catch (Exception exception)
+                    {
+                        result.Success = false;
+                        result.CommitStatus = GameDBCommitStatus.PersistenceFailed;
+                        result.Message = exception.Message;
+                        return result;
+                    }
+
+                    result.CommitStatus = GameDBCommitStatus.Saved;
+                    result.FilesCommitted = true;
+                    try
+                    {
+                        refreshAssets();
+                    }
+                    catch (Exception exception)
+                    {
+                        result.Success = false;
+                        result.CommitStatus = GameDBCommitStatus.PostSavePending;
+                        result.PostSavePending = true;
+                        result.PostSaveErrors.Add(exception.Message);
+                        result.Message = "C# classes were generated, but Unity asset refresh is still pending.";
+                    }
                 }
 
                 return result;
+            }
+            catch (GameDBRecoveryRequiredException exception)
+            {
+                var failure = Failure("generateCSharp", request.DatabasePath, exception.Message);
+                failure.RecoveryArtifacts = exception.Artifacts.ToList();
+                return failure;
             }
             catch (Exception exception)
             {

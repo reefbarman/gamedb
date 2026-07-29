@@ -564,6 +564,8 @@ namespace GameDBLibrary.Tests
                 });
 
                 Assert.That(result.Success, Is.False);
+                Assert.That(result.CommitStatus, Is.EqualTo(GameDBCommitStatus.ValidationFailed));
+                Assert.That(result.FilesCommitted, Is.False);
                 Assert.That(result.Issues.Select(issue => issue.Code), Does.Contain("member.name.collision"));
                 Assert.That(Directory.Exists(Path.Combine(assetFolderAbsolutePath, "Generated")), Is.False);
             }

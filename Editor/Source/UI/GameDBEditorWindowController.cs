@@ -1385,9 +1385,17 @@ namespace GameDBEditorLibrary.UI
                 return;
             }
             var tab = m_workspace.ActiveTab;
-            if (tab != null)
+            if (tab == null)
             {
-                m_workspace.TrySetTabViewState(tab.TabId, viewState);
+                return;
+            }
+
+            var tableChanged = !string.Equals(tab.ViewState.SelectedTableId,
+                viewState.SelectedTableId, StringComparison.Ordinal);
+            if (m_workspace.TrySetTabViewState(tab.TabId, viewState) && tableChanged
+                && ReferenceEquals(m_workspace.ActiveTab, tab) && !tab.Session.IsDisposed)
+            {
+                m_schemaControls.Bind(tab, tab.Session.CreateSnapshot());
             }
         }
 

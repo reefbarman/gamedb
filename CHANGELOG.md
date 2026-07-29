@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.0.0-preview.6] - 2026-07-29
+
+### Fixed
+
+- Fixed Unity USS vendor-prefixed font-style and text-alignment declarations so the GameDB editor opens without unknown-property console warnings.
+
 ## [1.0.0-preview.5] - 2026-07-29
 
 ### Added
@@ -77,7 +83,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Legacy Free/Pro feature split, old project files, vendored promise/JSON sources, binary/encrypted build output, and the unshipped legacy deployment server workflow.
 
-[Unreleased]: https://github.com/reefbarman/gamedb/compare/v1.0.0-preview.5...HEAD
+[Unreleased]: https://github.com/reefbarman/gamedb/compare/v1.0.0-preview.6...HEAD
+[1.0.0-preview.6]: https://github.com/reefbarman/gamedb/compare/v1.0.0-preview.5...v1.0.0-preview.6
 [1.0.0-preview.5]: https://github.com/reefbarman/gamedb/compare/v1.0.0-preview.4...v1.0.0-preview.5
 [1.0.0-preview.4]: https://github.com/reefbarman/gamedb/compare/v1.0.0-preview.3...v1.0.0-preview.4
 [1.0.0-preview.3]: https://github.com/reefbarman/gamedb/compare/v1.0.0-preview.1...v1.0.0-preview.3

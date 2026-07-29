@@ -36,7 +36,7 @@
 .gamedb-editor__tab {
     min-width: 96px;
     max-width: 220px;
-    unity-text-align: middle-left;
+    -unity-text-align: middle-left;
 }
 
 .gamedb-editor__tab-action {
@@ -47,7 +47,7 @@
 }
 
 .gamedb-editor__tab--active {
-    unity-font-style: bold;
+    -unity-font-style: bold;
     border-bottom-width: 2px;
     border-bottom-color: -unity-accent-color;
 }
@@ -60,7 +60,7 @@
 
 .gamedb-editor__empty-message {
     color: var(--gamedb-muted-text-color);
-    unity-text-align: middle-center;
+    -unity-text-align: middle-center;
 }
 
 .gamedb-editor__document-shell {
@@ -76,7 +76,7 @@
 }
 
 .gamedb-editor__document-path {
-    unity-font-style: bold;
+    -unity-font-style: bold;
 }
 
 .gamedb-editor__document-summary {
@@ -101,7 +101,7 @@
 }
 
 .gamedb-editor__play-mode-label {
-    unity-font-style: bold;
+    -unity-font-style: bold;
 }
 
 .gamedb-editor__runtime-target {
@@ -129,7 +129,7 @@
 .gamedb-editor__pane-title {
     flex-shrink: 0;
     padding: var(--gamedb-space-sm);
-    unity-font-style: bold;
+    -unity-font-style: bold;
 }
 
 .gamedb-editor__table-toolbar {
@@ -163,7 +163,7 @@
 .gamedb-editor__table-cell {
     padding-left: var(--gamedb-space-xs);
     padding-right: var(--gamedb-space-xs);
-    unity-text-align: middle-left;
+    -unity-text-align: middle-left;
     white-space: nowrap;
     overflow: hidden;
 }
@@ -214,7 +214,7 @@
 
 .gamedb-editor__table-empty-message {
     color: var(--gamedb-muted-text-color);
-    unity-text-align: middle-center;
+    -unity-text-align: middle-center;
     white-space: normal;
 }
 
@@ -351,7 +351,7 @@
 }
 
 .gamedb-editor__popover-title {
-    unity-font-style: bold;
+    -unity-font-style: bold;
     margin-bottom: var(--gamedb-space-sm);
 }
 
@@ -470,13 +470,13 @@
 }
 
 .gamedb-editor__settings-title {
-    unity-font-style: bold;
+    -unity-font-style: bold;
     font-size: 15px;
     margin-bottom: var(--gamedb-space-sm);
 }
 
 .gamedb-editor__settings-heading {
-    unity-font-style: bold;
+    -unity-font-style: bold;
     margin-top: var(--gamedb-space-sm);
 }
 

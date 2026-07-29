@@ -57,6 +57,8 @@ namespace GameDBEditorLibrary.UI
         private readonly Func<GameDBRowDeleteIntent, GameDBRowMutationResult> m_deleteRowIntent;
         private readonly Func<GameDBValueEditIntent, GameDBValueEditResult> m_editValue;
         private readonly Action<GameDBCollectionEditRequest> m_editCollection;
+        private readonly Func<string, bool> m_tableSelectionRequested;
+        private readonly Action<string, string> m_inspectField;
         private GameDBTableViewProjection m_projection;
         private GameDBSnapshot m_snapshot;
         private GameDBWorkspaceTabViewState m_viewState;
@@ -78,7 +80,9 @@ namespace GameDBEditorLibrary.UI
             Func<GameDBRowRenameIntent, GameDBRowMutationResult> renameRow = null,
             Func<GameDBRowDeleteIntent, GameDBRowMutationResult> deleteRowIntent = null,
             Func<GameDBValueEditIntent, GameDBValueEditResult> editValue = null,
-            Action<GameDBCollectionEditRequest> editCollection = null)
+            Action<GameDBCollectionEditRequest> editCollection = null,
+            Func<string, bool> tableSelectionRequested = null,
+            Action<string, string> inspectField = null)
         {
             m_addRow = addRow ?? throw new ArgumentNullException(nameof(addRow));
             m_deleteRow = deleteRow ?? throw new ArgumentNullException(nameof(deleteRow));
@@ -100,6 +104,8 @@ namespace GameDBEditorLibrary.UI
             m_deleteRowIntent = deleteRowIntent;
             m_editValue = editValue;
             m_editCollection = editCollection;
+            m_tableSelectionRequested = tableSelectionRequested;
+            m_inspectField = inspectField;
 
             m_addRow.clicked += RequestAddRowFromToolbar;
             m_emptyAction.clicked += RequestAddRowFromEmptyState;
@@ -367,6 +373,15 @@ namespace GameDBEditorLibrary.UI
             var table = selection.OfType<GameDBTableSnapshot>().FirstOrDefault();
             if (table != null)
             {
+                if (m_tableSelectionRequested != null
+                    && !m_tableSelectionRequested(table.Name))
+                {
+                    var currentIndex = m_projection?.Tables.ToList().FindIndex(candidate =>
+                        candidate.Name == m_projection.SelectedTable?.Name) ?? -1;
+                    m_tableNavigation.SetSelectionWithoutNotify(currentIndex < 0
+                        ? Array.Empty<int>() : new[] { currentIndex });
+                    return;
+                }
                 var current = m_viewState ?? new GameDBWorkspaceTabViewState();
                 ApplyViewState(new GameDBWorkspaceTabViewState(table.Name, null,
                     current.SearchText, current.Sorts, current.Columns,
@@ -723,6 +738,15 @@ namespace GameDBEditorLibrary.UI
                 index >= 0 && index < m_displayColumns.Count - 1
                     ? DropdownMenuAction.Status.Normal
                     : DropdownMenuAction.Status.Disabled);
+            if (column.name != GameDBTableViewProjection.KeyFieldId)
+            {
+                evt.menu.AppendSeparator();
+                evt.menu.AppendAction("Inspect Field", _ => m_inspectField?.Invoke(
+                    m_projection?.SelectedTable?.Name, column.name),
+                    m_inspectField == null
+                        ? DropdownMenuAction.Status.Disabled
+                        : DropdownMenuAction.Status.Normal);
+            }
         }
 
         internal bool MoveColumn(string fieldId, int offset)

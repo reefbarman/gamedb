@@ -98,6 +98,19 @@ namespace GameDBEditorLibrary.Documents
     {
         private static readonly StringComparer NameComparer = StringComparer.Ordinal;
 
+        internal static bool IsLocalizationCompatibleField(GameDBFieldTypeSpec typeSpec)
+        {
+            return typeSpec != null && typeSpec.FieldType == FieldType.@string
+                && !typeSpec.IsArray && typeSpec.DictionaryType == null;
+        }
+
+        internal static bool HasLocalizationCompatibleSchema(GameDB model)
+        {
+            return model != null && model.Tables.Values.Cast<TableBase>()
+                .SelectMany(table => table.Fields.Values)
+                .All(field => field.Type == FieldType.@string && !field.IsArray);
+        }
+
         internal static void RequireName(string value, string parameterName)
         {
             if (string.IsNullOrWhiteSpace(value))

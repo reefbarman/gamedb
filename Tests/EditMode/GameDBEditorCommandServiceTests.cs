@@ -101,6 +101,18 @@ namespace GameDBLibrary.Tests
                 revision = Success(service, session,
                     new RenameFieldCommand("Items", "Name", "Label"), revision, true)
                     .RevisionAfter;
+                var incompatibleLocalizationField = service.Execute(session,
+                    new ReplaceFieldCommand("Items", "Label",
+                        new GameDBFieldTypeSpec(FieldType.@int, false, null)),
+                    revision, true);
+                Assert.That(incompatibleLocalizationField.Success, Is.False);
+                Assert.That(incompatibleLocalizationField.FailureKind,
+                    Is.EqualTo(GameDBTransactionFailureKind.CommandFailed));
+                Assert.That(incompatibleLocalizationField.Message,
+                    Does.Contain("scalar string"));
+                revision = Success(service, session,
+                    new SetDatabaseMetadataCommand("EditedScope", false), revision)
+                    .RevisionAfter;
                 revision = Success(service, session,
                     new ReplaceFieldCommand("Items", "Label",
                         new GameDBFieldTypeSpec(FieldType.@int, false, null)), revision, true)
@@ -131,6 +143,42 @@ namespace GameDBLibrary.Tests
                 var deleted = Success(service, session,
                     new DeleteTableCommand("Gear"), revision, true);
                 Assert.That(deleted.Snapshot.Tables, Is.Empty);
+            }
+        }
+
+        [Test]
+        public void LocalizationCommands_RejectIncompatibleFieldsAndAllowRepair()
+        {
+            using (var session = CreateSession())
+            {
+                var service = new GameDBEditorCommandService();
+                var revision = session.CreateSnapshot().Revision;
+                revision = Success(service, session,
+                    new AddTableCommand("Items", KeyType.@string, null), revision)
+                    .RevisionAfter;
+                revision = Success(service, session,
+                    new AddFieldCommand("Items", "Power",
+                        new GameDBFieldTypeSpec(FieldType.@int, false, null)), revision)
+                    .RevisionAfter;
+
+                var enable = service.Execute(session,
+                    new SetDatabaseMetadataCommand("Localization", true), revision);
+                Assert.That(enable.Success, Is.False);
+                Assert.That(enable.Message, Does.Contain("scalar string"));
+                Assert.That(enable.Snapshot.LocalizationDatabase, Is.False);
+
+                revision = Success(service, session,
+                    new DeleteFieldCommand("Items", "Power"), revision, true)
+                    .RevisionAfter;
+                revision = Success(service, session,
+                    new SetDatabaseMetadataCommand("Localization", true), revision)
+                    .RevisionAfter;
+                var addInvalid = service.Execute(session,
+                    new AddFieldCommand("Items", "Power",
+                        new GameDBFieldTypeSpec(FieldType.@int, false, null)), revision);
+                Assert.That(addInvalid.Success, Is.False);
+                Assert.That(addInvalid.Message, Does.Contain("scalar string"));
+                Assert.That(addInvalid.Snapshot.Tables.Single().Fields, Is.Empty);
             }
         }
 

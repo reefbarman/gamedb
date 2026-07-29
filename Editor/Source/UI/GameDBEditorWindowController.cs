@@ -97,7 +97,7 @@ namespace GameDBEditorLibrary.UI
         private readonly MultiColumnListView m_tableGrid;
         private readonly GameDBTableViewController m_tableView;
         private readonly GameDBEditorCommandService m_commandService;
-        private readonly GameDBSchemaControlsController m_schemaControls;
+        private readonly GameDBInspectorController m_inspector;
         private readonly GameDBCollectionEditorController m_collectionEditor;
         private readonly GameDBEditorResponsiveLayout m_responsiveLayout;
         private readonly IGameDBEditorReloadPolicy m_reloadPolicy;
@@ -158,6 +158,7 @@ namespace GameDBEditorLibrary.UI
         private GameDBAssetSession m_addRowSession;
         private VisualElement m_addRowFocusTarget;
         private string m_addRowDraft;
+        private bool m_addRowRevisionReviewPending;
         private bool m_disposed;
 
         internal GameDBEditorWindowController(VisualElement root,
@@ -216,14 +217,26 @@ namespace GameDBEditorLibrary.UI
                 m_tableEmptyState, m_tableEmptyMessage, m_tableEmptyAction,
                 SetTableViewState, addRowRequested: OpenAddRow,
                 createRow: CreateRow, renameRow: RenameRow,
-                deleteRowIntent: DeleteRow, editValue: SetValue,
-                editCollection: OpenCollectionEditor);
-            m_schemaControls = new GameDBSchemaControlsController(root,
-                m_workspace, m_destructivePolicy, Render, IsDataOnlyEditing);
-            m_collectionEditor = new GameDBCollectionEditorController(root,
-                m_workspace, Render, IsDataOnlyEditing);
+                 deleteRowIntent: DeleteRow, editValue: SetValue,
+                 editCollection: OpenCollectionEditor,
+                 tableSelectionRequested: tableName =>
+                     m_inspector == null || m_inspector.RequestTableSelection(tableName),
+                 inspectField: (tableName, fieldName) =>
+                     m_inspector?.RequestInspectField(tableName, fieldName));
             m_responsiveLayout = new GameDBEditorResponsiveLayout(
                 root.Q<VisualElement>("gamedb-editor-root"));
+            m_inspector = new GameDBInspectorController(root,
+                m_workspace, m_destructivePolicy,
+                () => m_projectSettings.GetSnapshot()?.ImportedEnumTypeNames
+                    ?? Array.Empty<string>(),
+                Render, IsDataOnlyEditing, m_responsiveLayout.EnsureInspectorOpen);
+            m_responsiveLayout.SetCloseRequested(() =>
+                m_inspector.RequestWindowAction(
+                    GameDBInspectorPendingIntentKind.CloseInspector,
+                    "You have unsaved Inspector changes. Save or discard them before closing the Inspector.",
+                    m_responsiveLayout.CloseInspectorImmediately));
+            m_collectionEditor = new GameDBCollectionEditorController(root,
+                m_workspace, Render, IsDataOnlyEditing);
             m_undoButton = root.Q<ToolbarButton>("undo-button");
             m_redoButton = root.Q<ToolbarButton>("redo-button");
             m_saveButton = root.Q<ToolbarButton>("save-button");
@@ -293,7 +306,7 @@ namespace GameDBEditorLibrary.UI
             catch
             {
                 m_tableView.Dispose();
-                m_schemaControls.Dispose();
+                m_inspector.Dispose();
                 m_collectionEditor.Dispose();
                 m_responsiveLayout?.Dispose();
                 DetachCallbacksAndBindings();
@@ -363,7 +376,7 @@ namespace GameDBEditorLibrary.UI
                 m_documentPath.tooltip = string.Empty;
                 m_documentSummary.text = string.Empty;
                 m_tableView.Bind(null, null);
-                m_schemaControls.Bind(null, null);
+                m_inspector.Bind(null, null);
                 BindPlayModeControls(null, playing);
                 return;
             }
@@ -403,7 +416,7 @@ namespace GameDBEditorLibrary.UI
             {
                 m_workspace.TrySetTabViewState(active.TabId, resolvedViewState);
             }
-            m_schemaControls.Bind(m_workspace.ActiveTab, snapshot);
+            m_inspector.Bind(m_workspace.ActiveTab, snapshot);
         }
 
         internal bool ActivateTab(string tabId)
@@ -412,12 +425,22 @@ namespace GameDBEditorLibrary.UI
             {
                 return false;
             }
-            var changed = m_workspace.TryActivateTab(tabId);
-            if (changed)
+            if (tabId == m_workspace.ActiveTabId)
             {
-                m_outputMessage = null;
-                Render();
+                return true;
             }
+            var changed = false;
+            m_inspector.RequestWindowAction(GameDBInspectorPendingIntentKind.ActivateTab,
+                "You have unsaved Inspector changes. Save or discard them before switching databases.",
+                () =>
+                {
+                    changed = m_workspace.TryActivateTab(tabId);
+                    if (changed)
+                    {
+                        m_outputMessage = null;
+                        Render();
+                    }
+                }, tabId);
             return changed;
         }
 
@@ -427,6 +450,19 @@ namespace GameDBEditorLibrary.UI
             {
                 return new GameDBTabCloseResult(GameDBTabCloseStatus.Cancelled);
             }
+            if (tabId != m_workspace.ActiveTabId)
+            {
+                return CloseTabImmediately(tabId);
+            }
+            var result = new GameDBTabCloseResult(GameDBTabCloseStatus.Cancelled);
+            m_inspector.RequestWindowAction(GameDBInspectorPendingIntentKind.CloseTab,
+                "You have unsaved Inspector changes. Save or discard them before closing this database.",
+                () => result = CloseTabImmediately(tabId), tabId);
+            return result;
+        }
+
+        private GameDBTabCloseResult CloseTabImmediately(string tabId)
+        {
             var result = m_workspace.CloseTab(tabId, m_closePolicy);
             if (result.Status == GameDBTabCloseStatus.Closed)
             {
@@ -450,16 +486,30 @@ namespace GameDBEditorLibrary.UI
 
         internal GameDBWorkspaceDatabaseOpenResult ChooseAndCreateDatabase()
         {
-            return m_disposed
-                ? null
-                : CreateDatabase(m_databaseDialogs.SelectCreateDatabase());
+            if (m_disposed)
+            {
+                return null;
+            }
+            GameDBWorkspaceDatabaseOpenResult result = null;
+            m_inspector.RequestWindowAction(
+                GameDBInspectorPendingIntentKind.CreateOrOpenDatabase,
+                "You have unsaved Inspector changes. Save or discard them before creating another database.",
+                () => result = CreateDatabase(m_databaseDialogs.SelectCreateDatabase()));
+            return result;
         }
 
         internal GameDBWorkspaceDatabaseOpenResult ChooseAndOpenDatabase()
         {
-            return m_disposed
-                ? null
-                : OpenDatabase(m_databaseDialogs.SelectOpenDatabase());
+            if (m_disposed)
+            {
+                return null;
+            }
+            GameDBWorkspaceDatabaseOpenResult result = null;
+            m_inspector.RequestWindowAction(
+                GameDBInspectorPendingIntentKind.CreateOrOpenDatabase,
+                "You have unsaved Inspector changes. Save or discard them before opening another database.",
+                () => result = OpenDatabase(m_databaseDialogs.SelectOpenDatabase()));
+            return result;
         }
 
         internal GameDBProjectSettingsResult ChooseAndRegisterDatabase()
@@ -575,6 +625,14 @@ namespace GameDBEditorLibrary.UI
             {
                 return;
             }
+            m_inspector.RequestWindowAction(
+                GameDBInspectorPendingIntentKind.OpenSettingsOrModal,
+                "You have unsaved Inspector changes. Save or discard them before opening Settings.",
+                OpenSettingsImmediately);
+        }
+
+        private void OpenSettingsImmediately()
+        {
             ClosePopoverLayer();
             m_collectionEditor.Cancel();
             RenderSettings(m_projectSettings.Refresh());
@@ -609,7 +667,7 @@ namespace GameDBEditorLibrary.UI
             }
             m_disposed = true;
             m_tableView.Dispose();
-            m_schemaControls.Dispose();
+            m_inspector.Dispose();
             m_collectionEditor.Dispose();
             m_responsiveLayout.Dispose();
             DetachCallbacksAndBindings();
@@ -710,10 +768,7 @@ namespace GameDBEditorLibrary.UI
                     m_addRowDraft = choices[0];
                     control = new PopupField<string>(choices, 0);
                     ((PopupField<string>)control).RegisterValueChangedCallback(evt =>
-                    {
-                        m_addRowDraft = evt.newValue;
-                        ValidateAddRowDraft();
-                    });
+                        UpdateAddRowDraft(evt.newValue));
                 }
             }
             else
@@ -721,10 +776,7 @@ namespace GameDBEditorLibrary.UI
                 var field = new TextField("Key");
                 field.RegisterCallback<KeyDownEvent>(OnAddRowKeyDown);
                 field.RegisterValueChangedCallback(evt =>
-                {
-                    m_addRowDraft = evt.newValue;
-                    ValidateAddRowDraft();
-                });
+                    UpdateAddRowDraft(evt.newValue));
                 control = field;
             }
             control.AddToClassList("gamedb-editor__add-row-key-control");
@@ -762,6 +814,17 @@ namespace GameDBEditorLibrary.UI
             evt.StopImmediatePropagation();
         }
 
+        internal void UpdateAddRowDraft(string draft)
+        {
+            if (m_disposed || m_addRowRequest == null)
+            {
+                return;
+            }
+            m_addRowDraft = draft;
+            m_addRowRevisionReviewPending = false;
+            ValidateAddRowDraft();
+        }
+
         internal void SubmitAddRow()
         {
             if (m_disposed || m_addRowRequest == null)
@@ -785,6 +848,7 @@ namespace GameDBEditorLibrary.UI
             }
             if (revisionChanged)
             {
+                m_addRowRevisionReviewPending = true;
                 ShowAddRowValidation(
                     "The GameDB document changed. Review the key and submit again.");
                 return;
@@ -892,6 +956,7 @@ namespace GameDBEditorLibrary.UI
             m_addRowSession = null;
             m_addRowFocusTarget = null;
             m_addRowDraft = null;
+            m_addRowRevisionReviewPending = false;
             m_addRowKeyControlHost.Clear();
             m_addRowConfirm.SetEnabled(false);
             ShowAddRowValidation(null);
@@ -919,12 +984,34 @@ namespace GameDBEditorLibrary.UI
                 return;
             }
             if (!ReferenceEquals(active?.Session, m_addRowSession)
-                || m_addRowSession.IsDisposed || !RefreshAddRowRequest(out _))
+                || m_addRowSession.IsDisposed)
             {
-                ClosePopoverLayer();
+                ClosePopoverLayer(true);
                 return;
             }
-            ValidateAddRowDraft();
+
+            var snapshot = m_addRowSession.CreateSnapshot();
+            var table = snapshot.Tables.FirstOrDefault(candidate =>
+                candidate.Name == m_addRowRequest.Table.Name);
+            if (table == null || table.KeyType != m_addRowRequest.Table.KeyType
+                || table.KeyTypeArgument != m_addRowRequest.Table.KeyTypeArgument
+                || table.KeyType == KeyType.@enum
+                && !new HashSet<string>(table.Rows.Select(row => row.Key),
+                    StringComparer.Ordinal).SetEquals(
+                        m_addRowRequest.Table.Rows.Select(row => row.Key)))
+            {
+                m_outputMessage = "Add Row closed because the table key schema or available enum keys changed.";
+                m_outputSucceeded = false;
+                ClosePopoverLayer(true);
+                return;
+            }
+
+            m_addRowRequest = new GameDBAddRowRequest(snapshot, table,
+                m_addRowRequest.Revision, m_addRowFocusTarget);
+            if (!m_addRowRevisionReviewPending)
+            {
+                ValidateAddRowDraft();
+            }
             m_addRowPopover.schedule.Execute(PositionAddRowPopover);
         }
 
@@ -1395,7 +1482,7 @@ namespace GameDBEditorLibrary.UI
             if (m_workspace.TrySetTabViewState(tab.TabId, viewState) && tableChanged
                 && ReferenceEquals(m_workspace.ActiveTab, tab) && !tab.Session.IsDisposed)
             {
-                m_schemaControls.Bind(tab, tab.Session.CreateSnapshot());
+                m_inspector.Bind(tab, tab.Session.CreateSnapshot());
             }
         }
 
@@ -1541,6 +1628,14 @@ namespace GameDBEditorLibrary.UI
         }
 
         private void ReloadActiveDocument()
+        {
+            m_inspector.RequestWindowAction(
+                GameDBInspectorPendingIntentKind.ReloadOrRevert,
+                "You have unsaved Inspector changes. Save or discard them before reloading the database.",
+                ReloadActiveDocumentImmediately);
+        }
+
+        private void ReloadActiveDocumentImmediately()
         {
             var active = m_workspace.ActiveTab;
             if (active == null)

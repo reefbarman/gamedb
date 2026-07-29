@@ -1,3 +1,4 @@
+using GameDBEditorLibrary;
 using GameDBEditorLibrary.Automation;
 using GameDBEditorLibrary.Documents;
 using GameDBEditorLibrary.UI;
@@ -74,56 +75,30 @@ namespace GameDBLibrary.Tests
             GameDBEditorUiAssets.Build(root);
             using (var controller = new GameDBEditorWindowController(root, workspace))
             {
-                Assert.That(root.Q<Label>("selected-table-label").text,
+                Assert.That(root.Q<Label>("inspector-title-label").text,
                     Is.EqualTo("Items"));
-                root.Q<DropdownField>("table-key-type-field")
-                    .SetValueWithoutNotify(KeyType.@enum.ToString());
-                root.Q<TextField>("table-key-type-argument-field")
-                    .SetValueWithoutNotify("stale-enum-type");
                 root.Q<ListView>("table-navigation-list").SetSelection(1);
 
                 Assert.That(workspace.ActiveTab.ViewState.SelectedTableId,
                     Is.EqualTo("Recipes"));
-                Assert.That(root.Q<Label>("selected-table-label").text,
+                Assert.That(root.Q<Label>("inspector-title-label").text,
                     Is.EqualTo("Recipes"));
-                Assert.That(root.Q<TextField>("table-name-field").value,
-                    Is.EqualTo("Recipes"));
-                Assert.That(root.Q<DropdownField>("table-key-type-field").value,
-                    Is.EqualTo(KeyType.@string.ToString()));
-                Assert.That(root.Q<TextField>("table-key-type-argument-field").value,
-                    Is.Empty);
+                Assert.That(root.Q<Label>("inspector-table-summary").text,
+                    Does.Contain("String key").And.Contain("1 fields"));
                 Assert.That(root.Q<ListView>("field-navigation-list").itemsSource
                     .Cast<GameDBFieldSnapshot>().Select(field => field.Name),
                     Is.EqualTo(new[] { "Ingredient" }));
-                Assert.That(root.Q<TextField>("field-name-field").value,
-                    Is.EqualTo("Ingredient"));
-                Assert.That(root.Q<TextField>("table-key-type-argument-field")
-                    .style.display.value, Is.EqualTo(DisplayStyle.None));
 
-                root.Q<DropdownField>("table-key-type-field")
-                    .SetValueWithoutNotify(KeyType.@enum.ToString());
-                root.Q<TextField>("table-key-type-argument-field")
-                    .SetValueWithoutNotify("draft-enum-type");
                 controller.Render();
-                Assert.That(root.Q<DropdownField>("table-key-type-field").value,
-                    Is.EqualTo(KeyType.@enum.ToString()));
-                Assert.That(root.Q<TextField>("table-key-type-argument-field").value,
-                    Is.EqualTo("draft-enum-type"),
-                    "Same-table renders should preserve the Add Table key draft.");
+                Assert.That(root.Q<Label>("inspector-title-label").text,
+                    Is.EqualTo("Recipes"),
+                    "Same-table renders should preserve the canonical Inspector context.");
 
-                root.Q<VisualElement>("editor-action-message-host").Add(
-                    new HelpBox("Stale Recipes error", HelpBoxMessageType.Error));
                 root.Q<ListView>("table-navigation-list").SetSelection(0);
-                Assert.That(root.Q<Label>("selected-table-label").text,
+                Assert.That(root.Q<Label>("inspector-title-label").text,
                     Is.EqualTo("Items"));
-                Assert.That(root.Q<DropdownField>("table-key-type-field").value,
-                    Is.EqualTo(KeyType.@string.ToString()));
-                Assert.That(root.Q<TextField>("table-key-type-argument-field").value,
-                    Is.Empty);
-                Assert.That(root.Q<TextField>("table-key-type-argument-field")
-                    .style.display.value, Is.EqualTo(DisplayStyle.None));
-                Assert.That(root.Q<VisualElement>("editor-action-message-host").childCount,
-                    Is.Zero);
+                Assert.That(root.Q<ListView>("field-navigation-list").itemsSource
+                    .Cast<GameDBFieldSnapshot>(), Is.Empty);
             }
             workspace.Dispose();
         }
@@ -442,7 +417,8 @@ namespace GameDBLibrary.Tests
         {
             var workspace = CreateWorkspace(out _);
             var registry = new GameDBRuntimeRegistry();
-            registry.Register(new RuntimeTarget("Runtime Items"));
+            var runtimeTarget = new RuntimeTarget("Runtime Items");
+            registry.Register(runtimeTarget);
             var root = new VisualElement();
             GameDBEditorUiAssets.Build(root);
 
@@ -459,11 +435,9 @@ namespace GameDBLibrary.Tests
                 Assert.That(root.Q<ToolbarButton>("reload-button").enabledSelf, Is.False);
                 Assert.That(root.Q<ToolbarButton>("generate-button").enabledSelf, Is.False);
                 Assert.That(root.Q<ToolbarButton>("build-button").enabledSelf, Is.False);
-                Assert.That(root.Q<TextField>("database-scope-field").enabledSelf, Is.False);
-                Assert.That(root.Q<Button>("apply-database-metadata-button").enabledSelf,
-                    Is.False);
-                Assert.That(root.Q<Button>("add-table-button").enabledSelf, Is.False);
-                Assert.That(root.Q<Button>("add-field-button").enabledSelf, Is.False);
+                Assert.That(root.Q<Button>("database-edit-action").enabledSelf, Is.False);
+                Assert.That(root.Q<Button>("table-create-button").enabledSelf, Is.False);
+                Assert.That(root.Q<Button>("field-create-button").enabledSelf, Is.False);
                 Assert.That(root.Q<ToolbarButton>("table-add-row-button").enabledSelf, Is.True);
                 var beforeRow = workspace.ActiveTab.Session.CreateSnapshot();
                 var row = controller.CreateRow(new GameDBRowCreateIntent(
@@ -474,6 +448,7 @@ namespace GameDBLibrary.Tests
                     Is.EqualTo("RuntimeRow"));
                 Assert.That(root.Q<Label>("play-mode-status-label").text,
                     Does.Contain("Select a runtime GameDB"));
+                GC.KeepAlive(runtimeTarget);
             }
             workspace.Dispose();
         }
@@ -499,7 +474,7 @@ namespace GameDBLibrary.Tests
             {
                 Assert.That(root.Q<VisualElement>("play-mode-toolbar").style.display.value,
                     Is.EqualTo(DisplayStyle.Flex));
-                Assert.That(root.Q<Button>("add-table-button").enabledSelf, Is.False);
+                Assert.That(root.Q<Button>("table-create-button").enabledSelf, Is.False);
 
                 playing = false;
                 controller.Render();
@@ -512,7 +487,7 @@ namespace GameDBLibrary.Tests
                     Does.Not.Contain("RuntimeOnly"));
                 Assert.That(root.Q<VisualElement>("play-mode-toolbar").style.display.value,
                     Is.EqualTo(DisplayStyle.None));
-                Assert.That(root.Q<Button>("add-table-button").enabledSelf, Is.True);
+                Assert.That(root.Q<Button>("table-create-button").enabledSelf, Is.True);
                 var schemaEdit = active.Session.ApplyTransaction(new GameDBCommand[]
                 {
                     new AddTableCommand("EditModeTable", KeyType.@string, null)
@@ -534,10 +509,8 @@ namespace GameDBLibrary.Tests
             {
                 Assert.That(root.Q<VisualElement>("play-mode-toolbar").style.display.value,
                     Is.EqualTo(DisplayStyle.None));
-                Assert.That(root.Q<TextField>("database-scope-field").enabledSelf, Is.True);
-                Assert.That(root.Q<Button>("apply-database-metadata-button").enabledSelf,
-                    Is.True);
-                Assert.That(root.Q<Button>("add-table-button").enabledSelf, Is.True);
+                Assert.That(root.Q<Button>("database-edit-action").enabledSelf, Is.True);
+                Assert.That(root.Q<Button>("table-create-button").enabledSelf, Is.True);
             }
             workspace.Dispose();
         }
@@ -628,18 +601,19 @@ namespace GameDBLibrary.Tests
                 var layer = root.Q<VisualElement>("popover-layer");
                 var confirm = root.Q<Button>("add-row-confirm-button");
                 var validation = root.Q<Label>("add-row-validation-message");
-                var key = root.Q<VisualElement>("add-row-key-control-host").Q<TextField>();
+                Assert.That(root.Q<VisualElement>("add-row-key-control-host").Q<TextField>(),
+                    Is.Not.Null);
                 Assert.That(layer.style.display.value, Is.EqualTo(DisplayStyle.Flex));
                 Assert.That(confirm.enabledSelf, Is.False);
                 Assert.That(validation.text, Does.Contain("Enter a row key"));
 
-                key.value = " Existing ";
+                controller.UpdateAddRowDraft(" Existing ");
                 Assert.That(confirm.enabledSelf, Is.False);
                 Assert.That(validation.text, Does.Contain("already exists"));
-                key.value = FieldBase.NullRefToken;
+                controller.UpdateAddRowDraft(FieldBase.NullRefToken);
                 Assert.That(confirm.enabledSelf, Is.False);
                 Assert.That(validation.text, Does.Contain("reserved"));
-                key.value = " NewRow ";
+                controller.UpdateAddRowDraft(" NewRow ");
                 Assert.That(confirm.enabledSelf, Is.True);
 
                 controller.SubmitAddRow();
@@ -666,6 +640,11 @@ namespace GameDBLibrary.Tests
         [Test]
         public void AddRowPopover_UsesDeclaredEnumMembersAndRejectsDuplicates()
         {
+            AssemblyExplorer.Instance.Load();
+            if (AssemblyExplorer.Instance.GetType("GameDBTestProject.AddRowKey") == null)
+            {
+                Assert.Ignore("Requires the TestProject~ consumer-project enum fixture.");
+            }
             var workspace = CreateWorkspace(out _);
             var root = new VisualElement();
             GameDBEditorUiAssets.Build(root);
@@ -675,8 +654,8 @@ namespace GameDBLibrary.Tests
                 Assert.That(session.ApplyTransaction(new GameDBCommand[]
                 {
                     new AddTableCommand("EnumRows", KeyType.@enum,
-                        typeof(AddRowKey).AssemblyQualifiedName),
-                    new AddRowCommand("EnumRows", nameof(AddRowKey.Alpha),
+                        "GameDBTestProject.AddRowKey"),
+                    new AddRowCommand("EnumRows", "Alpha",
                         new Dictionary<string, object>())
                 }).Success, Is.True);
                 var snapshot = session.CreateSnapshot();
@@ -688,14 +667,13 @@ namespace GameDBLibrary.Tests
                 var popup = root.Q<VisualElement>("add-row-key-control-host")
                     .Q<PopupField<string>>();
                 var confirm = root.Q<Button>("add-row-confirm-button");
-                Assert.That(popup.choices,
-                    Is.EqualTo(new[] { nameof(AddRowKey.Beta) }));
-                Assert.That(popup.value, Is.EqualTo(nameof(AddRowKey.Beta)));
+                Assert.That(popup.choices, Is.EqualTo(new[] { "Beta", "Gamma" }));
+                Assert.That(popup.value, Is.EqualTo("Beta"));
                 Assert.That(confirm.enabledSelf, Is.True);
                 controller.SubmitAddRow();
                 Assert.That(session.CreateSnapshot().Tables.Single(candidate =>
                     candidate.Name == "EnumRows").Rows.Select(row => row.Key),
-                    Does.Contain(nameof(AddRowKey.Beta)));
+                    Does.Contain("Beta"));
             }
             workspace.Dispose();
         }
@@ -714,8 +692,7 @@ namespace GameDBLibrary.Tests
                 var request = new GameDBAddRowRequest(snapshot, table, snapshot.Revision,
                     root.Q<ToolbarButton>("table-add-row-button"));
                 Assert.That(controller.OpenAddRow(request), Is.True);
-                root.Q<VisualElement>("add-row-key-control-host").Q<TextField>().value
-                    = "StaleRow";
+                controller.UpdateAddRowDraft("StaleRow");
                 Assert.That(first.ApplyTransaction(new GameDBCommand[]
                 {
                     new AddRowCommand("Items", "Concurrent", new Dictionary<string, object>())
@@ -730,10 +707,28 @@ namespace GameDBLibrary.Tests
                     Is.EqualTo(DisplayStyle.Flex));
                 Assert.That(root.Q<Label>("add-row-validation-message").text,
                     Does.Contain("changed"));
+                controller.Render();
+                Assert.That(root.Q<Label>("add-row-validation-message").text,
+                    Does.Contain("changed"));
                 controller.SubmitAddRow();
                 Assert.That(first.CreateSnapshot().Tables.Single(candidate =>
                     candidate.Name == "Items").Rows.Select(row => row.Key),
                     Does.Contain("StaleRow"));
+
+                snapshot = first.CreateSnapshot();
+                table = snapshot.Tables.Single(candidate => candidate.Name == "Items");
+                Assert.That(controller.OpenAddRow(new GameDBAddRowRequest(snapshot,
+                    table, snapshot.Revision,
+                    root.Q<ToolbarButton>("table-add-row-button"))), Is.True);
+                controller.UpdateAddRowDraft("ConcurrentDuplicate");
+                Assert.That(first.ApplyTransaction(new GameDBCommand[]
+                {
+                    new AddRowCommand("Items", "ConcurrentDuplicate",
+                        new Dictionary<string, object>())
+                }).Success, Is.True);
+                Assert.That(root.Q<Button>("add-row-confirm-button").enabledSelf, Is.False);
+                Assert.That(root.Q<Label>("add-row-validation-message").text,
+                    Does.Contain("already exists"));
 
                 controller.CancelAddRow();
                 controller.Render();
@@ -742,8 +737,7 @@ namespace GameDBLibrary.Tests
                 Assert.That(controller.OpenAddRow(new GameDBAddRowRequest(snapshot,
                     table, snapshot.Revision,
                     root.Q<ToolbarButton>("table-add-row-button"))), Is.True);
-                root.Q<VisualElement>("add-row-key-control-host").Q<TextField>().value
-                    = "WrongTab";
+                controller.UpdateAddRowDraft("WrongTab");
                 Assert.That(workspace.TryActivateTab("second"), Is.True);
 
                 Assert.That(root.Q<VisualElement>("popover-layer").style.display.value,
@@ -866,7 +860,7 @@ namespace GameDBLibrary.Tests
                 var raced = controller.RenameRow(new GameDBRowRenameIntent(
                     "Items", "Sword", "Blade", before.Revision));
                 Assert.That(raced.Success, Is.False);
-                Assert.That(raced.Message, Does.Contain("revision"));
+                Assert.That(raced.Message, Does.Contain("Revision"));
                 Assert.That(session.CreateSnapshot().Tables.Single(table =>
                     table.Name == "Items").Rows.Single().Key, Is.EqualTo("Sword"));
 
@@ -927,12 +921,6 @@ namespace GameDBLibrary.Tests
                     table.Name == "Items").Rows.Single().Key, Is.EqualTo("Sword"));
             }
             workspace.Dispose();
-        }
-
-        private enum AddRowKey
-        {
-            Alpha,
-            Beta
         }
 
         private static void AssertReadOnlyTableView(VisualElement root)

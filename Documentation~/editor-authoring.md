@@ -32,21 +32,26 @@ A table key is either:
 
 To add a table:
 
-1. In the Inspector's **Table** section, enter its **Name**.
-2. Select its **Key type** and, for enum keys, enter the fully qualified imported enum type.
-3. Click **Add**.
+1. Click **+ Table** beside the Tables navigator heading.
+2. In the Inspector task, enter the table **Name** and choose its **Key type**.
+3. For enum keys, choose one of the enum types saved under **Settings → Imported enum types**.
+4. Click **Add**. **Cancel** returns to the previous Inspector context without changing the schema.
 
 To add a row, select its table and click **+ Row** in the table toolbar. Empty tables also show **+ Add Row** in the table body. Enter a unique string key or choose an unused enum member, then confirm with **Add** or Enter. Escape, the Cancel button, or clicking outside the popover cancels creation.
 
 The center grid is virtualized and supports search and stable column sorting. Selection follows the row key across filtering and sorting. Double-click a key cell to rename it; Enter commits and Escape cancels. Long column names are ellipsized, and double-clicking a column's right resize border applies Best Fit using the header and all loaded rows.
 
-Use the table toolbar's **Inspector** button to show or collapse schema controls. At compact window widths, the same controls open as a side drawer; use **Close**, Escape outside text input, or the shaded scrim to dismiss it.
+Use the table toolbar's **Inspector** button to show or collapse the contextual Inspector. It follows the selected table, showing a read-only table summary and its Fields list. At compact window widths, the same Inspector opens as a side drawer; use **Close**, Escape outside text input, or the shaded scrim to dismiss it when no edit task is active.
 
 Scope, table, and field names must be valid non-keyword C# identifiers. Row keys must produce distinct valid `Key<RowKey>` members after whitespace is removed. Generation also rejects generated accessor/type collisions and case-insensitive filename conflicts before writing any output. Avoid changing keys and schemas casually after game code depends on them, and regenerate classes after every schema change.
 
 ## Create and edit fields
 
-Select a table, then use the inspector's **Fields** section. Enter a field name, choose its type and type argument when required, then click **Add**. Select an existing field to rename, replace its type, or delete it.
+Select a table, then click **+ Field** in the Inspector's Fields section. Enter the field name, choose **Scalar**, **Array**, or **Dictionary**, configure any required enum/table-reference/key/value arguments, and click **Add**.
+
+Select a field in the Inspector list, or choose **Inspect Field** from a non-key column header menu, to open its read-only detail view. Use **Edit Name**, **Change Type…**, or **Delete Field…** for explicit schema changes. Changing a field type is a separate confirmed operation because existing row values are reset.
+
+If you try to change tables or inspect another field while an Inspector task has unsaved changes, the Inspector blocks navigation and offers **Save and continue**, **Discard**, or **Cancel navigation**. A schema change made elsewhere can mark the open task stale; cancel the task and review the current schema before trying again.
 
 Supported field types are:
 

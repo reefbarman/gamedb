@@ -1047,6 +1047,37 @@ namespace GameDBLibrary.Tests
         }
 
         [Test]
+        public void TableController_RejectedTableSelectionRestoresNavigatorWithoutRebinding()
+        {
+            var snapshot = new GameDBSnapshot
+            {
+                Tables = new List<GameDBTableSnapshot>
+                {
+                    Table("Items", "Row1"),
+                    Table("Recipes", "Recipe1")
+                }
+            };
+            var navigation = new ListView();
+            var grid = new MultiColumnListView();
+            var published = new List<GameDBWorkspaceTabViewState>();
+            using (var controller = new GameDBTableViewController(
+                new ToolbarButton(), new ToolbarButton(), new ToolbarButton(),
+                new ToolbarSearchField(), navigation, grid, new VisualElement(),
+                new VisualElement(), new Label(), new Button(), published.Add,
+                tableSelectionRequested: _ => false))
+            {
+                controller.Bind(new GameDBWorkspaceTabViewState("Items"), snapshot);
+
+                navigation.SetSelection(1);
+
+                Assert.That(published, Is.Empty);
+                Assert.That(navigation.selectedIndex, Is.Zero);
+                Assert.That(grid.itemsSource.Cast<GameDBRowSnapshot>().Select(row => row.Key),
+                    Is.EqualTo(new[] { "Row1" }));
+            }
+        }
+
+        [Test]
         public void WindowController_TableSelectionPersistsThroughWorkspaceRecovery()
         {
             var store = new RecoveryStore();

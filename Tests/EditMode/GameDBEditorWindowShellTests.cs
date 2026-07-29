@@ -35,6 +35,7 @@ namespace GameDBLibrary.Tests
                 { "build-button", typeof(ToolbarButton) },
                 { "workspace-content", typeof(VisualElement) },
                 { "table-navigation-host", typeof(VisualElement) },
+                { "table-create-button", typeof(Button) },
                 { "table-navigation-list", typeof(ListView) },
                 { "table-surface-host", typeof(VisualElement) },
                 { "table-toolbar", typeof(Toolbar) },
@@ -50,17 +51,42 @@ namespace GameDBLibrary.Tests
                 { "table-row-grid", typeof(MultiColumnListView) },
                 { "inspector-scrim", typeof(VisualElement) },
                 { "inspector-host", typeof(VisualElement) },
+                { "inspector-back-button", typeof(Button) },
+                { "inspector-eyebrow-label", typeof(Label) },
+                { "inspector-title-label", typeof(Label) },
                 { "inspector-close-button", typeof(Button) },
-                { "schema-action-scroll", typeof(ScrollView) },
-                { "database-scope-field", typeof(TextField) },
-                { "database-localization-toggle", typeof(Toggle) },
-                { "apply-database-metadata-button", typeof(Button) },
-                { "table-name-field", typeof(TextField) },
-                { "table-key-type-field", typeof(DropdownField) },
+                { "inspector-content-host", typeof(VisualElement) },
+                { "inspector-table-view", typeof(VisualElement) },
+                { "inspector-table-summary", typeof(Label) },
+                { "table-rename-action", typeof(Button) },
+                { "table-delete-action", typeof(Button) },
+                { "field-create-button", typeof(Button) },
                 { "field-navigation-list", typeof(ListView) },
-                { "field-name-field", typeof(TextField) },
-                { "field-type-field", typeof(DropdownField) },
-                { "editor-action-message-host", typeof(VisualElement) },
+                { "inspector-field-view", typeof(ScrollView) },
+                { "inspector-field-type-label", typeof(Label) },
+                { "inspector-field-detail-label", typeof(Label) },
+                { "field-rename-action", typeof(Button) },
+                { "field-change-type-action", typeof(Button) },
+                { "field-delete-action", typeof(Button) },
+                { "inspector-task-scroll", typeof(ScrollView) },
+                { "inspector-task-context-label", typeof(Label) },
+                { "inspector-task-form-host", typeof(VisualElement) },
+                { "field-type-editor-host", typeof(VisualElement) },
+                { "inspector-task-message-host", typeof(VisualElement) },
+                { "inspector-action-message-host", typeof(VisualElement) },
+                { "inspector-database-foldout", typeof(VisualElement) },
+                { "database-foldout-toggle", typeof(Button) },
+                { "database-foldout-scroll", typeof(ScrollView) },
+                { "database-summary-label", typeof(Label) },
+                { "database-edit-action", typeof(Button) },
+                { "inspector-navigation-decision", typeof(VisualElement) },
+                { "inspector-navigation-message", typeof(Label) },
+                { "inspector-navigation-cancel", typeof(Button) },
+                { "inspector-navigation-discard", typeof(Button) },
+                { "inspector-navigation-save", typeof(Button) },
+                { "inspector-task-footer", typeof(VisualElement) },
+                { "inspector-task-cancel", typeof(Button) },
+                { "inspector-task-primary", typeof(Button) },
                 { "popover-layer", typeof(VisualElement) },
                 { "add-row-popover", typeof(VisualElement) },
                 { "add-row-popover-title", typeof(Label) },
@@ -123,6 +149,10 @@ namespace GameDBLibrary.Tests
             Assert.That(root.Q<VisualElement>("table-empty-state").parent,
                 Is.SameAs(root.Q<Toolbar>("table-toolbar").parent));
             Assert.That(root.Query<ListView>().ToList(), Has.Count.EqualTo(4));
+            Assert.That(root.Q<VisualElement>("inspector-task-footer").parent,
+                Is.SameAs(root.Q<VisualElement>("inspector-content-host").parent));
+            Assert.That(root.Q<VisualElement>("field-type-editor-host").parent,
+                Is.SameAs(root.Q<ScrollView>("inspector-task-scroll").contentContainer));
             Assert.That(root.Q<ListView>("field-navigation-list"), Is.Not.Null);
             Assert.That(root.Q<ListView>("collection-editor-list"), Is.Not.Null);
             Assert.That(root.Q<ListView>("imported-enum-types"), Is.Not.Null);
@@ -221,6 +251,29 @@ namespace GameDBLibrary.Tests
                 GameDBEditorResponsiveLayout.InspectorOpenClass), Is.False);
             Assert.That(navigation.enabledSelf, Is.True);
             Assert.That(surface.enabledSelf, Is.True);
+        }
+
+        [Test]
+        public void ResponsiveLayout_CloseGuardCanDeferInspectorDismissal()
+        {
+            var host = new VisualElement();
+            GameDBEditorUiAssets.Build(host);
+            var root = host.Q<VisualElement>("gamedb-editor-root");
+            var layout = new GameDBEditorResponsiveLayout(root);
+            try
+            {
+                var requests = 0;
+                layout.SetCloseRequested(() => requests++);
+
+                layout.CloseInspector();
+
+                Assert.That(requests, Is.EqualTo(1));
+                Assert.That(layout.IsInspectorOpen, Is.True);
+            }
+            finally
+            {
+                layout.Dispose();
+            }
         }
 
         [Test]

@@ -6,8 +6,8 @@ namespace GameDBEditorLibrary.UI
 {
     internal sealed class GameDBEditorResponsiveLayout : IDisposable
     {
-        internal const float CompactWidth = 760f;
-        internal const float NarrowWidth = 520f;
+        internal const float CompactWidth = 900f;
+        internal const float NarrowWidth = 560f;
         internal const string CompactClass = "gamedb-editor--compact";
         internal const string NarrowClass = "gamedb-editor--narrow";
         internal const string InspectorOpenClass = "gamedb-editor--inspector-open";
@@ -22,10 +22,16 @@ namespace GameDBEditorLibrary.UI
         private bool m_inspectorOpen;
         private bool m_wideInspectorOpen = true;
         private bool? m_compact;
+        private Action m_closeRequested;
         private int m_focusGeneration;
         private bool m_disposed;
 
         internal bool IsInspectorOpen => m_inspectorOpen;
+
+        internal void SetCloseRequested(Action closeRequested)
+        {
+            m_closeRequested = closeRequested;
+        }
 
         internal GameDBEditorResponsiveLayout(VisualElement root)
         {
@@ -78,21 +84,50 @@ namespace GameDBEditorLibrary.UI
 
         internal void ToggleInspector()
         {
-            var open = !m_inspectorOpen;
+            if (m_inspectorOpen)
+            {
+                RequestCloseInspector();
+                return;
+            }
             if (m_compact == false)
             {
-                m_wideInspectorOpen = open;
+                m_wideInspectorOpen = true;
             }
-            SetInspectorOpen(open, true);
+            SetInspectorOpen(true, true);
         }
 
         internal void CloseInspector()
+        {
+            RequestCloseInspector();
+        }
+
+        internal void CloseInspectorImmediately()
         {
             if (m_compact == false)
             {
                 m_wideInspectorOpen = false;
             }
             SetInspectorOpen(false, true);
+        }
+
+        private void RequestCloseInspector()
+        {
+            if (m_closeRequested != null)
+            {
+                m_closeRequested();
+                return;
+            }
+            CloseInspectorImmediately();
+        }
+
+        internal void EnsureInspectorOpen(VisualElement focusTarget = null)
+        {
+            if (m_compact == false)
+            {
+                m_wideInspectorOpen = true;
+            }
+            SetInspectorOpen(true, false);
+            ScheduleInspectorFocus(focusTarget);
         }
 
         private void SetInspectorOpen(bool open, bool updateFocus)
@@ -114,7 +149,7 @@ namespace GameDBEditorLibrary.UI
             }
             if (open)
             {
-                ScheduleInspectorFocus();
+                ScheduleInspectorFocus(null);
             }
             else
             {
@@ -122,7 +157,7 @@ namespace GameDBEditorLibrary.UI
             }
         }
 
-        private void ScheduleInspectorFocus()
+        private void ScheduleInspectorFocus(VisualElement focusTarget)
         {
             if (m_inspector == null)
             {
@@ -135,13 +170,14 @@ namespace GameDBEditorLibrary.UI
                 {
                     return;
                 }
-                var controls = m_inspector.Q<VisualElement>("schema-action-scroll")
+                var controls = m_inspector.Q<VisualElement>("inspector-content-host")
                     ?? m_inspector;
-                var control = m_compact == true && m_inspectorClose?.canGrabFocus == true
-                    ? m_inspectorClose
-                    : controls.Query<VisualElement>().ToList().FirstOrDefault(element =>
-                        element.focusable && element.enabledInHierarchy
-                        && element.resolvedStyle.display != DisplayStyle.None);
+                var control = IsVisibleFocusable(focusTarget)
+                    ? focusTarget
+                    : m_compact == true && IsVisibleFocusable(m_inspectorClose)
+                        ? m_inspectorClose
+                        : controls.Query<VisualElement>().ToList().FirstOrDefault(
+                            IsVisibleFocusable);
                 control?.Focus();
             }).ExecuteLater(1);
         }
@@ -154,6 +190,7 @@ namespace GameDBEditorLibrary.UI
             }
 
             m_disposed = true;
+            m_closeRequested = null;
             m_focusGeneration++;
             m_inspectorOpen = false;
             m_root.EnableInClassList(InspectorOpenClass, false);
@@ -199,6 +236,27 @@ namespace GameDBEditorLibrary.UI
                 CloseInspector();
                 evt.StopImmediatePropagation();
             }
+        }
+
+        private bool IsVisibleFocusable(VisualElement element)
+        {
+            if (element == null || element.panel == null || !element.focusable
+                || !element.enabledInHierarchy)
+            {
+                return false;
+            }
+            for (var current = element; current != null; current = current.parent)
+            {
+                if (current.resolvedStyle.display == DisplayStyle.None)
+                {
+                    return false;
+                }
+                if (current == m_inspector)
+                {
+                    return true;
+                }
+            }
+            return false;
         }
 
         private bool IsTextInputEvent(VisualElement element)

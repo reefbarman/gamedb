@@ -34,7 +34,11 @@
             </uie:Toolbar>
             <ui:VisualElement name="workspace-content" class="gamedb-editor__content">
                 <ui:VisualElement name="table-navigation-host" class="gamedb-editor__navigation">
-                    <ui:Label text="Tables" class="gamedb-editor__pane-title" />
+                    <ui:VisualElement class="gamedb-editor__navigator-header">
+                        <ui:Label text="Tables" class="gamedb-editor__pane-title" />
+                        <ui:VisualElement class="gamedb-editor__toolbar-spacer" />
+                        <ui:Button name="table-create-button" text="+" tooltip="Create a table" class="gamedb-editor__navigator-add" />
+                    </ui:VisualElement>
                     <ui:ListView name="table-navigation-list" fixed-item-height="22" virtualization-method="FixedHeight" selection-type="Single" reorderable="false" class="gamedb-editor__table-navigation-list" />
                 </ui:VisualElement>
                 <ui:VisualElement name="table-surface-host" class="gamedb-editor__surface">
@@ -55,45 +59,63 @@
                 <ui:VisualElement name="inspector-scrim" class="gamedb-editor__inspector-scrim" />
                 <ui:VisualElement name="inspector-host" class="gamedb-editor__inspector">
                     <ui:VisualElement class="gamedb-editor__inspector-toolbar">
-                        <ui:Label text="Inspector" class="gamedb-editor__pane-title" />
+                        <ui:Button name="inspector-back-button" text="‹" tooltip="Back to table" class="gamedb-editor__inspector-back" />
+                        <ui:VisualElement class="gamedb-editor__inspector-heading">
+                            <ui:Label name="inspector-eyebrow-label" text="Inspector" class="gamedb-editor__inspector-eyebrow" />
+                            <ui:Label name="inspector-title-label" text="No table selected" class="gamedb-editor__pane-title" />
+                        </ui:VisualElement>
                         <ui:VisualElement class="gamedb-editor__toolbar-spacer" />
                         <ui:Button name="inspector-close-button" text="Close" tooltip="Close the Inspector" class="gamedb-editor__inspector-close" />
                     </ui:VisualElement>
-                    <ui:ScrollView name="schema-action-scroll" class="gamedb-editor__inspector-scroll">
-                        <ui:Label text="Database" class="gamedb-editor__pane-title" />
-                        <ui:TextField name="database-scope-field" label="Scope" />
-                        <ui:Toggle name="database-localization-toggle" label="Localization database" />
-                        <ui:Button name="apply-database-metadata-button" text="Apply Metadata" />
-                        <ui:VisualElement class="gamedb-editor__inspector-section">
-                            <ui:Label text="Table" class="gamedb-editor__pane-title" />
-                            <ui:Label name="selected-table-label" text="No table selected" />
-                            <ui:TextField name="table-name-field" label="Name" />
-                            <ui:DropdownField name="table-key-type-field" label="Key type" />
-                            <ui:TextField name="table-key-type-argument-field" label="Enum type" tooltip="Fully qualified public enum type name" />
-                            <ui:VisualElement class="gamedb-editor__inspector-actions">
-                                <ui:Button name="add-table-button" text="Add" />
-                                <ui:Button name="rename-table-button" text="Rename" />
-                                <ui:Button name="delete-table-button" text="Delete" class="gamedb-editor__destructive-action" />
+                    <ui:VisualElement name="inspector-content-host" class="gamedb-editor__inspector-content">
+                        <ui:VisualElement name="inspector-table-view" class="gamedb-editor__inspector-screen">
+                            <ui:Label name="inspector-table-summary" class="gamedb-editor__inspector-summary" />
+                            <ui:VisualElement class="gamedb-editor__inspector-action-row">
+                                <ui:Button name="table-rename-action" text="Rename Table" />
+                                <ui:Button name="table-delete-action" text="Delete Table…" class="gamedb-editor__destructive-action" />
+                            </ui:VisualElement>
+                            <ui:VisualElement class="gamedb-editor__inspector-section-header">
+                                <ui:Label text="Fields" class="gamedb-editor__pane-title" />
+                                <ui:VisualElement class="gamedb-editor__toolbar-spacer" />
+                                <ui:Button name="field-create-button" text="+ Field" tooltip="Add a field to this table" />
+                            </ui:VisualElement>
+                            <ui:ListView name="field-navigation-list" fixed-item-height="26" virtualization-method="FixedHeight" selection-type="Single" reorderable="false" class="gamedb-editor__field-navigation-list" />
+                        </ui:VisualElement>
+                        <ui:ScrollView name="inspector-field-view" class="gamedb-editor__inspector-screen gamedb-editor__inspector-body-scroll">
+                            <ui:Label name="inspector-field-type-label" class="gamedb-editor__inspector-type-badge" />
+                            <ui:Label name="inspector-field-detail-label" class="gamedb-editor__inspector-summary" />
+                            <ui:Button name="field-rename-action" text="Edit Name" />
+                            <ui:Button name="field-change-type-action" text="Change Type…" />
+                            <ui:Button name="field-delete-action" text="Delete Field…" class="gamedb-editor__destructive-action" />
+                        </ui:ScrollView>
+                        <ui:ScrollView name="inspector-task-scroll" class="gamedb-editor__inspector-screen gamedb-editor__inspector-body-scroll">
+                            <ui:Label name="inspector-task-context-label" class="gamedb-editor__scope-note" />
+                            <ui:VisualElement name="inspector-task-form-host" />
+                            <ui:VisualElement name="field-type-editor-host" />
+                            <ui:VisualElement name="inspector-task-message-host" />
+                        </ui:ScrollView>
+                        <ui:VisualElement name="inspector-action-message-host" class="gamedb-editor__inspector-action-message" />
+                        <ui:VisualElement name="inspector-database-foldout" class="gamedb-editor__database-card">
+                            <ui:Button name="database-foldout-toggle" text="Database ›" />
+                            <ui:ScrollView name="database-foldout-scroll" class="gamedb-editor__database-scroll">
+                                <ui:Label name="database-summary-label" />
+                                <ui:Button name="database-edit-action" text="Edit Database" />
+                            </ui:ScrollView>
+                        </ui:VisualElement>
+                        <ui:VisualElement name="inspector-navigation-decision" class="gamedb-editor__navigation-decision">
+                            <ui:Label name="inspector-navigation-message" />
+                            <ui:VisualElement class="gamedb-editor__inspector-action-row">
+                                <ui:Button name="inspector-navigation-cancel" text="Cancel navigation" />
+                                <ui:Button name="inspector-navigation-discard" text="Discard" />
+                                <ui:Button name="inspector-navigation-save" text="Save and continue" />
                             </ui:VisualElement>
                         </ui:VisualElement>
-                        <ui:VisualElement class="gamedb-editor__inspector-section">
-                            <ui:Label text="Fields" class="gamedb-editor__pane-title" />
-                            <ui:ListView name="field-navigation-list" fixed-item-height="22" virtualization-method="FixedHeight" selection-type="Single" reorderable="false" class="gamedb-editor__field-navigation-list" />
-                            <ui:Label name="selected-field-type-label" />
-                            <ui:Label name="field-collection-note" text="Edit array and dictionary values from their table cells." class="gamedb-editor__scope-note" />
-                            <ui:TextField name="field-name-field" label="Name" />
-                            <ui:DropdownField name="field-type-field" label="Type" />
-                            <ui:TextField name="field-enum-type-argument-field" label="Enum type" tooltip="Fully qualified public enum type name" />
-                            <ui:DropdownField name="field-table-reference-argument-field" label="Referenced table" />
-                            <ui:VisualElement class="gamedb-editor__inspector-actions">
-                                <ui:Button name="add-field-button" text="Add" />
-                                <ui:Button name="rename-field-button" text="Rename" />
-                                <ui:Button name="replace-field-button" text="Replace Type" />
-                                <ui:Button name="delete-field-button" text="Delete" class="gamedb-editor__destructive-action" />
-                            </ui:VisualElement>
-                        </ui:VisualElement>
-                        <ui:VisualElement name="editor-action-message-host" />
-                    </ui:ScrollView>
+                    </ui:VisualElement>
+                    <ui:VisualElement name="inspector-task-footer" class="gamedb-editor__task-footer">
+                        <ui:VisualElement class="gamedb-editor__toolbar-spacer" />
+                        <ui:Button name="inspector-task-cancel" text="Cancel" />
+                        <ui:Button name="inspector-task-primary" text="Save" enabled="false" />
+                    </ui:VisualElement>
                 </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>

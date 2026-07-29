@@ -8,6 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.0.0-preview.8] - 2026-07-29
+
+### Added
+
+- Added a contextual master/detail Inspector with explicit table, field, database, and field-type tasks; guarded Save/Discard/Cancel navigation; responsive drawer focus; and scoped action feedback.
+- Added scalar, array, and dictionary field authoring with imported-enum and table-reference choices.
+
+### Changed
+
+- Replaced the legacy always-editable schema controls with navigator **+ Table**, Inspector **+ Field**, field detail actions, and column-header **Inspect Field** entry points.
+- Hardened schema commands, localization compatibility, add-row enum key resolution, and selection reconciliation across concurrent editor state changes.
+
 ## [1.0.0-preview.7] - 2026-07-29
 
 ### Fixed
@@ -90,7 +102,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Legacy Free/Pro feature split, old project files, vendored promise/JSON sources, binary/encrypted build output, and the unshipped legacy deployment server workflow.
 
-[Unreleased]: https://github.com/reefbarman/gamedb/compare/v1.0.0-preview.7...HEAD
+[Unreleased]: https://github.com/reefbarman/gamedb/compare/v1.0.0-preview.8...HEAD
+[1.0.0-preview.8]: https://github.com/reefbarman/gamedb/compare/v1.0.0-preview.7...v1.0.0-preview.8
 [1.0.0-preview.7]: https://github.com/reefbarman/gamedb/compare/v1.0.0-preview.6...v1.0.0-preview.7
 [1.0.0-preview.6]: https://github.com/reefbarman/gamedb/compare/v1.0.0-preview.5...v1.0.0-preview.6
 [1.0.0-preview.5]: https://github.com/reefbarman/gamedb/compare/v1.0.0-preview.4...v1.0.0-preview.5

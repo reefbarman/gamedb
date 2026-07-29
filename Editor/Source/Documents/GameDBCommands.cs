@@ -78,6 +78,12 @@ namespace GameDBEditorLibrary.Documents
 
         internal override GameDBCommandExecution Execute(GameDBCommandContext context)
         {
+            if (m_localizationDatabase
+                && !GameDBModelOperations.HasLocalizationCompatibleSchema(context.Model))
+            {
+                return GameDBCommandExecution.Failed(
+                    "Localization databases support only scalar string fields.");
+            }
             context.Model.ScopeName = m_scopeName;
             context.Model.LocalizationDB = m_localizationDatabase;
             return GameDBCommandExecution.Succeeded();
@@ -183,6 +189,12 @@ namespace GameDBEditorLibrary.Documents
         protected GameDBCommandExecution ExecuteChange(GameDBCommandContext context, bool replace)
         {
             GameDBModelOperations.RequireName(FieldName, nameof(FieldName));
+            if (context.Model.LocalizationDB
+                && !GameDBModelOperations.IsLocalizationCompatibleField(TypeSpec))
+            {
+                return GameDBCommandExecution.Failed(
+                    "Localization databases support only scalar string fields.");
+            }
             var table = GameDBModelOperations.GetTable(context.Model, TableName);
             var typeArgument = GameDBModelOperations.ResolveFieldTypeArgument(context.Model, TypeSpec);
             var success = replace
